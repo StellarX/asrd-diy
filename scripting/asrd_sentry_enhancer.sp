@@ -534,6 +534,7 @@ int FindSentryTop(int iBase)
 
 // ============================================================================
 //  命令：把最近的机枪塔放到自己头顶
+// test
 //  AS:RD 中玩家实体不支持 SetParent，改用 OnGameFrame 每帧追踪位置
 // ============================================================================
 public Action Command_SentryHat(int client, int args)
