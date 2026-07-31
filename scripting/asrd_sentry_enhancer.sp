@@ -1,23 +1,21 @@
 /**
  * ============================================================================
  *  Plugin: [AS:RD] Sentry Enhancer + Sentry Hat
+ *  Version: 6.0.0
  *
  *  描述: 增强 AS:RD 机枪塔属性 + 把机枪塔放角色头顶
  *  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
- *  支持4种机枪塔:
- *    哨戒枪 (asw_sentry_top_machinegun)  — m_nGunType=0
- *    哨戒炮 (asw_sentry_top_cannon)      — m_nGunType=1
- *    喷火型哨戒枪 (asw_sentry_top_flamer) — m_nGunType=2
- *    冷冻型哨戒枪 (asw_sentry_top_freeze) — m_nGunType=3
- *
- *  功能:
- *    - 增加机枪塔生命值
- *    - 增加机枪塔弹药 + 手动装填命令
- *    - 增加机枪塔射程
- *    - 提高机枪塔射速
- *    - 机枪塔无敌（不消失）
- *    - 机枪塔放头顶
+ *  v6.0.0 重写要点:
+ *    - 性能: ArrayList 替代固定数组遍历，属性偏移缓存，避免循环内 IO
+ *    - 兼容: MAX_ENTITIES 动态获取，支持 4096+ 实体
+ *    - 多玩家: 每个玩家独立管理头顶塔，按 userid 隔离，无 targetname 冲突
+ *    - 无敌: m_takedamage = 0 (无需 SDKHooks)
+ *    - 头顶: 删除 SetParent，统一 OnGameFrame 追踪，行为可预测
+ *    - 新增: 禁用塔对玩家伤害 (检查 m_hEnemy + 队伍过滤)
+ *    - 新增: ConVar 修改自动刷新
+ *    - 新增: 保存/恢复原始碰撞组
+ *    - 新增: 按塔类型获取真实基础射速 + 动态射速加速
  *
  *  依赖:
  *    SourceMod 1.11+
@@ -30,39 +28,68 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_NAME    "[AS:RD] Sentry Enhancer + Hat"
-#define PLUGIN_VERSION "5.0.0"
+#define PLUGIN_NAME    "[AS:RD] Sentry Enhancer + Sentry Hat"
+#define PLUGIN_VERSION "6.0.0"
 
-#define MAX_ENTITIES  2048
-#define SENTRY_BASE_FIRE_RATE 0.1
+// 玩家队伍 (AS:RD 中 marine 队伍号)
+#define ASRD_TEAM_PLAYERS 2
 
-// ─── CVar 句柄 ──────────────────────────────────────────
+// ============================================================================
+//  ConVar 句柄
+// ============================================================================
 ConVar g_cvEnabled;
 ConVar g_cvHealthMult;
 ConVar g_cvFireRateMult;
 ConVar g_cvRangeMult;
 ConVar g_cvAmmoMult;
 ConVar g_cvInvulnerable;
+ConVar g_cvNoPlayerDamage;
 ConVar g_cvHatTurnSpeed;
 ConVar g_cvHatPublic;
 ConVar g_cvDebug;
 
-// ─── 增强追踪 ───────────────────────────────────────────
-bool  g_bEnhanced[MAX_ENTITIES];
-int   g_iOrigMaxHealth[MAX_ENTITIES];
-int   g_iOrigAmmo[MAX_ENTITIES];
-float g_fOrigShootRange[MAX_ENTITIES];
-int   g_iCachedTop[MAX_ENTITIES];
+// ============================================================================
+//  属性偏移缓存（避免循环内 FindDataMapInfo 字符串 IO）
+//  同类实体偏移相同，首次访问时初始化即可
+// ============================================================================
+// base 实体偏移
+int g_offBaseMaxHealth    = -1;
+int g_offBaseHealth       = -1;
+int g_offBaseAmmo         = -1;
+int g_offBaseGunType      = -1;
+int g_offBaseSentryTop    = -1;
+int g_offBaseTakedamage   = -1;
+int g_offBaseCollisionGrp = -1;  // Prop_Send
+int g_offBaseTeamNum      = -1;  // Prop_Send
+// top 实体偏移
+int g_offTopShootRange    = -1;
+int g_offTopNextFireTime  = -1;
+int g_offTopEnemy         = -1;
+int g_offTopSentryBase    = -1;
 
-// ─── 头顶机枪塔追踪 ─────────────────────────────────────
-// base ref → marine userid
-int   g_iHatMarine[MAX_ENTITIES];
-// 是否使用父子绑定模式（AS:RD 中玩家不支持 SetParent，改用 OnGameFrame 追踪）
-bool  g_bHatParented[MAX_ENTITIES];
-// 缓存 marine 实体索引（避免每帧遍历）
-int   g_iHatMarineEnt[MAX_ENTITIES];
-// 每个塔的额外 Yaw 偏移（度）
-float g_fHatYawOffset[MAX_ENTITIES];
+bool g_bPropsCached = false;
+
+// ============================================================================
+//  数据结构：用 ArrayList 存储增强记录，避免遍历 MAX_ENTITIES
+// ============================================================================
+enum struct SentryData {
+    int   baseRef;           // base 实体引用（唯一标识，防实体复用）
+    int   topRef;            // top  实体引用
+    int   origMaxHealth;     // 原始最大生命值
+    int   origAmmo;          // 原始弹药
+    float origShootRange;    // 原始射程
+    int   origCollision;     // 原始碰撞组（头顶塔关闭时恢复）
+    int   origTakedamage;    // 原始 m_takedamage
+    int   origTeamNum;       // 原始队伍
+    int   gunType;           // 塔类型 0-3
+    float lastNextFireTime;  // 上一帧的 m_fNextFireTime（用于检测开火瞬间）
+    // 头顶塔相关 (hatUserId == 0 表示非头顶塔)
+    int   hatUserId;         // 所属玩家 userid
+    int   hatMarineRef;      // marine 实体引用
+    float hatYawOffset;      // Yaw 偏移
+}
+
+ArrayList g_hSentries;  // 增强记录列表（SentryData）
 
 // ============================================================================
 //  插件信息
@@ -70,7 +97,7 @@ float g_fHatYawOffset[MAX_ENTITIES];
 public Plugin myinfo = {
     name        = PLUGIN_NAME,
     author      = "jack",
-    description = "AS:RD 机枪塔增强 + 头顶机枪塔",
+    description = "AS:RD 机枪塔增强 + 头顶机枪塔 (v6 重写)",
     version     = PLUGIN_VERSION,
     url         = ""
 };
@@ -85,49 +112,46 @@ public void OnPluginStart()
         "启用/禁用机枪塔增强",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
-
     g_cvHealthMult = CreateConVar(
         "sm_asrd_sentry_health_mult", "2.0",
         "机枪塔生命值倍率 (1.0=默认, 2.0=双倍)",
         FCVAR_NOTIFY, true, 1.0
     );
-
     g_cvFireRateMult = CreateConVar(
         "sm_asrd_sentry_firerate_mult", "2.0",
         "机枪塔射速倍率 (1.0=默认, 2.0=两倍射速)",
         FCVAR_NOTIFY, true, 1.0
     );
-
     g_cvRangeMult = CreateConVar(
         "sm_asrd_sentry_range_mult", "1.5",
         "机枪塔射程倍率 (1.0=默认, 1.5=1.5倍射程)",
         FCVAR_NOTIFY, true, 1.0
     );
-
     g_cvAmmoMult = CreateConVar(
         "sm_asrd_sentry_ammo_mult", "2.0",
         "机枪塔弹药倍率 (1.0=默认, 2.0=双倍弹药)",
         FCVAR_NOTIFY, true, 1.0
     );
-
     g_cvInvulnerable = CreateConVar(
         "sm_asrd_sentry_invulnerable", "0",
         "机枪塔无敌 (0=正常可被摧毁, 1=不会死亡不会消失)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
-
+    g_cvNoPlayerDamage = CreateConVar(
+        "sm_asrd_sentry_no_player_damage", "1",
+        "禁用塔对玩家的伤害 (0=可伤害, 1=不伤害玩家/marine)",
+        FCVAR_NOTIFY, true, 0.0, true, 1.0
+    );
     g_cvHatTurnSpeed = CreateConVar(
         "sm_asrd_sentry_hat_turnspeed", "360.0",
         "头顶机枪塔转向速度 (度/秒, 0=瞬间转向, 360=1秒转1圈)",
         FCVAR_NOTIFY, true, 0.0
     );
-
     g_cvHatPublic = CreateConVar(
         "sm_asrd_sentry_hat_public", "0",
         "允许所有玩家使用头顶机枪塔命令 (0=仅管理员, 1=所有玩家)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
-
     g_cvDebug = CreateConVar(
         "sm_asrd_sentry_debug", "0",
         "调试模式",
@@ -136,69 +160,102 @@ public void OnPluginStart()
 
     AutoExecConfig(true, "asrd_sentry_enhancer");
 
-    RegAdminCmd("sm_sentry_refresh", Command_RefreshSentries, ADMFLAG_GENERIC, "重新增强所有机枪塔并补满弹药");
-    RegAdminCmd("sm_sentry_status", Command_SentryStatus, ADMFLAG_GENERIC, "查看所有机枪塔状态");
-    RegAdminCmd("sm_sentry_dump", Command_SentryDump, ADMFLAG_GENERIC, "转储机枪塔属性（调试）");
-    RegAdminCmd("sm_sentry_dump_player", Command_DumpPlayer, ADMFLAG_GENERIC, "转储玩家实体属性（调试）");
-    RegAdminCmd("sm_sentryhat", Command_SentryHat, ADMFLAG_GENERIC, "把最近的机枪塔放到自己头顶");
-    RegAdminCmd("sm_sentryhat_off", Command_SentryHatOff, ADMFLAG_GENERIC, "取消所有头顶机枪塔");
-    RegConsoleCmd("sm_hat", Command_HatPublic, "把最近的机枪塔放到自己头顶 (需管理员开启)");
-    RegConsoleCmd("sm_hat_off", Command_HatOffPublic, "取消自己的头顶机枪塔 (需管理员开启)");
+    // 命令
+    RegAdminCmd("sm_sentry_refresh",   Command_RefreshSentries, ADMFLAG_GENERIC, "重新增强所有机枪塔并补满弹药");
+    RegAdminCmd("sm_sentry_status",    Command_SentryStatus,    ADMFLAG_GENERIC, "查看所有机枪塔状态");
+    RegAdminCmd("sm_sentry_dump",      Command_SentryDump,      ADMFLAG_GENERIC, "转储机枪塔属性（调试）");
+    RegAdminCmd("sm_sentry_dump_player", Command_DumpPlayer,    ADMFLAG_GENERIC, "转储玩家实体属性（调试）");
+    RegAdminCmd("sm_sentryhat",        Command_SentryHat,       ADMFLAG_GENERIC, "把最近的机枪塔放到自己头顶");
+    RegAdminCmd("sm_sentryhat_off",    Command_SentryHatOff,    ADMFLAG_GENERIC, "取消所有玩家的头顶机枪塔");
+    RegConsoleCmd("sm_hat",            Command_HatPublic,       "把最近的机枪塔放到自己头顶 (需管理员开启)");
+    RegConsoleCmd("sm_hat_off",        Command_HatOffPublic,    "取消自己的头顶机枪塔 (需管理员开启)");
 
-    ResetAllTracking();
+    // ConVar 变更自动刷新
+    g_cvHealthMult.AddChangeHook(OnMultCvarChanged);
+    g_cvFireRateMult.AddChangeHook(OnMultCvarChanged);
+    g_cvRangeMult.AddChangeHook(OnMultCvarChanged);
+    g_cvAmmoMult.AddChangeHook(OnMultCvarChanged);
+    g_cvInvulnerable.AddChangeHook(OnInvulnCvarChanged);
+    g_cvNoPlayerDamage.AddChangeHook(OnNoDamageCvarChanged);
+
+    g_hSentries = new ArrayList(sizeof(SentryData));
 }
 
 // ============================================================================
-//  实体创建
+//  地图加载：清空状态
+// ============================================================================
+public void OnMapStart()
+{
+    g_hSentries.Clear();
+    g_bPropsCached = false;  // 新地图可能实体类重新注册，重新缓存
+}
+
+// ============================================================================
+//  实体创建：延迟增强 base
 // ============================================================================
 public void OnEntityCreated(int entity, const char[] classname)
 {
     if (!g_cvEnabled.BoolValue)
         return;
-
-    if (entity < 0 || entity >= MAX_ENTITIES)
+    if (entity <= 0)
         return;
 
-    // 延迟增强 base 实体
     if (StrEqual(classname, "asw_sentry_base"))
     {
+        // 延迟 0.3s 等 top 实体 spawn 完毕
         CreateTimer(0.3, Timer_EnhanceSentry, EntIndexToEntRef(entity), TIMER_FLAG_NO_MAPCHANGE);
     }
 }
 
-void ResetAllTracking()
-{
-    for (int i = 0; i < MAX_ENTITIES; i++)
-    {
-        g_bEnhanced[i]       = false;
-        g_iOrigMaxHealth[i]  = 0;
-        g_iOrigAmmo[i]       = 0;
-        g_fOrigShootRange[i] = 0.0;
-        g_iCachedTop[i]      = -1;
-        g_iHatMarine[i]      = 0;
-        g_iHatMarineEnt[i]   = -1;
-        g_fHatYawOffset[i]   = 0.0;
-    }
-}
-
-public void OnMapStart()
-{
-    ResetAllTracking();
-}
-
 public void OnEntityDestroyed(int entity)
 {
-    if (entity < 0 || entity >= MAX_ENTITIES)
+    if (entity <= 0)
         return;
 
-    g_bEnhanced[entity]       = false;
-    g_iOrigMaxHealth[entity]  = 0;
-    g_iOrigAmmo[entity]       = 0;
-    g_fOrigShootRange[entity] = 0.0;
-    g_iCachedTop[entity]      = -1;
-    g_iHatMarine[entity]      = 0;
-    g_iHatMarineEnt[entity]   = -1;
-    g_fHatYawOffset[entity]   = 0.0;
+    // 从列表中移除被销毁的 base
+    int idx = FindSentryByEntIndex(entity);
+    if (idx >= 0)
+        g_hSentries.Erase(idx);
+}
+
+// ============================================================================
+//  属性偏移缓存（首次访问时初始化）
+// ============================================================================
+void CachePropOffsets(int iBase, int iTop)
+{
+    if (g_bPropsCached)
+        return;
+
+    // base 偏移
+    g_offBaseMaxHealth    = FindDataMapInfo(iBase, "m_iMaxHealth");
+    g_offBaseHealth       = FindDataMapInfo(iBase, "m_iHealth");
+    g_offBaseAmmo         = FindDataMapInfo(iBase, "m_iAmmo");
+    g_offBaseGunType      = FindDataMapInfo(iBase, "m_nGunType");
+    g_offBaseSentryTop    = FindDataMapInfo(iBase, "m_hSentryTop");
+    g_offBaseTakedamage   = FindDataMapInfo(iBase, "m_takedamage");
+    g_offBaseCollisionGrp = FindSendPropInfo("asw_sentry_base", "m_CollisionGroup");
+    g_offBaseTeamNum      = FindSendPropInfo("asw_sentry_base", "m_iTeamNum");
+
+    // top 偏移
+    if (iTop > 0)
+    {
+        g_offTopShootRange   = FindDataMapInfo(iTop, "m_flShootRange");
+        g_offTopNextFireTime = FindDataMapInfo(iTop, "m_fNextFireTime");
+        g_offTopEnemy        = FindDataMapInfo(iTop, "m_hEnemy");
+        g_offTopSentryBase   = FindDataMapInfo(iTop, "m_hSentryBase");
+    }
+
+    g_bPropsCached = true;
+
+    if (g_cvDebug.BoolValue)
+    {
+        PrintToServer("[机枪塔] 属性偏移缓存完成:");
+        PrintToServer("  base: MaxHealth=%d Health=%d Ammo=%d GunType=%d SentryTop=%d Takedamage=%d Coll=%d Team=%d",
+            g_offBaseMaxHealth, g_offBaseHealth, g_offBaseAmmo, g_offBaseGunType,
+            g_offBaseSentryTop, g_offBaseTakedamage, g_offBaseCollisionGrp, g_offBaseTeamNum);
+        PrintToServer("  top:  ShootRange=%d NextFire=%d Enemy=%d SentryBase=%d",
+            g_offTopShootRange, g_offTopNextFireTime, g_offTopEnemy, g_offTopSentryBase);
+    }
 }
 
 // ============================================================================
@@ -219,300 +276,371 @@ public Action Timer_EnhanceSentry(Handle timer, int ref)
 // ============================================================================
 void EnhanceSentry(int iBase, bool bForce)
 {
-    if (!bForce && g_bEnhanced[iBase])
+    // 已存在则跳过（除非 Force）
+    int idx = FindSentryByEntIndex(iBase);
+    if (!bForce && idx >= 0)
         return;
+
+    // 查找 top 实体
+    int iTop = FindSentryTop(iBase);
+    CachePropOffsets(iBase, iTop);
 
     float fHealthMult = g_cvHealthMult.FloatValue;
     float fAmmoMult   = g_cvAmmoMult.FloatValue;
     float fRangeMult  = g_cvRangeMult.FloatValue;
 
-    // ─── 增强生命值 ───
-    if (FindDataMapInfo(iBase, "m_iMaxHealth") != -1)
+    // ─── 已存在：保留原始值和头顶塔状态，只重新应用增强 ───
+    if (idx >= 0)
     {
-        if (!g_bEnhanced[iBase])
-            g_iOrigMaxHealth[iBase] = GetEntProp(iBase, Prop_Data, "m_iMaxHealth");
+        SentryData data;
+        g_hSentries.GetArray(idx, data);
 
-        int iOrigHealth = g_iOrigMaxHealth[iBase];
-        if (iOrigHealth > 0 && fHealthMult != 1.0)
+        // 刷新 topRef（可能变化）
+        if (iTop > 0)
+            data.topRef = EntIndexToEntRef(iTop);
+
+        // 用保存的原始值重新应用增强
+        ReapplyEnhance(iBase, data);
+
+        // 补满弹药
+        if (data.origAmmo > 0)
         {
-            int iNewHealth = RoundToFloor(float(iOrigHealth) * fHealthMult);
-            SetEntProp(iBase, Prop_Data, "m_iMaxHealth", iNewHealth);
-            SetEntProp(iBase, Prop_Data, "m_iHealth", iNewHealth);
-
-            if (g_cvDebug.BoolValue)
-                PrintToServer("[机枪塔] 生命: %d → %d (x%.1f)", iOrigHealth, iNewHealth, fHealthMult);
-        }
-    }
-
-    // ─── 增强弹药 ───
-    if (FindDataMapInfo(iBase, "m_iAmmo") != -1)
-    {
-        if (!g_bEnhanced[iBase])
-            g_iOrigAmmo[iBase] = GetEntProp(iBase, Prop_Data, "m_iAmmo");
-
-        int iOrigAmmo = g_iOrigAmmo[iBase];
-        if (iOrigAmmo > 0 && fAmmoMult != 1.0)
-        {
-            int iNewAmmo = RoundToFloor(float(iOrigAmmo) * fAmmoMult);
-            // 强制刷新时也补满弹药
-            SetEntProp(iBase, Prop_Data, "m_iAmmo", iNewAmmo);
-
-            if (g_cvDebug.BoolValue)
-                PrintToServer("[机枪塔] 弹药: %d → %d (x%.1f)", iOrigAmmo, iNewAmmo, fAmmoMult);
-        }
-        else if (bForce && iOrigAmmo > 0)
-        {
-            // 倍率为1时也补满到原始值 × 倍率
-            int iFullAmmo = RoundToFloor(float(iOrigAmmo) * fAmmoMult);
+            int iFullAmmo = RoundToFloor(float(data.origAmmo) * fAmmoMult);
             SetEntProp(iBase, Prop_Data, "m_iAmmo", iFullAmmo);
         }
+
+        // 重新应用无敌
+        if (g_cvInvulnerable.BoolValue && g_offBaseTakedamage >= 0)
+            SetEntProp(iBase, Prop_Data, "m_takedamage", 0);
+
+        // 重新应用禁伤
+        if (g_cvNoPlayerDamage.BoolValue && g_offBaseTeamNum >= 0)
+            SetEntProp(iBase, Prop_Send, "m_iTeamNum", ASRD_TEAM_PLAYERS);
+
+        g_hSentries.SetArray(idx, data);
+
+        char sTypeName[32];
+        GetSentryTypeName(data.gunType, sTypeName, sizeof(sTypeName));
+        PrintToServer("[机枪塔刷新] #%d [%s] (生命x%.1f 射速x%.1f 射程x%.1f 弹药x%.1f)",
+            iBase, sTypeName, fHealthMult, g_cvFireRateMult.FloatValue,
+            fRangeMult, fAmmoMult);
+        return;
     }
 
-    // ─── 查找 top 实体并缓存 ───
-    int iTop = FindSentryTop(iBase);
-    g_iCachedTop[iBase] = iTop;
+    // ─── 新塔：构建记录 ───
+    SentryData data;
+    data.baseRef = EntIndexToEntRef(iBase);
+    data.topRef  = (iTop > 0) ? EntIndexToEntRef(iTop) : 0;
+    data.hatUserId    = 0;
+    data.hatMarineRef = 0;
+    data.hatYawOffset = 0.0;
+    data.lastNextFireTime = 0.0;
 
-    // ─── 增强射程 ───
-    if (iTop > 0 && FindDataMapInfo(iTop, "m_flShootRange") != -1)
+    // 读取原始值
+    data.origMaxHealth = (g_offBaseMaxHealth >= 0) ? GetEntProp(iBase, Prop_Data, "m_iMaxHealth") : 0;
+    data.origAmmo      = (g_offBaseAmmo     >= 0) ? GetEntProp(iBase, Prop_Data, "m_iAmmo")       : 0;
+    data.origCollision = (g_offBaseCollisionGrp >= 0) ? GetEntProp(iBase, Prop_Send, "m_CollisionGroup") : 0;
+    data.origTakedamage= (g_offBaseTakedamage >= 0) ? GetEntProp(iBase, Prop_Data, "m_takedamage") : 1;
+    data.origTeamNum   = (g_offBaseTeamNum  >= 0) ? GetEntProp(iBase, Prop_Send, "m_iTeamNum")    : ASRD_TEAM_PLAYERS;
+    data.gunType       = (g_offBaseGunType  >= 0) ? GetEntProp(iBase, Prop_Data, "m_nGunType")    : 0;
+    data.origShootRange = (iTop > 0 && g_offTopShootRange >= 0) ? GetEntPropFloat(iTop, Prop_Data, "m_flShootRange") : 0.0;
+
+    // 应用增强
+    if (data.origMaxHealth > 0 && fHealthMult != 1.0)
     {
-        if (!g_bEnhanced[iBase])
-            g_fOrigShootRange[iBase] = GetEntPropFloat(iTop, Prop_Data, "m_flShootRange");
-
-        float fOrigRange = g_fOrigShootRange[iBase];
-        if (fOrigRange > 0.0 && fRangeMult != 1.0)
-        {
-            float fNewRange = fOrigRange * fRangeMult;
-            SetEntPropFloat(iTop, Prop_Data, "m_flShootRange", fNewRange);
-
-            if (g_cvDebug.BoolValue)
-                PrintToServer("[机枪塔] 射程: %.0f → %.0f (x%.1f)", fOrigRange, fNewRange, fRangeMult);
-        }
+        int iNewHealth = RoundToFloor(float(data.origMaxHealth) * fHealthMult);
+        SetEntProp(iBase, Prop_Data, "m_iMaxHealth", iNewHealth);
+        SetEntProp(iBase, Prop_Data, "m_iHealth", iNewHealth);
     }
 
-    g_bEnhanced[iBase] = true;
+    if (data.origAmmo > 0 && fAmmoMult != 1.0)
+    {
+        int iNewAmmo = RoundToFloor(float(data.origAmmo) * fAmmoMult);
+        SetEntProp(iBase, Prop_Data, "m_iAmmo", iNewAmmo);
+    }
 
-    // 获取塔类型名称
+    if (iTop > 0 && data.origShootRange > 0.0 && fRangeMult != 1.0)
+    {
+        SetEntPropFloat(iTop, Prop_Data, "m_flShootRange", data.origShootRange * fRangeMult);
+    }
+
+    if (g_cvInvulnerable.BoolValue && g_offBaseTakedamage >= 0)
+        SetEntProp(iBase, Prop_Data, "m_takedamage", 0);
+
+    if (g_cvNoPlayerDamage.BoolValue && g_offBaseTeamNum >= 0)
+        SetEntProp(iBase, Prop_Send, "m_iTeamNum", ASRD_TEAM_PLAYERS);
+
+    g_hSentries.PushArray(data);
+
     char sTypeName[32];
-    GetSentryTypeName(iBase, sTypeName, sizeof(sTypeName));
+    GetSentryTypeName(data.gunType, sTypeName, sizeof(sTypeName));
 
-    PrintToServer("[机枪塔增强] #%d [%s] (生命x%.1f 射速x%.1f 射程x%.1f 弹药x%.1f 无敌%s)",
-        iBase, sTypeName, fHealthMult,
-        g_cvFireRateMult.FloatValue, fRangeMult, fAmmoMult,
-        g_cvInvulnerable.BoolValue ? "开" : "关");
+    PrintToServer("[机枪塔增强] #%d [%s] (生命x%.1f 射速x%.1f 射程x%.1f 弹药x%.1f 无敌%s 禁伤%s)",
+        iBase, sTypeName, fHealthMult, g_cvFireRateMult.FloatValue,
+        fRangeMult, fAmmoMult,
+        g_cvInvulnerable.BoolValue ? "开" : "关",
+        g_cvNoPlayerDamage.BoolValue ? "开" : "关");
 }
 
 // ============================================================================
-//  OnGameFrame：射速 + 无敌
+//  OnGameFrame：射速 + 无敌 + 禁伤 + 头顶追踪
+//  只遍历 ArrayList（通常 <20 个），不遍历 MAX_ENTITIES
 // ============================================================================
 public void OnGameFrame()
 {
     if (!g_cvEnabled.BoolValue)
         return;
+    if (g_hSentries.Length == 0)
+        return;
 
+    float fGameTime     = GetGameTime();
     float fFireRateMult = g_cvFireRateMult.FloatValue;
-    bool bInvuln = g_cvInvulnerable.BoolValue;
-    float fGameTime = GetGameTime();
+    bool  bInvuln       = g_cvInvulnerable.BoolValue;
+    bool  bNoPlayerDmg  = g_cvNoPlayerDamage.BoolValue;
+    float fTickInterval = GetTickInterval();
+    float fTurnSpeed    = g_cvHatTurnSpeed.FloatValue;
 
-    for (int i = MaxClients + 1; i < MAX_ENTITIES; i++)
+    SentryData data;
+    for (int i = 0; i < g_hSentries.Length; i++)
     {
-        if (!g_bEnhanced[i])
-            continue;
+        g_hSentries.GetArray(i, data);
 
-        // ─── 射速操控 ───
-        if (fFireRateMult > 1.0)
+        // 校验 base 实体有效性（防实体复用）
+        int iBase = EntRefToEntIndex(data.baseRef);
+        if (iBase == INVALID_ENT_REFERENCE || !IsValidEntity(iBase))
         {
-            int iTop = g_iCachedTop[i];
-            if (iTop <= 0 || !IsValidEntity(iTop))
-            {
-                iTop = FindSentryTop(i);
-                g_iCachedTop[i] = iTop;
-            }
+            g_hSentries.Erase(i);
+            i--;
+            continue;
+        }
 
-            if (iTop > 0 && FindDataMapInfo(iTop, "m_fNextFireTime") != -1)
+        // 校验/刷新 top 实体
+        int iTop = EntRefToEntIndex(data.topRef);
+        if (iTop == INVALID_ENT_REFERENCE || !IsValidEntity(iTop))
+        {
+            iTop = FindSentryTop(iBase);
+            if (iTop > 0)
             {
-                float fNextFire = GetEntPropFloat(iTop, Prop_Data, "m_fNextFireTime");
-                if (fNextFire > fGameTime)
-                {
-                    float fDesiredInterval = SENTRY_BASE_FIRE_RATE / fFireRateMult;
-                    float fCurrentInterval = fNextFire - fGameTime;
-                    if (fCurrentInterval > fDesiredInterval)
-                    {
-                        SetEntPropFloat(iTop, Prop_Data, "m_fNextFireTime", fGameTime + fDesiredInterval);
-                    }
-                }
+                data.topRef = EntIndexToEntRef(iTop);
+                CachePropOffsets(iBase, iTop);
             }
         }
 
-        // ─── 无敌：保持生命值不低于1 ───
-        if (bInvuln && FindDataMapInfo(i, "m_iHealth") != -1)
+        // ─── 射速加速（动态检测开火瞬间） ───
+        if (fFireRateMult > 1.0 && iTop > 0 && g_offTopNextFireTime >= 0)
         {
-            int iHealth = GetEntProp(i, Prop_Data, "m_iHealth");
-            if (iHealth <= 0)
-            {
-                int iMaxHealth = GetEntProp(i, Prop_Data, "m_iMaxHealth");
-                if (iMaxHealth > 0)
-                {
-                    SetEntProp(i, Prop_Data, "m_iHealth", iMaxHealth);
+            float fNextFire = GetEntPropFloat(iTop, Prop_Data, "m_fNextFireTime");
 
+            // 检测塔刚开火：m_fNextFireTime 突然变大（引擎重置为 now + baseInterval）
+            if (fNextFire > data.lastNextFireTime && fNextFire > fGameTime)
+            {
+                // 将剩余等待时间压缩为 1/倍率
+                float fRemaining = fNextFire - fGameTime;
+                float fNewNext   = fGameTime + (fRemaining / fFireRateMult);
+                SetEntPropFloat(iTop, Prop_Data, "m_fNextFireTime", fNewNext);
+                data.lastNextFireTime = fNewNext;
+            }
+            else
+            {
+                data.lastNextFireTime = fNextFire;
+            }
+        }
+
+        // ─── 无敌：保持 m_takedamage = 0 ───
+        if (bInvuln && g_offBaseTakedamage >= 0)
+        {
+            if (GetEntProp(iBase, Prop_Data, "m_takedamage") != 0)
+                SetEntProp(iBase, Prop_Data, "m_takedamage", 0);
+            // 同时保持血量满
+            if (g_offBaseHealth >= 0 && g_offBaseMaxHealth >= 0)
+            {
+                int iMaxHp = GetEntProp(iBase, Prop_Data, "m_iMaxHealth");
+                if (iMaxHp > 0 && GetEntProp(iBase, Prop_Data, "m_iHealth") < iMaxHp)
+                    SetEntProp(iBase, Prop_Data, "m_iHealth", iMaxHp);
+            }
+        }
+
+        // ─── 禁用对玩家伤害：清除指向 marine 的目标 + 强制同队 ───
+        if (bNoPlayerDmg && iTop > 0)
+        {
+            // 强制塔与玩家同队
+            if (g_offBaseTeamNum >= 0 && GetEntProp(iBase, Prop_Send, "m_iTeamNum") != ASRD_TEAM_PLAYERS)
+                SetEntProp(iBase, Prop_Send, "m_iTeamNum", ASRD_TEAM_PLAYERS);
+
+            // 清除指向 marine 的目标
+            if (g_offTopEnemy >= 0)
+            {
+                int iEnemy = GetEntPropEnt(iTop, Prop_Data, "m_hEnemy");
+                if (iEnemy > 0 && IsValidEntity(iEnemy) && IsMarineEntity(iEnemy))
+                {
+                    SetEntPropEnt(iTop, Prop_Data, "m_hEnemy", -1);
                     if (g_cvDebug.BoolValue)
-                        PrintToServer("[机枪塔] #%d 无敌保护：生命恢复 %d/%d", i, iMaxHealth, iMaxHealth);
+                        PrintToServer("[机枪塔] #%d 清除指向 marine #%d 的目标", iBase, iEnemy);
                 }
             }
         }
-    }
 
-    // ─── 头顶机枪塔追踪 ───
-    for (int i = MaxClients + 1; i < MAX_ENTITIES; i++)
-    {
-        if (g_iHatMarine[i] == 0)
-            continue;
+        // 先写回射速/无敌/禁伤的修改
+        g_hSentries.SetArray(i, data);
 
-        if (g_bHatParented[i])
-            continue;
-
-        int iBase = i;
-        if (!IsValidEntity(iBase))
+        // ─── 头顶塔追踪（内部自己管理 data 读写） ───
+        if (data.hatUserId != 0)
         {
-            g_iHatMarine[i] = 0;
-            g_iHatMarineEnt[i] = -1;
-            g_fHatYawOffset[i] = 0.0;
-            continue;
+            UpdateHatSentry(i, iBase, fTurnSpeed, fTickInterval);
         }
-
-        int iClient = GetClientOfUserId(g_iHatMarine[i]);
-        if (iClient <= 0 || !IsClientInGame(iClient))
-        {
-            g_iHatMarine[i] = 0;
-            g_iHatMarineEnt[i] = -1;
-            g_fHatYawOffset[i] = 0.0;
-            SetEntProp(iBase, Prop_Send, "m_CollisionGroup", 0);
-            continue;
-        }
-
-        // 使用缓存的 marine 实体，如果无效则重新查找
-        int iMarine = g_iHatMarineEnt[i];
-        if (iMarine <= 0 || !IsValidEntity(iMarine))
-        {
-            iMarine = GetPlayerMarine(iClient);
-            g_iHatMarineEnt[i] = iMarine;
-        }
-
-        if (iMarine <= 0 || !IsValidEntity(iMarine))
-        {
-            // marine 不存在（可能还没部署），跳过本帧
-            continue;
-        }
-
-        // 检查 marine 是否存活
-        if (FindDataMapInfo(iMarine, "m_iHealth") != -1 && GetEntProp(iMarine, Prop_Data, "m_iHealth") <= 0)
-        {
-            // marine 死亡，取消追踪
-            g_iHatMarine[i] = 0;
-            g_iHatMarineEnt[i] = -1;
-            g_fHatYawOffset[i] = 0.0;
-            SetEntProp(iBase, Prop_Send, "m_CollisionGroup", 0);
-            continue;
-        }
-
-        // 获取 marine 头部位置和朝向
-        float fOrigin[3], fAngles[3];
-        GetEntPropVector(iMarine, Prop_Data, "m_vecOrigin", fOrigin);
-        fOrigin[2] += 80.0;  // 基础高度80
-
-        // 有角度偏移的塔放更高，避免重叠（塔整体约60-70单位高）
-        if (g_fHatYawOffset[i] != 0.0)
-            fOrigin[2] += 70.0;
-
-        // 获取玩家视角（用于计算朝向）
-        float fEyeAngles[3];
-        GetClientEyeAngles(iClient, fEyeAngles);
-
-        // 获取 marine 朝向
-        GetEntPropVector(iMarine, Prop_Data, "m_angRotation", fAngles);
-
-        // 计算目标朝向：玩家视角 + 180度
-        float fTargetYaw = fEyeAngles[1] + 180.0 + g_fHatYawOffset[i];
-
-        // 转向速度控制
-        float fTurnSpeed = g_cvHatTurnSpeed.FloatValue;
-        if (fTurnSpeed <= 0.0)
-        {
-            // 瞬间转向
-            fAngles[1] = fTargetYaw;
-        }
-        else
-        {
-            // 平滑转向：计算角度差，限制每帧最大转角
-            float fDelta = fTargetYaw - fAngles[1];
-            // 归一化到 -180 ~ 180
-            while (fDelta > 180.0) fDelta -= 360.0;
-            while (fDelta < -180.0) fDelta += 360.0;
-
-            float fMaxTurn = fTurnSpeed * GetTickInterval();
-            if (fDelta > fMaxTurn)
-                fDelta = fMaxTurn;
-            else if (fDelta < -fMaxTurn)
-                fDelta = -fMaxTurn;
-
-            fAngles[1] += fDelta;
-        }
-
-        fAngles[0] = 0.0;  // 不俯仰
-
-        // 传送机枪塔到头顶并跟随朝向
-        TeleportEntity(iBase, fOrigin, fAngles, NULL_VECTOR);
     }
 }
 
 // ============================================================================
-//  辅助：获取机枪塔类型名称
+//  头顶塔位置追踪（每帧）
+//  内部自己从 ArrayList 读取/写回 data，避免与 OnGameFrame 的 data 副本冲突
 // ============================================================================
-void GetSentryTypeName(int iBase, char[] sName, int iLen)
+void UpdateHatSentry(int listIdx, int iBase, float fTurnSpeed, float fTickInterval)
 {
-    if (FindDataMapInfo(iBase, "m_nGunType") == -1)
+    SentryData data;
+    g_hSentries.GetArray(listIdx, data);
+
+    int iClient = GetClientOfUserId(data.hatUserId);
+    if (iClient <= 0 || !IsClientInGame(iClient))
     {
-        strcopy(sName, iLen, "未知");
+        // 玩家离线，取消头顶塔
+        ClearHatState(listIdx, data, iBase);
         return;
     }
 
-    int iGunType = GetEntProp(iBase, Prop_Data, "m_nGunType");
+    // 获取/刷新 marine 实体
+    int iMarine = EntRefToEntIndex(data.hatMarineRef);
+    if (iMarine == INVALID_ENT_REFERENCE || !IsValidEntity(iMarine))
+    {
+        iMarine = GetPlayerMarine(iClient);
+        if (iMarine > 0)
+        {
+            data.hatMarineRef = EntIndexToEntRef(iMarine);
+            g_hSentries.SetArray(listIdx, data);  // 写回刷新的 marineRef
+        }
+    }
+
+    if (iMarine <= 0 || !IsValidEntity(iMarine))
+    {
+        // marine 还没部署，跳过本帧
+        return;
+    }
+
+    // marine 死亡则取消
+    if (GetEntProp(iMarine, Prop_Data, "m_iHealth") <= 0)
+    {
+        ClearHatState(listIdx, data, iBase);
+        return;
+    }
+
+    // 获取 marine 位置
+    float fOrigin[3], fAngles[3];
+    GetEntPropVector(iMarine, Prop_Data, "m_vecOrigin", fOrigin);
+    fOrigin[2] += 80.0;
+
+    // 有角度偏移的塔放更高，避免重叠
+    if (data.hatYawOffset != 0.0)
+        fOrigin[2] += 70.0;
+
+    // 朝向：玩家视角 + 180 + 偏移
+    float fEyeAngles[3];
+    GetClientEyeAngles(iClient, fEyeAngles);
+    GetEntPropVector(iMarine, Prop_Data, "m_angRotation", fAngles);
+
+    float fTargetYaw = fEyeAngles[1] + 180.0 + data.hatYawOffset;
+
+    if (fTurnSpeed <= 0.0)
+    {
+        fAngles[1] = fTargetYaw;
+    }
+    else
+    {
+        float fDelta = fTargetYaw - fAngles[1];
+        while (fDelta > 180.0)  fDelta -= 360.0;
+        while (fDelta < -180.0) fDelta += 360.0;
+
+        float fMaxTurn = fTurnSpeed * fTickInterval;
+        if (fDelta > fMaxTurn)      fDelta = fMaxTurn;
+        else if (fDelta < -fMaxTurn) fDelta = -fMaxTurn;
+        fAngles[1] += fDelta;
+    }
+    fAngles[0] = 0.0;
+
+    TeleportEntity(iBase, fOrigin, fAngles, NULL_VECTOR);
+}
+
+// ============================================================================
+//  清除头顶塔状态（恢复碰撞组等）
+// ============================================================================
+void ClearHatState(int listIdx, SentryData data, int iBase)
+{
+    // 恢复原始碰撞组
+    if (g_offBaseCollisionGrp >= 0 && IsValidEntity(iBase))
+        SetEntProp(iBase, Prop_Send, "m_CollisionGroup", data.origCollision);
+
+    // 同时恢复 top 碰撞组
+    int iTop = EntRefToEntIndex(data.topRef);
+    if (iTop > 0 && IsValidEntity(iTop))
+        SetEntProp(iTop, Prop_Send, "m_CollisionGroup", 0);
+
+    data.hatUserId    = 0;
+    data.hatMarineRef = 0;
+    data.hatYawOffset = 0.0;
+    g_hSentries.SetArray(listIdx, data);
+}
+
+// ============================================================================
+//  辅助：判断实体是否是 marine（玩家控制的角色）
+// ============================================================================
+bool IsMarineEntity(int entity)
+{
+    if (entity <= 0 || !IsValidEntity(entity))
+        return false;
+
+    char sClass[32];
+    if (!GetEntityClassname(entity, sClass, sizeof(sClass)))
+        return false;
+
+    return StrEqual(sClass, "asw_marine");
+}
+
+// ============================================================================
+//  辅助：获取塔类型名称
+// ============================================================================
+void GetSentryTypeName(int iGunType, char[] sName, int iLen)
+{
     switch (iGunType)
     {
         case 0: strcopy(sName, iLen, "哨戒枪");
         case 1: strcopy(sName, iLen, "哨戒炮");
         case 2: strcopy(sName, iLen, "喷火型");
         case 3: strcopy(sName, iLen, "冷冻型");
-        default:
-        {
-            Format(sName, iLen, "未知(%d)", iGunType);
-        }
+        default: Format(sName, iLen, "未知(%d)", iGunType);
     }
 }
 
 // ============================================================================
-//  辅助：通过 base 找 top（支持4种塔）
+//  辅助：通过 base 找 top（优先用 m_hSentryTop 句柄，避免全实体遍历）
 // ============================================================================
 int FindSentryTop(int iBase)
 {
     if (!IsValidEntity(iBase))
         return -1;
 
-    // 方法1：通过 m_hSentryTop 句柄
-    if (FindDataMapInfo(iBase, "m_hSentryTop") != -1)
+    // 方法1：通过 m_hSentryTop 句柄（O(1)，无 IO）
+    if (g_offBaseSentryTop >= 0 || FindDataMapInfo(iBase, "m_hSentryTop") != -1)
     {
         int iTop = GetEntPropEnt(iBase, Prop_Data, "m_hSentryTop");
         if (iTop > 0 && IsValidEntity(iTop))
             return iTop;
     }
 
-    // 方法2：遍历所有 top 实体类名
-    // 4种塔的 top 实体类名
+    // 方法2：遍历 top 实体类名（仅兜底）
     char sTopClasses[][] = {
-        "asw_sentry_top",              // 基类
-        "asw_sentry_top_machinegun",   // 哨戒枪
-        "asw_sentry_top_cannon",       // 哨戒炮
-        "asw_sentry_top_flamer",       // 喷火型哨戒枪
-        "asw_sentry_top_freeze"        // 冷冻型哨戒枪
+        "asw_sentry_top_machinegun",
+        "asw_sentry_top_cannon",
+        "asw_sentry_top_flamer",
+        "asw_sentry_top_freeze"
     };
 
     for (int t = 0; t < sizeof(sTopClasses); t++)
@@ -520,22 +648,188 @@ int FindSentryTop(int iBase)
         int entity = -1;
         while ((entity = FindEntityByClassname(entity, sTopClasses[t])) != -1)
         {
-            if (FindDataMapInfo(entity, "m_hSentryBase") != -1)
-            {
-                int iMyBase = GetEntPropEnt(entity, Prop_Data, "m_hSentryBase");
-                if (iMyBase == iBase)
-                    return entity;
-            }
+            int iMyBase = GetEntPropEnt(entity, Prop_Data, "m_hSentryBase");
+            if (iMyBase == iBase)
+                return entity;
         }
+    }
+    return -1;
+}
+
+// ============================================================================
+//  辅助：按实体索引查找列表中的位置
+// ============================================================================
+int FindSentryByEntIndex(int iBase)
+{
+    if (iBase <= 0)
+        return -1;
+
+    int ref = EntIndexToEntRef(iBase);
+    SentryData data;
+    for (int i = 0; i < g_hSentries.Length; i++)
+    {
+        g_hSentries.GetArray(i, data);
+        if (data.baseRef == ref)
+            return i;
+    }
+    return -1;
+}
+
+// ============================================================================
+//  辅助：获取玩家控制的 marine 实体
+//  优先用 m_hInhabiting（Prop_Send），回退到遍历 asw_marine
+// ============================================================================
+int GetPlayerMarine(int iClient)
+{
+    if (iClient <= 0 || !IsClientInGame(iClient))
+        return -1;
+
+    // 方法1: m_hInhabiting（Prop_Send）
+    char sNetClass[64];
+    if (GetEntityNetClass(iClient, sNetClass, sizeof(sNetClass)))
+    {
+        if (FindSendPropInfo(sNetClass, "m_hInhabiting") != -1)
+        {
+            int iMarine = GetEntPropEnt(iClient, Prop_Send, "m_hInhabiting");
+            if (iMarine > 0 && IsValidEntity(iMarine))
+                return iMarine;
+        }
+    }
+
+    // 方法2: Prop_Data
+    if (FindDataMapInfo(iClient, "m_hInhabiting") != -1)
+    {
+        int iMarine = GetEntPropEnt(iClient, Prop_Data, "m_hInhabiting");
+        if (iMarine > 0 && IsValidEntity(iMarine))
+            return iMarine;
+    }
+
+    // 方法3: 遍历 asw_marine 匹配 m_hCommander
+    int entity = -1;
+    while ((entity = FindEntityByClassname(entity, "asw_marine")) != -1)
+    {
+        int iCommander = -1;
+        if (FindDataMapInfo(entity, "m_hCommander") != -1)
+            iCommander = GetEntPropEnt(entity, Prop_Data, "m_hCommander");
+
+        if (iCommander <= 0)
+        {
+            if (GetEntityNetClass(entity, sNetClass, sizeof(sNetClass))
+                && FindSendPropInfo(sNetClass, "m_hCommander") != -1)
+                iCommander = GetEntPropEnt(entity, Prop_Send, "m_hCommander");
+        }
+
+        if (iCommander == iClient)
+            return entity;
     }
 
     return -1;
 }
 
 // ============================================================================
+//  ConVar 变更：倍率修改 → 自动重新增强
+// ============================================================================
+void OnMultCvarChanged(ConVar cv, const char[] oldValue, const char[] newValue)
+{
+    if (!g_cvEnabled.BoolValue || g_hSentries.Length == 0)
+        return;
+
+    // 重新增强所有已追踪的塔
+    SentryData data;
+    for (int i = 0; i < g_hSentries.Length; i++)
+    {
+        g_hSentries.GetArray(i, data);
+        int iBase = EntRefToEntIndex(data.baseRef);
+        if (iBase != INVALID_ENT_REFERENCE && IsValidEntity(iBase))
+            ReapplyEnhance(iBase, data);
+    }
+}
+
+// ============================================================================
+//  ConVar 变更：无敌切换
+// ============================================================================
+void OnInvulnCvarChanged(ConVar cv, const char[] oldValue, const char[] newValue)
+{
+    if (g_hSentries.Length == 0)
+        return;
+
+    bool bInvuln = g_cvInvulnerable.BoolValue;
+    SentryData data;
+    for (int i = 0; i < g_hSentries.Length; i++)
+    {
+        g_hSentries.GetArray(i, data);
+        int iBase = EntRefToEntIndex(data.baseRef);
+        if (iBase == INVALID_ENT_REFERENCE || !IsValidEntity(iBase))
+            continue;
+
+        if (g_offBaseTakedamage >= 0)
+        {
+            if (bInvuln)
+                SetEntProp(iBase, Prop_Data, "m_takedamage", 0);
+            else
+                SetEntProp(iBase, Prop_Data, "m_takedamage", data.origTakedamage);
+        }
+    }
+}
+
+// ============================================================================
+//  ConVar 变更：禁伤玩家切换
+// ============================================================================
+void OnNoDamageCvarChanged(ConVar cv, const char[] oldValue, const char[] newValue)
+{
+    if (g_hSentries.Length == 0)
+        return;
+
+    bool bNoDmg = g_cvNoPlayerDamage.BoolValue;
+    SentryData data;
+    for (int i = 0; i < g_hSentries.Length; i++)
+    {
+        g_hSentries.GetArray(i, data);
+        int iBase = EntRefToEntIndex(data.baseRef);
+        if (iBase == INVALID_ENT_REFERENCE || !IsValidEntity(iBase))
+            continue;
+
+        if (g_offBaseTeamNum >= 0)
+        {
+            if (bNoDmg)
+                SetEntProp(iBase, Prop_Send, "m_iTeamNum", ASRD_TEAM_PLAYERS);
+            else
+                SetEntProp(iBase, Prop_Send, "m_iTeamNum", data.origTeamNum);
+        }
+    }
+}
+
+// ============================================================================
+//  重新应用增强（倍率变更时）
+// ============================================================================
+void ReapplyEnhance(int iBase, SentryData data)
+{
+    float fHealthMult = g_cvHealthMult.FloatValue;
+    float fAmmoMult   = g_cvAmmoMult.FloatValue;
+    float fRangeMult  = g_cvRangeMult.FloatValue;
+
+    if (data.origMaxHealth > 0 && fHealthMult != 1.0)
+    {
+        int iNewHealth = RoundToFloor(float(data.origMaxHealth) * fHealthMult);
+        SetEntProp(iBase, Prop_Data, "m_iMaxHealth", iNewHealth);
+        SetEntProp(iBase, Prop_Data, "m_iHealth", iNewHealth);
+    }
+
+    if (data.origAmmo > 0 && fAmmoMult != 1.0)
+    {
+        int iNewAmmo = RoundToFloor(float(data.origAmmo) * fAmmoMult);
+        SetEntProp(iBase, Prop_Data, "m_iAmmo", iNewAmmo);
+    }
+
+    int iTop = EntRefToEntIndex(data.topRef);
+    if (iTop > 0 && IsValidEntity(iTop) && data.origShootRange > 0.0 && fRangeMult != 1.0)
+    {
+        SetEntPropFloat(iTop, Prop_Data, "m_flShootRange", data.origShootRange * fRangeMult);
+    }
+}
+
+// ============================================================================
 //  命令：把最近的机枪塔放到自己头顶
-// test
-//  AS:RD 中玩家实体不支持 SetParent，改用 OnGameFrame 每帧追踪位置
 // ============================================================================
 public Action Command_SentryHat(int client, int args)
 {
@@ -545,7 +839,7 @@ public Action Command_SentryHat(int client, int args)
         return Plugin_Handled;
     }
 
-    // 可选参数：额外 Yaw 偏移角度（如 180 = 反向）
+    // 参数：Yaw 偏移
     float fYawOffset = 0.0;
     if (args >= 1)
     {
@@ -554,105 +848,90 @@ public Action Command_SentryHat(int client, int args)
         fYawOffset = StringToFloat(sArg);
     }
 
+    // 找最近的、未被占用的 base
     int iBase = FindNearestSentryBase(client);
     if (iBase == -1)
     {
-        ReplyToCommand(client, "附近没有找到机枪塔");
+        ReplyToCommand(client, "附近没有可用的机枪塔");
         return Plugin_Handled;
     }
 
-    // 关闭碰撞，防止卡住玩家和塔之间互相阻挡
-    // 碰撞组 1 = debris (不与玩家/塔碰撞)
-    SetEntProp(iBase, Prop_Send, "m_CollisionGroup", 1);
-    // 同时关闭 top 实体的碰撞
-    int iTop = FindSentryTop(iBase);
-    if (iTop > 0)
+    // 获取 marine
+    int iMarine = GetPlayerMarine(client);
+    if (iMarine <= 0)
+    {
+        ReplyToCommand(client, "未找到你控制的 marine，请先部署角色");
+        return Plugin_Handled;
+    }
+
+    // 查找/创建增强记录
+    int idx = FindSentryByEntIndex(iBase);
+    if (idx < 0)
+    {
+        // 未增强过的塔，先增强
+        EnhanceSentry(iBase, false);
+        idx = FindSentryByEntIndex(iBase);
+    }
+    if (idx < 0)
+    {
+        ReplyToCommand(client, "机枪塔记录创建失败");
+        return Plugin_Handled;
+    }
+
+    SentryData data;
+    g_hSentries.GetArray(idx, data);
+
+    // 关闭碰撞（保存原始值已在增强时记录）
+    if (g_offBaseCollisionGrp >= 0)
+        SetEntProp(iBase, Prop_Send, "m_CollisionGroup", 1);  // debris
+    int iTop = EntRefToEntIndex(data.topRef);
+    if (iTop > 0 && IsValidEntity(iTop))
         SetEntProp(iTop, Prop_Send, "m_CollisionGroup", 1);
 
-    // 尝试 SetParent 绑定到 marine 实体
-    int iMarine = GetPlayerMarine(client);
-    bool bParented = false;
+    // 设置头顶塔归属（按 userid 隔离，多玩家互不干扰）
+    data.hatUserId    = GetClientUserId(client);
+    data.hatMarineRef = EntIndexToEntRef(iMarine);
+    data.hatYawOffset = fYawOffset;
+    g_hSentries.SetArray(idx, data);
 
-    if (iMarine > 0 && IsValidEntity(iMarine))
-    {
-        // 给 marine 设目标名
-        char sParentName[64];
-        Format(sParentName, sizeof(sParentName), "marine_ent_%d", iMarine);
-        DispatchKeyValue(iMarine, "targetname", sParentName);
-
-        // 尝试绑定
-        SetVariantString(sParentName);
-        bParented = AcceptEntityInput(iBase, "SetParent");
-    }
-
-    // 记录追踪信息（用实体索引做数组下标）
-    if (iBase >= 0 && iBase < MAX_ENTITIES)
-    {
-        g_iHatMarine[iBase] = GetClientUserId(client);
-        g_bHatParented[iBase] = bParented;
-        g_iHatMarineEnt[iBase] = iMarine;
-        g_fHatYawOffset[iBase] = fYawOffset;
-    }
-
-    // 初始传送到目标位置
-    if (iMarine > 0 && IsValidEntity(iMarine))
-    {
-        float fOrigin[3], fAngles[3];
-        GetEntPropVector(iMarine, Prop_Data, "m_vecOrigin", fOrigin);
-        fOrigin[2] += 80.0;
-        GetEntPropVector(iMarine, Prop_Data, "m_angRotation", fAngles);
-        fAngles[0] = 0.0;
-        TeleportEntity(iBase, fOrigin, fAngles, NULL_VECTOR);
-    }
-    else
-    {
-        // marine 找不到，回退到玩家眼睛位置
-        float fEyePos[3], fEyeAngles[3];
-        GetClientEyePosition(client, fEyePos);
-        fEyePos[2] += 15.0;
-        GetClientEyeAngles(client, fEyeAngles);
-        fEyeAngles[0] = 0.0;
-        TeleportEntity(iBase, fEyePos, fEyeAngles, NULL_VECTOR);
-    }
+    // 初始传送到头顶
+    float fOrigin[3], fAngles[3];
+    GetEntPropVector(iMarine, Prop_Data, "m_vecOrigin", fOrigin);
+    fOrigin[2] += (fYawOffset != 0.0) ? 150.0 : 80.0;
+    GetEntPropVector(iMarine, Prop_Data, "m_angRotation", fAngles);
+    fAngles[0] = 0.0;
+    TeleportEntity(iBase, fOrigin, fAngles, NULL_VECTOR);
 
     char sTypeName[32];
-    GetSentryTypeName(iBase, sTypeName, sizeof(sTypeName));
+    GetSentryTypeName(data.gunType, sTypeName, sizeof(sTypeName));
     ReplyToCommand(client, "已把[%s]放到你头顶", sTypeName);
     return Plugin_Handled;
 }
 
 // ============================================================================
-//  命令：取消头顶机枪塔
+//  命令：取消所有头顶机枪塔（管理员）
 // ============================================================================
 public Action Command_SentryHatOff(int client, int args)
 {
     int iCount = 0;
-
-    for (int i = MaxClients + 1; i < MAX_ENTITIES; i++)
+    for (int i = 0; i < g_hSentries.Length; i++)
     {
-        if (g_iHatMarine[i] == 0)
+        SentryData data;
+        g_hSentries.GetArray(i, data);
+        if (data.hatUserId == 0)
             continue;
 
-        if (IsValidEntity(i))
-        {
-            if (g_bHatParented[i])
-                AcceptEntityInput(i, "ClearParent");
-            SetEntProp(i, Prop_Send, "m_CollisionGroup", 0);
-        }
-
-        g_iHatMarine[i] = 0;
-        g_bHatParented[i] = false;
-        g_iHatMarineEnt[i] = -1;
-        g_fHatYawOffset[i] = 0.0;
+        int iBase = EntRefToEntIndex(data.baseRef);
+        if (iBase != INVALID_ENT_REFERENCE && IsValidEntity(iBase))
+            ClearHatState(i, data, iBase);
         iCount++;
     }
-
     ReplyToCommand(client, "已取消 %d 个头顶机枪塔", iCount);
     return Plugin_Handled;
 }
 
 // ============================================================================
-//  公共命令：玩家头顶机枪塔（需管理员开启 sm_asrd_sentry_hat_public）
+//  公共命令：玩家头顶机枪塔（需管理员开启）
 // ============================================================================
 public Action Command_HatPublic(int client, int args)
 {
@@ -672,30 +951,22 @@ public Action Command_HatOffPublic(int client, int args)
         return Plugin_Handled;
     }
 
-    // 普通玩家只能取消自己的头顶机枪塔
+    // 普通玩家只能取消自己的头顶塔（按 userid 隔离）
+    int iUserId = GetClientUserId(client);
     int iCount = 0;
-    int iUserID = GetClientUserId(client);
-
-    for (int i = MaxClients + 1; i < MAX_ENTITIES; i++)
+    for (int i = 0; i < g_hSentries.Length; i++)
     {
-        if (g_iHatMarine[i] != iUserID)
+        SentryData data;
+        g_hSentries.GetArray(i, data);
+        if (data.hatUserId != iUserId)
             continue;
 
-        if (IsValidEntity(i))
-        {
-            if (g_bHatParented[i])
-                AcceptEntityInput(i, "ClearParent");
-            SetEntProp(i, Prop_Send, "m_CollisionGroup", 0);
-        }
-
-        g_iHatMarine[i] = 0;
-        g_bHatParented[i] = false;
-        g_iHatMarineEnt[i] = -1;
-        g_fHatYawOffset[i] = 0.0;
+        int iBase = EntRefToEntIndex(data.baseRef);
+        if (iBase != INVALID_ENT_REFERENCE && IsValidEntity(iBase))
+            ClearHatState(i, data, iBase);
         iCount++;
     }
-
-    ReplyToCommand(client, "已取消 %d 个头顶机枪塔", iCount);
+    ReplyToCommand(client, "已取消你的 %d 个头顶机枪塔", iCount);
     return Plugin_Handled;
 }
 
@@ -717,7 +988,6 @@ public Action Command_RefreshSentries(int client, int args)
         EnhanceSentry(entity, true);
         count++;
     }
-
     ReplyToCommand(client, "已重新增强 %d 个机枪塔", count);
     return Plugin_Handled;
 }
@@ -728,43 +998,41 @@ public Action Command_RefreshSentries(int client, int args)
 public Action Command_SentryStatus(int client, int args)
 {
     PrintToConsole(client, "========== 机枪塔状态 (v%s) ==========", PLUGIN_VERSION);
-    PrintToConsole(client, "倍率: 生命x%.1f | 射速x%.1f | 射程x%.1f | 弹药x%.1f | 无敌%s",
-        g_cvHealthMult.FloatValue,
-        g_cvFireRateMult.FloatValue, g_cvRangeMult.FloatValue, g_cvAmmoMult.FloatValue,
-        g_cvInvulnerable.BoolValue ? "开" : "关");
+    PrintToConsole(client, "倍率: 生命x%.1f | 射速x%.1f | 射程x%.1f | 弹药x%.1f",
+        g_cvHealthMult.FloatValue, g_cvFireRateMult.FloatValue,
+        g_cvRangeMult.FloatValue, g_cvAmmoMult.FloatValue);
+    PrintToConsole(client, "无敌: %s | 禁伤玩家: %s | 头顶塔数量: %d",
+        g_cvInvulnerable.BoolValue ? "开" : "关",
+        g_cvNoPlayerDamage.BoolValue ? "开" : "关",
+        g_hSentries.Length);
     PrintToConsole(client, "------------------------------");
 
     int count = 0;
-    int entity = -1;
-
-    while ((entity = FindEntityByClassname(entity, "asw_sentry_base")) != -1)
+    SentryData data;
+    for (int i = 0; i < g_hSentries.Length; i++)
     {
+        g_hSentries.GetArray(i, data);
+        int iBase = EntRefToEntIndex(data.baseRef);
+        if (iBase == INVALID_ENT_REFERENCE || !IsValidEntity(iBase))
+            continue;
+
         count++;
-
-        int iHealth = GetEntProp(entity, Prop_Data, "m_iHealth");
-        int iMaxHealth = GetEntProp(entity, Prop_Data, "m_iMaxHealth");
-        int iAmmo = GetEntProp(entity, Prop_Data, "m_iAmmo");
-
         char sTypeName[32];
-        GetSentryTypeName(entity, sTypeName, sizeof(sTypeName));
+        GetSentryTypeName(data.gunType, sTypeName, sizeof(sTypeName));
 
-        PrintToConsole(client, "[base #%d] [%s] 生命: %d/%d | 弹药: %d | 已增强: %s | 头顶: %s",
-            entity, sTypeName, iHealth, iMaxHealth, iAmmo,
-            g_bEnhanced[entity] ? "是" : "否",
-            (entity < MAX_ENTITIES && g_iHatMarine[entity] != 0) ? "是" : "否");
+        int iHealth = GetEntProp(iBase, Prop_Data, "m_iHealth");
+        int iMaxHp  = GetEntProp(iBase, Prop_Data, "m_iMaxHealth");
+        int iAmmo   = GetEntProp(iBase, Prop_Data, "m_iAmmo");
 
-        int iTop = FindSentryTop(entity);
-        if (iTop > 0)
+        PrintToConsole(client, "[#%d %s] 生命: %d/%d | 弹药: %d | 头顶: %s",
+            iBase, sTypeName, iHealth, iMaxHp, iAmmo,
+            data.hatUserId != 0 ? "是" : "否");
+
+        int iTop = EntRefToEntIndex(data.topRef);
+        if (iTop > 0 && IsValidEntity(iTop))
         {
-            char sTopClass[64];
-            GetEntityClassname(iTop, sTopClass, sizeof(sTopClass));
-            float fShootRange = GetEntPropFloat(iTop, Prop_Data, "m_flShootRange");
-            PrintToConsole(client, "  [top #%d %s] 射程: %.0f",
-                iTop, sTopClass, fShootRange);
-        }
-        else
-        {
-            PrintToConsole(client, "  [top] 未找到!");
+            float fRange = GetEntPropFloat(iTop, Prop_Data, "m_flShootRange");
+            PrintToConsole(client, "  [top #%d] 射程: %.0f", iTop, fRange);
         }
     }
 
@@ -780,43 +1048,79 @@ public Action Command_SentryStatus(int client, int args)
 // ============================================================================
 public Action Command_SentryDump(int client, int args)
 {
-    int entity = -1;
-    int count = 0;
+    PrintToConsole(client, "====== 属性偏移缓存 ======");
+    PrintToConsole(client, "base: MaxHealth=%d Health=%d Ammo=%d GunType=%d SentryTop=%d Takedamage=%d Coll=%d Team=%d",
+        g_offBaseMaxHealth, g_offBaseHealth, g_offBaseAmmo, g_offBaseGunType,
+        g_offBaseSentryTop, g_offBaseTakedamage, g_offBaseCollisionGrp, g_offBaseTeamNum);
+    PrintToConsole(client, "top:  ShootRange=%d NextFire=%d Enemy=%d SentryBase=%d",
+        g_offTopShootRange, g_offTopNextFireTime, g_offTopEnemy, g_offTopSentryBase);
+    PrintToConsole(client, "列表长度: %d", g_hSentries.Length);
+    PrintToConsole(client, "------------------------------");
 
-    while ((entity = FindEntityByClassname(entity, "asw_sentry_base")) != -1)
+    SentryData data;
+    for (int i = 0; i < g_hSentries.Length; i++)
     {
-        count++;
+        g_hSentries.GetArray(i, data);
+        int iBase = EntRefToEntIndex(data.baseRef);
+        int iTop  = EntRefToEntIndex(data.topRef);
 
         char sTypeName[32];
-        GetSentryTypeName(entity, sTypeName, sizeof(sTypeName));
+        GetSentryTypeName(data.gunType, sTypeName, sizeof(sTypeName));
 
-        PrintToConsole(client, "====== base #%d [%s] ======", entity, sTypeName);
-        PrintToConsole(client, "  m_iMaxHealth: %d (值:%d)", FindDataMapInfo(entity, "m_iMaxHealth"), GetEntProp(entity, Prop_Data, "m_iMaxHealth"));
-        PrintToConsole(client, "  m_iHealth: %d (值:%d)", FindDataMapInfo(entity, "m_iHealth"), GetEntProp(entity, Prop_Data, "m_iHealth"));
-        PrintToConsole(client, "  m_iAmmo: %d (值:%d)", FindDataMapInfo(entity, "m_iAmmo"), GetEntProp(entity, Prop_Data, "m_iAmmo"));
-        PrintToConsole(client, "  m_nGunType: %d (值:%d)", FindDataMapInfo(entity, "m_nGunType"), GetEntProp(entity, Prop_Data, "m_nGunType"));
-        PrintToConsole(client, "  m_hSentryTop: %d", FindDataMapInfo(entity, "m_hSentryTop"));
-
-        int iTop = FindSentryTop(entity);
-        if (iTop > 0)
-        {
-            char sTopClass[64];
-            GetEntityClassname(iTop, sTopClass, sizeof(sTopClass));
-            PrintToConsole(client, "====== top #%d (%s) ======", iTop, sTopClass);
-            PrintToConsole(client, "  m_flShootRange: %d (值:%.0f)", FindDataMapInfo(iTop, "m_flShootRange"), GetEntPropFloat(iTop, Prop_Data, "m_flShootRange"));
-            PrintToConsole(client, "  m_fNextFireTime: %d (值:%.2f)", FindDataMapInfo(iTop, "m_fNextFireTime"), GetEntPropFloat(iTop, Prop_Data, "m_fNextFireTime"));
-        }
+        PrintToConsole(client, "[%d] base=%d top=%d [%s] origHp=%d origAmmo=%d origRange=%.0f hatUid=%d",
+            i, iBase, iTop, sTypeName, data.origMaxHealth, data.origAmmo,
+            data.origShootRange, data.hatUserId);
     }
 
-    if (count == 0)
-        PrintToConsole(client, "当前没有机枪塔");
-
-    ReplyToCommand(client, "已转储 %d 个机枪塔属性到控制台", count);
+    ReplyToCommand(client, "属性已转储到控制台");
     return Plugin_Handled;
 }
 
 // ============================================================================
-//  辅助：找最近的 base 实体
+//  命令：转储玩家实体属性（调试）
+// ============================================================================
+public Action Command_DumpPlayer(int client, int args)
+{
+    if (client <= 0)
+    {
+        ReplyToCommand(client, "只能在游戏内使用");
+        return Plugin_Handled;
+    }
+
+    PrintToConsole(client, "====== 玩家 #%d 属性 ======", client);
+    PrintToConsole(client, "--- GetPlayerMarine 测试 ---");
+
+    char sNetClass[64];
+    if (GetEntityNetClass(client, sNetClass, sizeof(sNetClass)))
+    {
+        PrintToConsole(client, "玩家网络类: %s", sNetClass);
+        PrintToConsole(client, "  m_hInhabiting Send=%d", FindSendPropInfo(sNetClass, "m_hInhabiting"));
+    }
+    PrintToConsole(client, "  m_hInhabiting Data=%d", FindDataMapInfo(client, "m_hInhabiting"));
+
+    bool bOldDebug = g_cvDebug.BoolValue;
+    g_cvDebug.SetBool(true);
+    int iMarine = GetPlayerMarine(client);
+    g_cvDebug.SetBool(bOldDebug);
+    PrintToConsole(client, "  GetPlayerMarine(%d) = %d", client, iMarine);
+
+    if (iMarine > 0)
+    {
+        char sMarineClass[64];
+        GetEntityClassname(iMarine, sMarineClass, sizeof(sMarineClass));
+        PrintToConsole(client, "  marine 类: %s", sMarineClass);
+
+        float fOrigin[3];
+        GetEntPropVector(iMarine, Prop_Data, "m_vecOrigin", fOrigin);
+        PrintToConsole(client, "  marine 位置: %.1f %.1f %.1f", fOrigin[0], fOrigin[1], fOrigin[2]);
+    }
+
+    ReplyToCommand(client, "属性已转储到控制台");
+    return Plugin_Handled;
+}
+
+// ============================================================================
+//  辅助：找最近的、未被占用为头顶塔的 base 实体
 // ============================================================================
 int FindNearestSentryBase(int iClient)
 {
@@ -829,9 +1133,15 @@ int FindNearestSentryBase(int iClient)
     int entity = -1;
     while ((entity = FindEntityByClassname(entity, "asw_sentry_base")) != -1)
     {
-        // 跳过已经在头顶的塔
-        if (entity >= 0 && entity < MAX_ENTITIES && g_iHatMarine[entity] != 0)
-            continue;
+        // 跳过已经被占用为头顶塔的
+        int idx = FindSentryByEntIndex(entity);
+        if (idx >= 0)
+        {
+            SentryData data;
+            g_hSentries.GetArray(idx, data);
+            if (data.hatUserId != 0)
+                continue;
+        }
 
         float fSentryPos[3];
         GetEntPropVector(entity, Prop_Data, "m_vecOrigin", fSentryPos);
@@ -845,376 +1155,4 @@ int FindNearestSentryBase(int iClient)
     }
 
     return iBest;
-}
-
-// ============================================================================
-//  辅助：获取玩家控制的 marine 实体
-//  AS:RD 中有多种方式获取玩家控制的 marine NPC：
-//    1. 玩家实体的 m_hInhabiting 属性 (asw_player.h)
-//    2. asw_game_resource 实体的 m_hMarine0~7 数组
-//    3. 遍历 asw_marine 实体匹配 m_hCommander
-// ============================================================================
-int GetPlayerMarine(int iClient)
-{
-    int iMarine = -1;
-
-    // ─── 方法1: 玩家实体的 m_hInhabiting ───
-    // 来源: asw_player.h → CNetworkHandle( CASW_Inhabitable_NPC, m_hInhabiting )
-    if (FindDataMapInfo(iClient, "m_hInhabiting") != -1)
-    {
-        iMarine = GetEntPropEnt(iClient, Prop_Data, "m_hInhabiting");
-        if (g_cvDebug.BoolValue)
-            PrintToServer("[机枪塔] m_hInhabiting (Prop_Data): %d", iMarine);
-    }
-
-    if (iMarine <= 0 || !IsValidEntity(iMarine))
-    {
-        char sNetClass[64];
-        if (GetEntityNetClass(iClient, sNetClass, sizeof(sNetClass)))
-        {
-            if (FindSendPropInfo(sNetClass, "m_hInhabiting") != -1)
-            {
-                iMarine = GetEntPropEnt(iClient, Prop_Send, "m_hInhabiting");
-                if (g_cvDebug.BoolValue)
-                    PrintToServer("[机枪塔] m_hInhabiting (Prop_Send, netclass=%s): %d", sNetClass, iMarine);
-            }
-        }
-    }
-
-    if (iMarine > 0 && IsValidEntity(iMarine))
-    {
-        if (g_cvDebug.BoolValue)
-        {
-            char sMarineClass[64];
-            GetEntityClassname(iMarine, sMarineClass, sizeof(sMarineClass));
-            PrintToServer("[机枪塔] 方法1成功: 找到 inhabiting NPC #%d (%s)", iMarine, sMarineClass);
-        }
-        return iMarine;
-    }
-
-    // ─── 方法2: 通过 asw_game_resource 获取 ───
-    // asw_game_resource 有 m_hMarine0~7 属性，按玩家索引存储 marine 句柄
-    int iGR = FindEntityByClassname(-1, "asw_game_resource");
-    if (iGR > 0 && IsValidEntity(iGR))
-    {
-        // 玩家索引从1开始，但数组从0开始
-        char sPropName[32];
-        for (int i = 0; i < 8; i++)
-        {
-            Format(sPropName, sizeof(sPropName), "m_hMarine%d", i);
-
-            int iDataOff = FindDataMapInfo(iGR, sPropName);
-            int iSendOff = -1;
-            char sGRNetClass[64];
-            GetEntityNetClass(iGR, sGRNetClass, sizeof(sGRNetClass));
-            if (sGRNetClass[0] != '\0')
-                iSendOff = FindSendPropInfo(sGRNetClass, sPropName);
-
-            if (iDataOff != -1 || iSendOff != -1)
-            {
-                int iMarineEnt = -1;
-                if (iSendOff != -1)
-                    iMarineEnt = GetEntPropEnt(iGR, Prop_Send, sPropName);
-                else
-                    iMarineEnt = GetEntPropEnt(iGR, Prop_Data, sPropName);
-
-                if (iMarineEnt > 0 && IsValidEntity(iMarineEnt))
-                {
-                    // 检查这个 marine 的 commander 是否是当前玩家
-                    int iCommander = -1;
-                    if (FindDataMapInfo(iMarineEnt, "m_hCommander") != -1)
-                        iCommander = GetEntPropEnt(iMarineEnt, Prop_Data, "m_hCommander");
-
-                    char sMarineNetClass[64];
-                    GetEntityNetClass(iMarineEnt, sMarineNetClass, sizeof(sMarineNetClass));
-                    if (sMarineNetClass[0] != '\0' && FindSendPropInfo(sMarineNetClass, "m_hCommander") != -1)
-                        iCommander = GetEntPropEnt(iMarineEnt, Prop_Send, "m_hCommander");
-
-                    if (iCommander == iClient)
-                    {
-                        if (g_cvDebug.BoolValue)
-                        {
-                            char sMarineClass[64];
-                            GetEntityClassname(iMarineEnt, sMarineClass, sizeof(sMarineClass));
-                            PrintToServer("[机枪塔] 方法2成功: 通过 asw_game_resource[%d] 找到 marine #%d (%s)", i, iMarineEnt, sMarineClass);
-                        }
-                        return iMarineEnt;
-                    }
-                }
-            }
-        }
-    }
-
-    // ─── 方法3: 遍历 asw_marine 实体匹配 m_hCommander ───
-    int entity = -1;
-    while ((entity = FindEntityByClassname(entity, "asw_marine")) != -1)
-    {
-        int iCommander = -1;
-
-        if (FindDataMapInfo(entity, "m_hCommander") != -1)
-            iCommander = GetEntPropEnt(entity, Prop_Data, "m_hCommander");
-
-        if (iCommander <= 0)
-        {
-            char sNetClass[64];
-            if (GetEntityNetClass(entity, sNetClass, sizeof(sNetClass)))
-            {
-                if (FindSendPropInfo(sNetClass, "m_hCommander") != -1)
-                    iCommander = GetEntPropEnt(entity, Prop_Send, "m_hCommander");
-            }
-        }
-
-        if (iCommander == iClient)
-        {
-            if (g_cvDebug.BoolValue)
-            {
-                char sMarineClass[64];
-                GetEntityClassname(entity, sMarineClass, sizeof(sMarineClass));
-                PrintToServer("[机枪塔] 方法3成功: 遍历找到 marine #%d (%s), commander=%d", entity, sMarineClass, iCommander);
-            }
-            return entity;
-        }
-    }
-
-    // ─── 方法4: 遍历 asw_marine_resource 匹配 m_hCommander ───
-    // asw_marine_resource 是 marine 的资源实体，也有 m_hCommander
-    entity = -1;
-    while ((entity = FindEntityByClassname(entity, "asw_marine_resource")) != -1)
-    {
-        int iCommander = -1;
-
-        if (FindDataMapInfo(entity, "m_hCommander") != -1)
-            iCommander = GetEntPropEnt(entity, Prop_Data, "m_hCommander");
-
-        if (iCommander <= 0)
-        {
-            char sNetClass[64];
-            if (GetEntityNetClass(entity, sNetClass, sizeof(sNetClass)))
-            {
-                if (FindSendPropInfo(sNetClass, "m_hCommander") != -1)
-                    iCommander = GetEntPropEnt(entity, Prop_Send, "m_hCommander");
-            }
-        }
-
-        if (iCommander == iClient)
-        {
-            // 找到对应的 marine_resource，尝试获取 marine 实体
-            int iMarineEnt = -1;
-            if (FindDataMapInfo(entity, "m_hMarineEntity") != -1)
-                iMarineEnt = GetEntPropEnt(entity, Prop_Data, "m_hMarineEntity");
-
-            if (iMarineEnt <= 0)
-            {
-                char sNetClass[64];
-                if (GetEntityNetClass(entity, sNetClass, sizeof(sNetClass)))
-                {
-                    if (FindSendPropInfo(sNetClass, "m_hMarineEntity") != -1)
-                        iMarineEnt = GetEntPropEnt(entity, Prop_Send, "m_hMarineEntity");
-                }
-            }
-
-            if (iMarineEnt > 0 && IsValidEntity(iMarineEnt))
-            {
-                if (g_cvDebug.BoolValue)
-                {
-                    char sMarineClass[64];
-                    GetEntityClassname(iMarineEnt, sMarineClass, sizeof(sMarineClass));
-                    PrintToServer("[机枪塔] 方法4成功: 通过 marine_resource 找到 marine #%d (%s)", iMarineEnt, sMarineClass);
-                }
-                return iMarineEnt;
-            }
-        }
-    }
-
-    if (g_cvDebug.BoolValue)
-        PrintToServer("[机枪塔] 警告: 所有方法均未找到 client %d 的 marine", iClient);
-
-    return -1;
-}
-
-// ============================================================================
-//  命令：转储玩家实体属性（调试用，找 marine 属性名）
-// ============================================================================
-public Action Command_DumpPlayer(int client, int args)
-{
-    if (client <= 0)
-    {
-        ReplyToCommand(client, "只能在游戏内使用");
-        return Plugin_Handled;
-    }
-
-    PrintToConsole(client, "====== 玩家实体 #%d 属性转储 ======", client);
-
-    // ─── 检查玩家自身的属性 ───
-    PrintToConsole(client, "--- 玩家 SendProp 中包含 marine/handle 的属性 ---");
-    char sPlayerNetClass[64];
-    if (GetEntityNetClass(client, sPlayerNetClass, sizeof(sPlayerNetClass)))
-    {
-        PrintToConsole(client, "  玩家网络类: %s", sPlayerNetClass);
-
-        char sPlayerProps[][] = {
-            "m_hInhabiting", "m_hMarine", "m_hMarineResource",
-            "m_hActiveWeapon", "m_hLastWeapon", "m_hOwnerEntity",
-            "m_iUserID", "m_nPlayerIndex", "m_iTeamNum"
-        };
-
-        for (int i = 0; i < sizeof(sPlayerProps); i++)
-        {
-            int iDataOff = FindDataMapInfo(client, sPlayerProps[i]);
-            int iSendOff = FindSendPropInfo(sPlayerNetClass, sPlayerProps[i]);
-
-            if (iDataOff != -1 || iSendOff != -1)
-            {
-                int iValue = -1;
-                if (iSendOff != -1)
-                    iValue = GetEntPropEnt(client, Prop_Send, sPlayerProps[i]);
-                else if (iDataOff != -1)
-                {
-                    iValue = GetEntPropEnt(client, Prop_Data, sPlayerProps[i]);
-                    if (iValue <= 0)
-                        iValue = GetEntProp(client, Prop_Data, sPlayerProps[i]);
-                }
-
-                PrintToConsole(client, "  %s: DataMap=%d Send=%d 值=%d", sPlayerProps[i], iDataOff, iSendOff, iValue);
-            }
-        }
-    }
-
-    // ─── 详细检查 asw_marine_resource ───
-    PrintToConsole(client, "--- 详细检查 asw_marine_resource ---");
-    int entity = -1;
-    while ((entity = FindEntityByClassname(entity, "asw_marine_resource")) != -1)
-    {
-        char sNetClass[64];
-        GetEntityNetClass(entity, sNetClass, sizeof(sNetClass));
-        PrintToConsole(client, "  #%d 网络类: %s", entity, sNetClass);
-
-        char sProps[][] = {
-            "m_hCommander", "m_iCommander", "m_hPlayer", "m_iPlayerIndex",
-            "m_hMarineEntity", "m_hMarine", "m_hInhabitableNPC",
-            "m_nMarineIndex", "m_iMarineIndex",
-            "m_iUserID", "m_nPlayerIndex",
-            "m_hLeader", "m_hSquadLeader",
-            "m_bInhabited", "m_bAlive"
-        };
-
-        for (int i = 0; i < sizeof(sProps); i++)
-        {
-            int iDataOff = FindDataMapInfo(entity, sProps[i]);
-            int iSendOff = FindSendPropInfo(sNetClass, sProps[i]);
-
-            if (iDataOff != -1 || iSendOff != -1)
-            {
-                int iValue = -1;
-                if (iSendOff != -1)
-                    iValue = GetEntPropEnt(entity, Prop_Send, sProps[i]);
-                else if (iDataOff != -1)
-                {
-                    iValue = GetEntPropEnt(entity, Prop_Data, sProps[i]);
-                    if (iValue <= 0)
-                        iValue = GetEntProp(entity, Prop_Data, sProps[i]);
-                }
-
-                PrintToConsole(client, "  %s: DataMap=%d Send=%d 值=%d", sProps[i], iDataOff, iSendOff, iValue);
-            }
-        }
-    }
-
-    // ─── 详细检查 asw_marine ───
-    PrintToConsole(client, "--- 详细检查 asw_marine ---");
-    entity = -1;
-    while ((entity = FindEntityByClassname(entity, "asw_marine")) != -1)
-    {
-        char sNetClass[64];
-        GetEntityNetClass(entity, sNetClass, sizeof(sNetClass));
-        PrintToConsole(client, "  #%d 网络类: %s", entity, sNetClass);
-
-        char sProps[][] = {
-            "m_hCommander", "m_iCommander", "m_hPlayer", "m_hMarineResource",
-            "m_hLeader", "m_hOwnerEntity", "m_hOwner",
-            "m_iHealth", "m_iMaxHealth",
-            "m_hWeapon", "m_hActiveWeapon",
-            "m_hInhabiting", "m_hInhabitableNPC",
-            "m_bInhabited", "m_bAlive"
-        };
-
-        for (int i = 0; i < sizeof(sProps); i++)
-        {
-            int iDataOff = FindDataMapInfo(entity, sProps[i]);
-            int iSendOff = FindSendPropInfo(sNetClass, sProps[i]);
-
-            if (iDataOff != -1 || iSendOff != -1)
-            {
-                int iValue = -1;
-                if (iSendOff != -1)
-                    iValue = GetEntPropEnt(entity, Prop_Send, sProps[i]);
-                else if (iDataOff != -1)
-                {
-                    iValue = GetEntPropEnt(entity, Prop_Data, sProps[i]);
-                    if (iValue <= 0)
-                        iValue = GetEntProp(entity, Prop_Data, sProps[i]);
-                }
-
-                PrintToConsole(client, "  %s: DataMap=%d Send=%d 值=%d", sProps[i], iDataOff, iSendOff, iValue);
-            }
-        }
-
-        // 获取位置确认 marine 在地图上
-        float fOrigin[3];
-        GetEntPropVector(entity, Prop_Data, "m_vecOrigin", fOrigin);
-        PrintToConsole(client, "  位置: %.1f %.1f %.1f", fOrigin[0], fOrigin[1], fOrigin[2]);
-    }
-
-    // ─── 检查 asw_game_resource ───
-    PrintToConsole(client, "--- 详细检查 asw_game_resource ---");
-    entity = -1;
-    while ((entity = FindEntityByClassname(entity, "asw_game_resource")) != -1)
-    {
-        char sNetClass[64];
-        GetEntityNetClass(entity, sNetClass, sizeof(sNetClass));
-        PrintToConsole(client, "  #%d 网络类: %s", entity, sNetClass);
-
-        char sProps[][] = {
-            "m_hCommander", "m_iNumMarines", "m_iNumPlayers",
-            "m_hMarine0", "m_hMarine1", "m_hMarine2", "m_hMarine3",
-            "m_hMarine4", "m_hMarine5", "m_hMarine6", "m_hMarine7",
-            "m_hMarineResource0", "m_hMarineResource1", "m_hMarineResource2", "m_hMarineResource3",
-            "m_hMarineResource4", "m_hMarineResource5", "m_hMarineResource6", "m_hMarineResource7",
-            "m_iNumMarinesSelected",
-            "m_hLeader0", "m_hLeader1", "m_hLeader2", "m_hLeader3",
-            "m_hLeader4", "m_hLeader5", "m_hLeader6", "m_hLeader7"
-        };
-
-        for (int i = 0; i < sizeof(sProps); i++)
-        {
-            int iDataOff = FindDataMapInfo(entity, sProps[i]);
-            int iSendOff = FindSendPropInfo(sNetClass, sProps[i]);
-
-            if (iDataOff != -1 || iSendOff != -1)
-            {
-                int iValue = -1;
-                if (iSendOff != -1)
-                    iValue = GetEntPropEnt(entity, Prop_Send, sProps[i]);
-                else if (iDataOff != -1)
-                {
-                    iValue = GetEntPropEnt(entity, Prop_Data, sProps[i]);
-                    if (iValue <= 0)
-                        iValue = GetEntProp(entity, Prop_Data, sProps[i]);
-                }
-
-                PrintToConsole(client, "  %s: DataMap=%d Send=%d 值=%d", sProps[i], iDataOff, iSendOff, iValue);
-            }
-        }
-    }
-
-    // ─── 测试 GetPlayerMarine 函数 ───
-    PrintToConsole(client, "--- 测试 GetPlayerMarine ---");
-    bool bOldDebug = g_cvDebug.BoolValue;
-    g_cvDebug.SetBool(true);
-    int iMarine = GetPlayerMarine(client);
-    g_cvDebug.SetBool(bOldDebug);
-    PrintToConsole(client, "  GetPlayerMarine(%d) = %d", client, iMarine);
-
-    ReplyToCommand(client, "属性已转储到控制台");
-    return Plugin_Handled;
 }
