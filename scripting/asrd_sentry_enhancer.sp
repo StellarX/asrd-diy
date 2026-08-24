@@ -19,6 +19,9 @@
  *   sm_sentry_status      在控制台查看所有哨戒塔状态
  *   sm_sentryhat          把最近的塔放到自己头顶
  *   sm_sentryhat_off      取消所有玩家的头顶塔
+ *   sm_sentry_boost       一键满配增强所有哨戒塔 (可 bind 到按键)
+ *   sm_sentry_unboost     一键还原增强倍率到默认档
+ *   sm_sentry_drop        在身边掉落一座哨戒枪拾取箱 (默认炮, 可 bind 到按键)
  *   sm_sentry_dump        转储哨戒塔内部属性 (调试)
  *   sm_sentry_dump_player 转储玩家实体属性 (调试)
  *
@@ -112,6 +115,7 @@ enum struct SentryData {
     int   origAmmo;          // 记录初始弹药
     float origShootRange;    // 记录初始射程 (0=还没记录, 炮口出现后再记)
     int   origCollision;     // 记录初始碰撞设置 (取消头顶塔时恢复)
+    MoveType origMoveType;    // 记录初始移动类型 (放头顶改 NONE 消除物理滞后, 取消时恢复)
     int   origTakedamage;    // 记录初始受击设置 (取消无敌时恢复)
     int   origFriendlyFire;  // 记录炮口初始的"友军伤害"开关 (-1=还没记录)
     int   gunType;           // 塔类型: 0=机枪 1=炮 2=喷火 3=冰冻 4=电磁
@@ -223,6 +227,9 @@ public void OnPluginStart()
     RegAdminCmd("sm_sentry_dump_player", Command_DumpPlayer,    ADMFLAG_GENERIC, "转储玩家实体属性（调试）");
     RegAdminCmd("sm_sentryhat",        Command_SentryHat,       ADMFLAG_GENERIC, "把最近的哨戒塔放到自己头顶");
     RegAdminCmd("sm_sentryhat_off",    Command_SentryHatOff,    ADMFLAG_GENERIC, "取消所有玩家的头顶哨戒塔");
+    RegAdminCmd("sm_sentry_boost",     Command_SentryBoost,     ADMFLAG_GENERIC, "一键满配增强所有哨戒塔");
+    RegAdminCmd("sm_sentry_unboost",   Command_SentryUnboost,   ADMFLAG_GENERIC, "一键还原哨戒塔增强倍率(默认档)");
+    RegAdminCmd("sm_sentry_drop",      Command_SentryDrop,      ADMFLAG_GENERIC, "在身边掉落一座哨戒塔(默认炮)");
     RegConsoleCmd("sm_hat",            Command_HatPublic,       "把最近的哨戒塔放到自己头顶 (需管理员开启)");
     RegConsoleCmd("sm_hat_off",        Command_HatOffPublic,    "取消自己的头顶哨戒塔 (需管理员开启)");
     RegConsoleCmd("sm_sentryhud",      Command_SentryHudToggle, "切换哨戒塔信息HUD显示 (默认不显示)");
@@ -330,15 +337,20 @@ public Action Timer_UpdateHud(Handle timer)
             // 先设文字位置/颜色/停留时间, 再尝试用内置 HUD 显示
             SetHudTextParams(HUD_POS_X, HUD_POS_Y, HUD_HOLD_TIME,
                 255, 220, 120, 255, 0, 0.0, 0.0, 0.0);
-            if (ShowHudText(i, HUD_CHANNEL, sBuf) == -1)
+            int iShowRet = ShowHudText(i, HUD_CHANNEL, sBuf);
+            if (iShowRet == -1)
             {
                 // 返回值 -1 表示这个游戏分支不支持内置 HUD → 改备用方式
                 g_iHudMode[i] = 2;
+                if (g_cvDebug.BoolValue)
+                    PrintToServer("[哨戒塔] 玩家#%d 内置HUD不可用, 改用 game_text", i);
                 ShowViaGameText(i, sBuf);
             }
             else
             {
                 g_iHudMode[i] = 1;
+                if (g_cvDebug.BoolValue)
+                    PrintToServer("[哨戒塔] 玩家#%d 内置HUD ok, ShowHudText=%d", i, iShowRet);
             }
         }
     }
@@ -434,6 +446,9 @@ public void OnMapStart()
     g_bBasePropsCached = false;  // 换图后实体类可能重新注册, 偏移重新查
     g_bTopPropsCached  = false;
     g_offTopLastFireTime = -1;   // 那个特殊偏移也重新定位
+
+    // 预缓存拾取箱模型: 运行时 spawn 的哨戒枪箱 (sm_sentry_drop) 客户端才能显示
+    PrecacheModel("models/items/ItemBox/ItemBoxLarge.mdl", true);
 }
 
 // ============================================================================
@@ -715,6 +730,7 @@ void EnhanceSentry(int iBase, bool bForce)
     data.origMaxHealth = (g_offBaseMaxHealth >= 0) ? GetEntProp(iBase, Prop_Data, "m_iMaxHealth") : 0;
     data.origAmmo      = (g_offBaseAmmo     >= 0) ? GetEntProp(iBase, Prop_Data, "m_iAmmo")       : 0;
     data.origCollision = (g_offBaseCollisionGrp >= 0) ? GetEntProp(iBase, Prop_Send, "m_CollisionGroup") : 0;
+    data.origMoveType  = GetEntityMoveType(iBase);
     data.origTakedamage= (g_offBaseTakedamage >= 0) ? GetEntProp(iBase, Prop_Data, "m_takedamage") : 1;
     data.gunType       = (g_offBaseGunType  >= 0) ? GetEntProp(iBase, Prop_Data, "m_nGunType")    : 0;
     data.origShootRange  = 0.0;   // 炮口出现后再记录
@@ -940,7 +956,7 @@ void UpdateHatSentry(int listIdx, int iBase, float fTurnSpeed, float fTickInterv
 
     // 拿角色位置, 把塔放到头顶上方
     float fOrigin[3], fAngles[3];
-    GetEntPropVector(iMarine, Prop_Data, "m_vecOrigin", fOrigin);
+    GetEntPropVector(iMarine, Prop_Send, "m_vecOrigin", fOrigin);   // 必须是 Send, Data 读出来是占位值
     fOrigin[2] += 80.0;   // 抬高 80 (游戏里向上是 Z 轴)
 
     // 有朝向偏移的塔再抬高些, 避免和别的塔叠一起
@@ -974,6 +990,10 @@ void UpdateHatSentry(int listIdx, int iBase, float fTurnSpeed, float fTickInterv
     }
     fAngles[0] = 0.0;
 
+    // 每帧确保脱离物理模拟, 避免物理引擎把位置回拉造成滞后
+    if (GetEntityMoveType(iBase) != MOVETYPE_NONE)
+        SetEntityMoveType(iBase, MOVETYPE_NONE);
+
     // 把塔传送(移动)到计算好的位置和朝向
     TeleportEntity(iBase, fOrigin, fAngles, NULL_VECTOR);
 }
@@ -983,9 +1003,11 @@ void UpdateHatSentry(int listIdx, int iBase, float fTurnSpeed, float fTickInterv
 // ============================================================================
 void ClearHatState(int listIdx, SentryData data, int iBase)
 {
-    // 恢复底座本来的碰撞设置
+    // 恢复底座本来的碰撞设置和移动类型
     if (g_offBaseCollisionGrp >= 0 && IsValidEntity(iBase))
         SetEntProp(iBase, Prop_Send, "m_CollisionGroup", data.origCollision);
+    if (data.origMoveType != MOVETYPE_NONE)
+        SetEntityMoveType(iBase, data.origMoveType);
 
     // 恢复炮口的碰撞设置
     int iTop = EntRefToEntIndex(data.topRef);
@@ -1297,12 +1319,16 @@ public Action Command_SentryHat(int client, int args)
     SentryData data;
     g_hSentries.GetArray(idx, data);
 
-    // 关闭碰撞, 让塔能悬在头顶不乱撞
+    // 关闭碰撞 + 脱离物理模拟, 消除头顶跟随时的滞后
     if (g_offBaseCollisionGrp >= 0)
         SetEntProp(iBase, Prop_Send, "m_CollisionGroup", 1);  // 1 = 不参与碰撞
+    SetEntityMoveType(iBase, MOVETYPE_NONE);
     int iTop = EntRefToEntIndex(data.topRef);
     if (iTop > 0 && IsValidEntity(iTop))
+    {
         SetEntProp(iTop, Prop_Send, "m_CollisionGroup", 1);
+        SetEntityMoveType(iTop, MOVETYPE_NONE);
+    }
 
     // 记录这座塔归这个玩家 (按 userid 区分, 多人互不干扰)
     data.hatUserId    = GetClientUserId(client);
@@ -1312,7 +1338,7 @@ public Action Command_SentryHat(int client, int args)
 
     // 先把塔传送到头顶 (朝向前方, 之后每帧跟随)
     float fOrigin[3], fAngles[3], fEyeAngles[3];
-    GetEntPropVector(iMarine, Prop_Data, "m_vecOrigin", fOrigin);
+    GetEntPropVector(iMarine, Prop_Send, "m_vecOrigin", fOrigin);   // 必须是 Send, Data 读出来是占位值
     fOrigin[2] += (fYawOffset != 0.0) ? 150.0 : 80.0;
     GetClientEyeAngles(client, fEyeAngles);
     fAngles[0] = 0.0;
@@ -1385,6 +1411,125 @@ public Action Command_HatOffPublic(int client, int args)
         iCount++;
     }
     ReplyToCommand(client, "已取消你的 %d 个头顶哨戒塔", iCount);
+    return Plugin_Handled;
+}
+
+// ============================================================================
+//  命令 (管理员): 一键满配增强所有哨戒塔
+//  改 ConVar 触发 changehook; 再强制扫描增强场上所有塔兜底(防未记录塔漏掉)
+// ============================================================================
+public Action Command_SentryBoost(int client, int args)
+{
+    if (client <= 0) return Plugin_Handled;   // 只接受游戏内/控制台管理员
+
+    g_cvEnabled.SetInt(1);
+    g_cvHealthMult.SetFloat(3.0);
+    g_cvFireRateMult.SetFloat(20.0);
+    g_cvRangeMult.SetFloat(5.0);
+    g_cvAmmoMult.SetFloat(50.0);
+    g_cvInvulnerable.SetInt(1);
+    g_cvNoPlayerDamage.SetInt(1);
+    g_cvDebug.SetInt(1);
+
+    // 设完倍率必须主动扫描增强场上所有塔:
+    // 倍率 changehook 只作用于已记录(g_hSentries)的塔, 若塔之前没被
+    // 增强逻辑捕获(增强时机错过等), 光改 convar 不会触及它们。这里强制
+    // 把当前所有 asw_sentry_base 逐一增强/补录, 最大化保证即刻生效。
+    int count = 0;
+    int entity = -1;
+    while ((entity = FindEntityByClassname(entity, "asw_sentry_base")) != -1)
+    {
+        EnhanceSentry(entity, true);
+        count++;
+    }
+
+    ReplyToCommand(client, "已一键开启哨戒塔满配增强并强化 %d 座塔 (生命x3 射速x20 射程x5 弹药x50 无敌 禁伤 调试开)", count);
+    return Plugin_Handled;
+}
+
+// ============================================================================
+//  命令 (管理员): 一键还原增强倍率到默认档 (1.0 即还原原始值)
+// ============================================================================
+public Action Command_SentryUnboost(int client, int args)
+{
+    if (client <= 0) return Plugin_Handled;
+
+    g_cvHealthMult.SetFloat(1.0);
+    g_cvFireRateMult.SetFloat(1.0);
+    g_cvRangeMult.SetFloat(1.0);
+    g_cvAmmoMult.SetFloat(1.0);
+    g_cvInvulnerable.SetInt(0);
+    g_cvNoPlayerDamage.SetInt(1);
+
+    ReplyToCommand(client, "已还原哨戒塔增强倍率到默认档");
+    return Plugin_Handled;
+}
+
+// ============================================================================
+//  命令 (管理员): 在玩家身边掉落一座哨戒枪拾取箱 (默认炮, 可选参数指定类型)
+//    0=机枪 1=炮 2=喷火 3=冰冻
+//  拾取后玩家自行部署, 塔组装完成会被 OnEntityCreated 自动增强
+// ============================================================================
+public Action Command_SentryDrop(int client, int args)
+{
+    if (client <= 0 || !IsClientInGame(client) || !IsPlayerAlive(client))
+    {
+        ReplyToCommand(client, "你必须存活才能使用此命令");
+        return Plugin_Handled;
+    }
+
+    int iMarine = GetPlayerMarine(client);
+    if (iMarine <= 0)
+    {
+        ReplyToCommand(client, "未找到你控制的 marine");
+        return Plugin_Handled;
+    }
+
+    // 类型: 默认炮(1), 可选参数覆盖
+    int iGunType = 1;
+    if (args >= 1)
+    {
+        char sArg[8];
+        GetCmdArg(1, sArg, sizeof(sArg));
+        iGunType = StringToInt(sArg);
+    }
+    if (iGunType < 0 || iGunType > 3)
+        iGunType = 1;
+
+    // 类型 → 拾取箱类名 (炮为默认)
+    char sClass[32];
+    if      (iGunType == 0) strcopy(sClass, sizeof(sClass), "asw_pickup_sentry");
+    else if (iGunType == 2) strcopy(sClass, sizeof(sClass), "asw_pickup_sentry_flamer");
+    else if (iGunType == 3) strcopy(sClass, sizeof(sClass), "asw_pickup_sentry_freeze");
+    else                    strcopy(sClass, sizeof(sClass), "asw_pickup_sentry_cannon");
+
+    // 玩家位置 (Send 读真实世界坐标, Data 读出来是占位值)
+    float fPos[3], fAng[3];
+    GetEntPropVector(iMarine, Prop_Send, "m_vecOrigin", fPos);
+
+    // 沿玩家朝向向前偏移 60 单位, 略抬高让它自然落地
+    GetClientEyeAngles(client, fAng);
+    float fYaw = DegToRad(fAng[1]);
+    fPos[0] += Cosine(fYaw) * 60.0;
+    fPos[1] += Sine(fYaw) * 60.0;
+    fPos[2] += 20.0;
+
+    // 创建拾取箱实体 (CItem 派生, spawn 后自动落地)
+    int iPickup = CreateEntityByName(sClass);
+    if (iPickup == -1)
+    {
+        ReplyToCommand(client, "创建哨戒枪拾取箱失败");
+        return Plugin_Handled;
+    }
+
+    float fZeroAng[3];
+    TeleportEntity(iPickup, fPos, fZeroAng, NULL_VECTOR);
+    DispatchSpawn(iPickup);
+    ActivateEntity(iPickup);
+
+    char sTypeName[32];
+    GetSentryTypeName(iGunType, sTypeName, sizeof(sTypeName));
+    ReplyToCommand(client, "已在身边掉落一座[%s]哨戒枪箱, 拾取后自行部署组装", sTypeName);
     return Plugin_Handled;
 }
 
@@ -1534,7 +1679,7 @@ public Action Command_DumpPlayer(int client, int args)
         PrintToConsole(client, "  marine 类: %s", sMarineClass);
 
         float fOrigin[3];
-        GetEntPropVector(iMarine, Prop_Data, "m_vecOrigin", fOrigin);
+        GetEntPropVector(iMarine, Prop_Send, "m_vecOrigin", fOrigin);
         PrintToConsole(client, "  marine 位置: %.1f %.1f %.1f", fOrigin[0], fOrigin[1], fOrigin[2]);
     }
 
@@ -1550,13 +1695,26 @@ int FindNearestSentryBase(int iClient)
     float fClientPos[3];
     GetClientAbsOrigin(iClient, fClientPos);
 
+    // AS:RD 的 marine 实体用 Prop_Data 读 m_vecOrigin 会得到占位值(0,0,-1),
+    // 必须用 Prop_Send 读网络属性才是真实世界坐标; 读到占位值时再退回眼睛位置。
+    int iMarine = GetPlayerMarine(iClient);
+    if (iMarine > 0)
+    {
+        GetEntPropVector(iMarine, Prop_Send, "m_vecOrigin", fClientPos);
+        if (fClientPos[0] == 0.0 && fClientPos[1] == 0.0)
+            GetClientEyePosition(iClient, fClientPos);
+    }
+
     int iBest = -1;
     float fBestDist = 999999.0;
     float fMaxDist = g_cvHatMaxDist.FloatValue;   // 0 = 不限制距离
 
+    int iTotal = 0, iOccupied = 0, iTooFar = 0;
     int entity = -1;
     while ((entity = FindEntityByClassname(entity, "asw_sentry_base")) != -1)
     {
+        iTotal++;
+
         // 跳过已经在别人头顶上的塔
         int idx = FindSentryByEntIndex(entity);
         if (idx >= 0)
@@ -1564,7 +1722,10 @@ int FindNearestSentryBase(int iClient)
             SentryData data;
             g_hSentries.GetArray(idx, data);
             if (data.hatUserId != 0)
+            {
+                iOccupied++;
                 continue;
+            }
         }
 
         float fSentryPos[3];
@@ -1574,13 +1735,46 @@ int FindNearestSentryBase(int iClient)
 
         // 太远的塔不算候选
         if (fMaxDist > 0.0 && fDist > fMaxDist)
+        {
+            iTooFar++;
             continue;
+        }
 
         if (fDist < fBestDist)
         {
             fBestDist = fDist;
             iBest = entity;
         }
+    }
+
+    // 调试: 打印本次查找的详细结果, 便于定位"为何匹配不到"
+    if (g_cvDebug.BoolValue)
+    {
+        int iMarineDbg = GetPlayerMarine(iClient);
+        float vClientD[3], vClientS[3], vMarineD[3], vMarineS[3], vEye[3];
+        GetEntPropVector(iClient, Prop_Data,  "m_vecOrigin", vClientD);
+        GetEntPropVector(iClient, Prop_Send,  "m_vecOrigin", vClientS);
+        GetEntPropVector(iMarineDbg, Prop_Data, "m_vecOrigin", vMarineD);
+        GetEntPropVector(iMarineDbg, Prop_Send, "m_vecOrigin", vMarineS);
+        GetClientEyePosition(iClient, vEye);
+
+        PrintToServer("[哨戒塔] 玩家#%d client=(%.0f,%.0f,%.0f) send=(%.0f,%.0f,%.0f)",
+            iClient, vClientD[0], vClientD[1], vClientD[2], vClientS[0], vClientS[1], vClientS[2]);
+        PrintToServer("[哨戒塔] marine#%d data=(%.0f,%.0f,%.0f) send=(%.0f,%.0f,%.0f) eye=(%.0f,%.0f,%.0f)",
+            iMarineDbg, vMarineD[0], vMarineD[1], vMarineD[2],
+            vMarineS[0], vMarineS[1], vMarineS[2], vEye[0], vEye[1], vEye[2]);
+
+        // 打印第一座塔的位置作对照
+        int eTmp = -1; float vT[3]; int nT = 0;
+        while ((eTmp = FindEntityByClassname(eTmp, "asw_sentry_base")) != -1 && nT < 1)
+        {
+            GetEntPropVector(eTmp, Prop_Data, "m_vecOrigin", vT);
+            PrintToServer("[哨戒塔] 对比塔#%d base位置=(%.0f,%.0f,%.0f)", eTmp, vT[0], vT[1], vT[2]);
+            nT++;
+        }
+
+        PrintToServer("[哨戒塔] 命令距离上限=%.0f 候选=%d 占用=%d 超距离=%d 最近=%.0f 命中#%d",
+            fMaxDist, iTotal, iOccupied, iTooFar, fBestDist, iBest);
     }
 
     return iBest;

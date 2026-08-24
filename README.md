@@ -8,6 +8,8 @@
 |------|------|------|
 | AFK 自动踢人 | `asrd_afk_kick.smx` | 检测挂机玩家，5分钟无操作自动踢出 |
 | 欢迎/告别消息 | `asrd_welcome.smx` | 玩家进出服务器时广播打招呼语 |
+| 电锯高速旋转 | `asrd_chainsaw_turbo.smx` | 手持电锯按攻击键时高速旋转，转速可调 |
+| 哨戒塔增强 | `asrd_sentry_enhancer.smx` | 哨戒塔属性倍率增强 + 头顶哨戒塔 |
 
 ## 🔧 前置要求
 
@@ -118,6 +120,22 @@ sm_asrd_afk_warn_time 540
 sm_asrd_welcome_msg "🎮 {player} 上线了！服务器现有 {count} 人"
 sm_asrd_goodbye_msg "👋 {player} 溜了，还剩 {count} 个战友"
 sm_asrd_welcome_sound "ui/menu_enter.wav"
+```
+
+### 电锯高速旋转 (`asrd_chainsaw_turbo`)
+
+配置文件自动生成在 `cfg/sourcemod/asrd_chainsaw_turbo.cfg`
+
+| CVar | 默认值 | 说明 |
+|------|--------|------|
+| `sm_asrd_chainsaw_enabled` | `1` | 启用/禁用 (0=关, 1=开) |
+| `sm_asrd_chainsaw_speed` | `3.0` | 锯片旋转速度倍率 (1.0=默认, 上限 12.0) |
+| `sm_asrd_chainsaw_debug` | `0` | 调试输出 (0=关, 1=开) |
+
+**效果:** 玩家手持电锯 (`asw_weapon_chainsaw`) 且**按住攻击键**时锯片高速旋转（旋转 + 伤害 + 音效由游戏原生接管，只是更快），**松开攻击键立即恢复默认速度**；换掉电锯后不再生效。改转速示例：
+
+```
+sm_asrd_chainsaw_speed 6.0
 ```
 
 ## 🧪 测试
