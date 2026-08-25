@@ -12,19 +12,27 @@
  *    sm_betray_list                 列出可生成的虫种
  *    sm_betray_clear                清除本插件生成的所有叛变虫
  *
- *  绑定按键 (玩家控制台输入一次, 存入 config.cfg 跨局生效):
- *    bind F8 "sm_betraypub"
- *
- *  实现原理:
+ *  实现原理 (关键结论, 均经 reactivedrop_public_src 源码 + 运行时 datamap 实测):
  *    1. CreateEntityByName(<虫族类名>) + DispatchSpawn 生成虫族实体。
- *    2. DispatchKeyValue("targetname", "asrd_betray_swarm") 打唯一标记。
- *    3. 用 ai_relationship 实体改写关系:
- *       - 叛变虫 ↔ 所有虫族类: 仇恨(Hate, 互反), 使双方互相攻击;
- *       - 叛变虫之间: 友善(Like, 优先级更高), 避免同批自相残杀;
- *       - 叛变虫 ↔ 陆战队员: 中立(Neutral), 使其不攻击玩家。
- *       (AS:RD 虫族继承 CAI_BaseNPC, IRelationType 走标准关系系统;
- *        哨戒塔自 2022 更新起同样使用 ai_relationship, 该实体在 AS:RD 可用)
+ *       AS:RD 的虫族 netclass 是 CASW_Drone_Advanced 之类 (不是 CASW_Drone)。
+ *    2. 改阵营: 把 m_nFaction 从 FACTION_ALIENS(实测=2) 改成 marine 阵营值。
+ *       - AS:RD 的 faction 字段叫 m_nFaction (datamap 偏移 1800), 不是标准
+ *         Source SDK 的 m_iFaction。
+ *       - CASW_Alien/CASW_Marine 都不重写 IRelationType, 走基类基于 faction
+ *         的判定; 同 faction → D_LI (友好, 不攻击), 异 faction → D_HT。
+ *       - m_bIgnoreMarines / m_AlienOrders 均不在 datadesc, SourceMod 无法
+ *         设置, 所以"改 faction"是唯一可行路径。
+ *    3. spawn 后立即改 + 0.1s 单次延迟重设 (Timer_ReassertFaction), 防
+ *       AS:RD 在 NPCInit/Think 里把 faction 重置回 FACTION_ALIENS。
  *    4. SetEntProp(m_clrRender) 着色, 与正常虫族外观区分。
+ *
+ *  踩过的坑 (详见项目记忆):
+ *    - ai_relationship 的 ApplyRelationship 遇实际虫族实体会段错误崩溃 server,
+ *      该方案在 AS:RD 不可用。
+ *    - 不要在 RepeatingTimer 里持续改 faction, Source AI 不期望 think 中途
+ *      改 faction, 会段错误崩溃。只做单次/有限次重设。
+ *    - GetEntProp(Prop_Send,"m_nFaction") 会抛 native error (类型不匹配),
+ *      必须用 FindDataMapInfo + GetEntData/SetEntData 走 datamap。
  *
  *  依赖: SourceMod 1.11+ (核心 + sdktools; 不依赖 SDKHooks)
  * ============================================================================
@@ -37,56 +45,26 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] 叛变虫群"
-#define PLUGIN_VERSION "1.0.0"
+#define PLUGIN_VERSION "3.0.0"
 
-// 叛变虫的统一 targetname, 供 ai_relationship 以"名字"精确匹配
+// 叛变虫的统一 targetname, 供清除命令匹配
 #define INFECTED_NAME  "asrd_betray_swarm"
-// 单次生成数量上限, 防止刷屏/卡服
+// 单次生成数量上限
 #define MAX_BATCH      80
-
-// 关系枚举 (与 basecombatcharacter.h 的 Disposition_t 一致)
-#define DISP_HATE      1
-#define DISP_FEAR      2
-#define DISP_LIKE      3
-#define DISP_NEUTRAL   4
-
-// 关系优先级 (rank, 越大越强)
-#define RANK_MAIN      90   // 叛变虫对虫族/陆战队员的主关系
-#define RANK_SELF      95   // 叛变虫之间保持友善, 略高于主关系
 
 // ─── 可生成的虫种: {类名, 中文名, 别名} ──────────────────
 char g_sTypes[][3][] = {
-    { "asw_drone",         "普通工蜂",   "drone"    },
-    { "asw_drone_jumper",  "跳跃工蜂",   "jumper"   },
-    { "asw_drone_uber",    "强化工蜂",   "uber"     },
-    { "asw_drone_antlion", "蚁狮工蜂",   "antlion"  },
-    { "asw_boomer",        "爆裂虫",     "boomer"   },
-    { "asw_parasite",      "抱脸寄生虫", "parasite" },
-    { "asw_ranger",        "游侠",       "ranger"   },
-    { "asw_mortarbug",     "迫击炮虫",   "mortar"   },
-    { "asw_shieldbug",     "盾甲虫",     "shield"   },
-    { "asw_buzzer",        "蜂群",       "buzzer"   },
-    { "asw_harvester",     "收割者",     "harvester"},
-    { "asw_grub",          "幼虫",       "grub"     }
-};
-
-// ─── 场上所有"敌方虫族"类名 (叛变虫对它们持仇恨态度) ────
-char g_sAlienClasses[][] = {
-    "asw_drone",
-    "asw_drone_jumper",
-    "asw_drone_uber",
-    "asw_drone_antlion",
-    "asw_parasite",
-    "asw_parasite_defanged",
-    "asw_egg",
-    "asw_boomer",
-    "asw_buzzer",
-    "asw_harvester",
-    "asw_mortarbug",
-    "asw_ranger",
-    "asw_shieldbug",
-    "asw_grub",
-    "asw_queen"
+    { "asw_drone",            "普通工蜂",   "drone"    },
+    { "asw_drone_jumper",     "跳跃工蜂",   "jumper"   },
+    { "asw_buzzer",           "蜂群",       "buzzer"   },
+    { "asw_parasite",         "抱脸寄生虫", "parasite" },
+    { "asw_parasite_defanged", "拔牙寄生虫","defanged" },
+    { "asw_boomer",           "爆裂虫",     "boomer"   },
+    { "asw_ranger",           "游侠",       "ranger"   },
+    { "asw_shieldbug",        "盾甲虫",     "shield"   },
+    { "asw_mortarbug",        "迫击炮虫",   "mortar"   },
+    { "asw_harvester",        "收割者",     "harvester"},
+    { "asw_grub",             "幼虫",       "grub"     }
 };
 
 // ─── ConVar 句柄 ─────────────────────────────────────────
@@ -95,12 +73,11 @@ ConVar g_cvType;
 ConVar g_cvCount;
 ConVar g_cvSpread;
 ConVar g_cvColor;
-ConVar g_cvHostile;
 ConVar g_cvPublic;
 ConVar g_cvDebug;
 
-// 关系实体是否已建立 (每个地图只建一次)
-bool g_bRelReady;
+// 缓存本批生成时从 marine 读到的真实 faction 值 (避免每只虫都扫一次 marine)
+int g_iCachedMarineFaction = -1;
 
 // ============================================================================
 //  插件信息
@@ -118,6 +95,8 @@ public Plugin myinfo = {
 // ============================================================================
 public void OnPluginStart()
 {
+    PrintToServer("[叛变虫群] v%s 已加载 (改 m_nFaction 方案)", PLUGIN_VERSION);
+
     CreateConVar("sm_asrd_betray_version", PLUGIN_VERSION,
         "插件版本", FCVAR_NOTIFY | FCVAR_DONTRECORD);
 
@@ -128,7 +107,7 @@ public void OnPluginStart()
 
     g_cvType = CreateConVar(
         "sm_asrd_betray_type", "asw_drone",
-        "默认生成的虫种类名 (如 asw_drone / asw_boomer, 见 sm_betray_list)",
+        "默认生成的虫种类名 (见 sm_betray_list)",
         FCVAR_NOTIFY);
 
     g_cvCount = CreateConVar(
@@ -138,18 +117,13 @@ public void OnPluginStart()
 
     g_cvSpread = CreateConVar(
         "sm_asrd_betray_spread", "120.0",
-        "生成时相对召唤者闪光点的散布半径(游戏单位)",
+        "生成时相对召唤者位置的散布半径(游戏单位)",
         FCVAR_NOTIFY, true, 0.0, true, 500.0);
 
     g_cvColor = CreateConVar(
         "sm_asrd_betray_color", "255 40 40",
         "叛变虫着色 RGB (如 180 0 255 紫色), 用空格分隔",
         FCVAR_NOTIFY);
-
-    g_cvHostile = CreateConVar(
-        "sm_asrd_betray_hostile", "1",
-        "是否让叛变虫与虫族互相敌对 (0=仅着色仍攻击陆战队员, 用于排查)",
-        FCVAR_NOTIFY, true, 0.0, true, 1.0);
 
     g_cvPublic = CreateConVar(
         "sm_asrd_betray_public", "0",
@@ -171,11 +145,11 @@ public void OnPluginStart()
 }
 
 // ============================================================================
-//  地图加载: 关系实体随地图重建
+//  地图加载: 重置 marine faction 缓存
 // ============================================================================
 public void OnMapStart()
 {
-    g_bRelReady = false;
+    g_iCachedMarineFaction = -1;
 }
 
 // ============================================================================
@@ -218,7 +192,6 @@ Action DoBetray(int client, int args)
     {
         char sArg[64];
         GetCmdArg(1, sArg, sizeof(sArg));
-
         if (!ResolveType(sArg, sType, sizeof(sType)))
         {
             ReplyToCommand(client, "[叛变虫群] 未知虫种 \"%s\", 用 sm_betray_list 查看可选虫种", sArg);
@@ -247,8 +220,8 @@ Action DoBetray(int client, int args)
         return Plugin_Handled;
     }
 
-    // 关系实体 (首次调用时建立)
-    EnsureRelationships();
+    // 每批生成开始时清空 marine faction 缓存, 重新从场上 marine 读真值
+    g_iCachedMarineFaction = -1;
 
     float fSpread = g_cvSpread.FloatValue;
     int iOk = 0;
@@ -265,7 +238,7 @@ Action DoBetray(int client, int args)
     }
 
     if (g_cvDebug.BoolValue)
-        PrintToServer("[叛变虫群] client=%d type=%s count=%d 成功=%d", client, sType, iCount, iOk);
+        PrintToServer("[叛变虫群] type=%s count=%d 成功=%d", sType, iCount, iOk);
 
     char sName[MAX_NAME_LENGTH];
     GetClientName(client, sName, sizeof(sName));
@@ -288,9 +261,9 @@ int SpawnAlien(const char[] sClass, const float fPos[3])
         return -1;
     }
 
-    // 打统一标记, 供 ai_relationship 按名字匹配
+    // 打统一标记, 供清除命令匹配
     DispatchKeyValue(ent, "targetname", INFECTED_NAME);
-    // 强制睡眠时也渲染 (AS:RD 睡眠虫默认不渲染, 是"看不见"的常见原因)
+    // 强制睡眠时也渲染 (AS:RD 睡眠虫默认不渲染)
     DispatchKeyValue(ent, "visiblewhenasleep", "1");
 
     float fAng[3];
@@ -307,53 +280,126 @@ int SpawnAlien(const char[] sClass, const float fPos[3])
     // 着色区分
     ApplyTint(ent);
 
-    if (g_cvDebug.BoolValue)
-        LogSpawned(ent, sClass, fPos);
+    // 改阵营: spawn 后立即改 m_nFaction 为 marine 阵营
+    SetToMarineFaction(ent);
+
+    // 0.1s 后单次重设, 防 AS:RD 在 NPCInit/Think 里重置 faction。
+    // 只做单次 (持续守护在 think 中途改 faction 会段错误崩溃)。
+    CreateTimer(0.1, Timer_ReassertFaction, EntIndexToEntRef(ent));
 
     return ent;
 }
 
 // ============================================================================
-//  调试: 打印单个生成实体的模型/位置/有效性
+//  faction 读写: AS:RD 的 faction 字段是 m_nFaction (datamap 偏移 1800, 实测),
+//  不是标准 Source SDK 的 m_iFaction。用 datamap 读写 (FindDataMapInfo +
+//  GetEntData/SetEntData), 绕开 SendProp 的 GetEntProp 类型不匹配问题。
 // ============================================================================
-void LogSpawned(int ent, const char[] sClass, const float fWant[3])
+int GetFaction(int ent)
 {
-    char sModel[128] = "(无)";
-    GetEntPropString(ent, Prop_Data, "m_ModelName", sModel, sizeof(sModel));
+    int off = FindDataMapInfo(ent, "m_nFaction");
+    if (off >= 0)
+        return GetEntData(ent, off, 4);
+    off = FindDataMapInfo(ent, "m_iFaction");
+    if (off >= 0)
+        return GetEntData(ent, off, 4);
+    return -1;
+}
 
-    float fOrg[3];
-    if (HasEntProp(ent, Prop_Send, "m_vecOrigin"))
-        GetEntPropVector(ent, Prop_Send, "m_vecOrigin", fOrg);
-
-    PrintToServer("[叛变虫群] #%d %s 有效=%d model=%s 期望=%.0f,%.0f,%.0f 实际=%.0f,%.0f,%.0f",
-        ent, sClass, IsValidEntity(ent), sModel,
-        fWant[0], fWant[1], fWant[2], fOrg[0], fOrg[1], fOrg[2]);
+bool WriteFaction(int ent, int val)
+{
+    int off = FindDataMapInfo(ent, "m_nFaction");
+    if (off >= 0)
+    {
+        SetEntData(ent, off, val, 4, true);
+        return true;
+    }
+    off = FindDataMapInfo(ent, "m_iFaction");
+    if (off >= 0)
+    {
+        SetEntData(ent, off, val, 4, true);
+        return true;
+    }
+    return false;
 }
 
 // ============================================================================
-//  着色: 用 m_clrRender 给叛变虫染色 (存在性做兜底, 避免 ThrowError)
+//  改阵营: 把叛变虫的 m_nFaction 从 FACTION_ALIENS 改成 marine 阵营值。
+//  不假设枚举顺序, 从场上任意 asw_marine 实体直接读 faction 真值。
 // ============================================================================
-void ApplyTint(int ent)
+void SetToMarineFaction(int ent)
 {
-    char sClass[64];
-    GetEntityClassname(ent, sClass, sizeof(sClass));
-
-    int iColor;
-    if (!ParseColor(iColor))
+    int iAlienFaction = GetFaction(ent);
+    if (iAlienFaction < 0)
     {
-        if (g_cvDebug.BoolValue)
-            PrintToServer("[叛变虫群] 调色板解析失败, 跳过着色");
+        PrintToServer("[叛变虫群] #%d 未找到 faction 字段, 改阵营失败", ent);
         return;
     }
 
-    // 渲染模式: RENDER_TRANSCOLOR(1) 才能让顶点色生效
+    int iMarineFaction = ResolveMarineFaction(iAlienFaction);
+
+    if (!WriteFaction(ent, iMarineFaction))
+    {
+        PrintToServer("[叛变虫群] #%d 写 faction 失败", ent);
+        return;
+    }
+
+    int iAfterFaction = GetFaction(ent);
+    PrintToServer("[叛变虫群] #%d 改阵营 alien=%d -> marine=%d 写入后=%d %s",
+        ent, iAlienFaction, iMarineFaction, iAfterFaction,
+        (iAfterFaction == iMarineFaction) ? "(OK)" : "(写入失败!)");
+}
+
+// ----------------------------------------------------------------------------
+//  取 marine 阵营值: 缓存优先, 否则扫场上 asw_marine 读真值, 兜底 alien-1。
+// ----------------------------------------------------------------------------
+int ResolveMarineFaction(int iAlienFaction)
+{
+    if (g_iCachedMarineFaction >= 0)
+        return g_iCachedMarineFaction;
+
+    int iMarine = FindEntityByClassname(-1, "asw_marine");
+    if (iMarine > 0 && IsValidEntity(iMarine))
+    {
+        int iMFaction = GetFaction(iMarine);
+        if (iMFaction >= 0 && iMFaction != iAlienFaction)
+        {
+            g_iCachedMarineFaction = iMFaction;
+            PrintToServer("[叛变虫群] marine #%d faction=%d", iMarine, iMFaction);
+            return iMFaction;
+        }
+    }
+
+    g_iCachedMarineFaction = iAlienFaction - 1;
+    PrintToServer("[叛变虫群] 场上无 marine, 兜底 marine faction=%d", g_iCachedMarineFaction);
+    return g_iCachedMarineFaction;
+}
+
+// ============================================================================
+//  0.1s 后单次重设 faction
+// ============================================================================
+Action Timer_ReassertFaction(Handle hTimer, int iEntRef)
+{
+    int ent = EntRefToEntIndex(iEntRef);
+    if (ent > 0 && IsValidEntity(ent))
+        SetToMarineFaction(ent);
+    return Plugin_Stop;
+}
+
+// ============================================================================
+//  着色: 用 m_clrRender 给叛变虫染色
+// ============================================================================
+void ApplyTint(int ent)
+{
+    int iColor;
+    if (!ParseColor(iColor))
+        return;
+
     if (HasEntProp(ent, Prop_Send, "m_nRenderMode"))
         SetEntProp(ent, Prop_Send, "m_nRenderMode", 1, 1);
 
     if (HasEntProp(ent, Prop_Send, "m_clrRender"))
         SetEntProp(ent, Prop_Send, "m_clrRender", iColor, 4);
-    else if (g_cvDebug.BoolValue)
-        PrintToServer("[叛变虫群] %s 无 m_clrRender, 跳过着色", sClass);
 }
 
 // ============================================================================
@@ -366,7 +412,6 @@ bool ParseColor(int &out)
 
     int v[3];
     int n = 0;
-
     char sPart[8];
     int l = 0;
     int len = strlen(sColor);
@@ -389,14 +434,13 @@ bool ParseColor(int &out)
         }
         else
         {
-            return false; // 含非法字符
+            return false;
         }
     }
 
     if (n < 3)
         return false;
 
-    // 钳制到 0~255
     int r = ClampI(v[0]);
     int g = ClampI(v[1]);
     int b = ClampI(v[2]);
@@ -410,57 +454,6 @@ int ClampI(int v)
     if (v < 0) return 0;
     if (v > 255) return 255;
     return v;
-}
-
-// ============================================================================
-//  建立 ai_relationship: 叛变虫 ↔ 虫族 互敌, 叛变虫内部友善, 对陆战队员中立
-// ============================================================================
-void EnsureRelationships()
-{
-    if (g_bRelReady)
-        return;
-    g_bRelReady = true;
-
-    if (!g_cvHostile.BoolValue)
-        return;
-
-    // 1) 叛变虫仇视所有虫族 (互反, 让正常虫族也反击叛变虫)
-    for (int i = 0; i < sizeof(g_sAlienClasses); i++)
-        CreateRelationship(INFECTED_NAME, g_sAlienClasses[i], DISP_HATE, RANK_MAIN, true);
-
-    // 2) 叛变虫之间保持友善 (优先级略高, 覆盖同一类名互仇, 避免自相残杀)
-    CreateRelationship(INFECTED_NAME, INFECTED_NAME, DISP_LIKE, RANK_SELF, true);
-
-    // 3) 叛变虫对陆战队员中立 (不主动攻击玩家)
-    CreateRelationship(INFECTED_NAME, "asw_marine", DISP_NEUTRAL, RANK_MAIN, false);
-}
-
-void CreateRelationship(const char[] sSubject, const char[] sTarget,
-                        int iDisp, int iRank, bool bReciprocal)
-{
-    int rel = CreateEntityByName("ai_relationship");
-    if (rel == -1)
-    {
-        if (g_cvDebug.BoolValue)
-            PrintToServer("[叛变虫群] 创建 ai_relationship 失败");
-        return;
-    }
-
-    char buf[8];
-
-    DispatchKeyValue(rel, "subject", sSubject);
-    DispatchKeyValue(rel, "target", sTarget);
-    IntToString(iDisp, buf, sizeof(buf));
-    DispatchKeyValue(rel, "disposition", buf);
-    IntToString(iRank, buf, sizeof(buf));
-    DispatchKeyValue(rel, "rank", buf);
-    DispatchKeyValue(rel, "Reciprocal", bReciprocal ? "1" : "0");
-    DispatchKeyValue(rel, "StartActive", "0"); // 显式用 ApplyRelationship, 规避多人/换图 StartActive 失效
-
-    DispatchSpawn(rel);
-    ActivateEntity(rel);
-    // ApplyRelationship 后, 之后生成的匹配实体同样生效
-    AcceptEntityInput(rel, "ApplyRelationship");
 }
 
 // ============================================================================
@@ -480,15 +473,18 @@ public Action Command_List(int client, int args)
 public Action Command_Clear(int client, int args)
 {
     int iCount = 0;
-    int ent = -1;
-    while ((ent = FindEntityByClassname(ent, "*")) != -1)
+    for (int t = 0; t < sizeof(g_sTypes); t++)
     {
-        char sName[64];
-        if (GetEntPropString(ent, Prop_Data, "m_iName", sName, sizeof(sName))
-            && StrEqual(sName, INFECTED_NAME))
+        int ent = -1;
+        while ((ent = FindEntityByClassname(ent, g_sTypes[t][0])) != -1)
         {
-            AcceptEntityInput(ent, "Kill");
-            iCount++;
+            char sName[64];
+            GetEntPropString(ent, Prop_Data, "m_iName", sName, sizeof(sName));
+            if (StrEqual(sName, INFECTED_NAME))
+            {
+                AcceptEntityInput(ent, "Kill");
+                iCount++;
+            }
         }
     }
 
@@ -503,9 +499,9 @@ bool ResolveType(const char[] sInput, char[] sOut, int outLen)
 {
     for (int i = 0; i < sizeof(g_sTypes); i++)
     {
-        if (StrEqual(sInput, g_sTypes[i][0], false)      // 类名
-            || StrEqual(sInput, g_sTypes[i][2], false)   // 别名
-            || StrEqual(sInput, g_sTypes[i][1], false))  // 中文名
+        if (StrEqual(sInput, g_sTypes[i][0], false)
+            || StrEqual(sInput, g_sTypes[i][2], false)
+            || StrEqual(sInput, g_sTypes[i][1], false))
         {
             strcopy(sOut, outLen, g_sTypes[i][0]);
             return true;
@@ -515,7 +511,7 @@ bool ResolveType(const char[] sInput, char[] sOut, int outLen)
 }
 
 // ============================================================================
-//  取召唤者控制的陆战队员坐标 (三种办法, 失败返回 false)
+//  取召唤者控制的陆战队员坐标
 // ============================================================================
 bool GetMarineOrigin(int client, float fOut[3])
 {
@@ -525,7 +521,6 @@ bool GetMarineOrigin(int client, float fOut[3])
     int iMarine = GetPlayerMarine(client);
     if (IsValidEntity(iMarine))
     {
-        // m_vecOrigin 是网络属性, 用 Prop_Send 读取; 带存在性兜底避免 ThrowError
         if (HasEntProp(iMarine, Prop_Send, "m_vecOrigin"))
         {
             GetEntPropVector(iMarine, Prop_Send, "m_vecOrigin", fOut);
@@ -538,7 +533,6 @@ bool GetMarineOrigin(int client, float fOut[3])
         }
     }
 
-    // 兜底: 直接用客户端位置
     GetClientAbsOrigin(client, fOut);
     return true;
 }
@@ -551,7 +545,7 @@ int GetPlayerMarine(int client)
     if (client <= 0 || !IsClientInGame(client))
         return 0;
 
-    // 办法1: 玩家身上的 m_hInhabiting 网络属性 (最快)
+    // 办法1: 玩家身上的 m_hInhabiting 网络属性
     char sNetClass[64];
     if (GetEntityNetClass(client, sNetClass, sizeof(sNetClass))
         && FindSendPropInfo(sNetClass, "m_hInhabiting") > 0)

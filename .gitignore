@@ -5,3 +5,7 @@
 /plugins/asrd_marine_power.smx
 /plugins/asrd_alien_civilwar.smx
 /plugins/_chainsaw_check.smx
+/.idea/
+/.workbuddy/
+/plugins/asrd_drone_escort.smx
+/scripting/compiled/

@@ -1,10 +1,10 @@
 /**
  * ============================================================================
  *  [AS:RD] 哨戒塔增强 + 头顶哨戒塔 + 信息 HUD
- *  版本 6.2.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 6.3.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ─────────────────────────────────────
- *  1. 增强地图里的哨戒塔: 生命/射速/射程/弹药 乘以倍率,
+ *  1. 增强地图里的哨戒塔: 生命/射速/射程/弹药/伤害 乘以倍率,
  *     可选无敌、可选关闭对队友的误伤
  *  2. 把哨戒塔放到角色头顶, 当"随行炮台" (sm_sentryhat)
  *  3. 在画面右上角显示哨戒塔信息 HUD (sm_sentryhud)
@@ -13,6 +13,7 @@
  *   sm_sentryhud      开关右上角信息 HUD (默认关)
  *   sm_hat            把最近的塔放到自己头顶 (需管理员开启该功能)
  *   sm_hat_off        取消自己的头顶塔
+ *   sm_sentrydrop     在身边掉落一座哨戒炮塔拾取箱 (需管理员开启该功能)
  *
  *  ── 管理员命令 ─────────────────────────────────────────
  *   sm_sentry_refresh     重新增强所有哨戒塔并补满弹药
@@ -28,15 +29,19 @@
  *  ── 常用 ConVar (自动生成 cfg/sourcemod/asrd_sentry_enhancer.cfg) ─
  *   sm_asrd_sentry_enabled            总开关 (0=关 1=开)
  *   sm_asrd_sentry_health_mult        生命倍率 (默认 2.0)
- *   sm_asrd_sentry_firerate_mult      射速倍率 (默认 2.0)
+ *   sm_asrd_sentry_firerate_mult      射速倍率 (默认 35)
  *   sm_asrd_sentry_range_mult         射程倍率 (默认 1.5)
- *   sm_asrd_sentry_ammo_mult          弹药倍率 (默认 2.0)
+ *   sm_asrd_sentry_ammo_mult          弹药倍率 (默认 100)
+ *   sm_asrd_sentry_damage_mult        子弹伤害倍率 (默认 1.0, 基于机枪10/炮60/喷火4)
  *   sm_asrd_sentry_invulnerable       无敌 (默认 0)
  *   sm_asrd_sentry_no_player_damage   关闭误伤队友 (默认 1)
- *   sm_asrd_sentry_hat_public         允许所有玩家用头顶塔命令 (默认 0)
+ *   sm_asrd_sentry_hat_public         允许所有玩家用头顶塔命令 (默认 1)
  *   sm_asrd_sentry_hat_turnspeed      头顶塔转向速度 度/秒 (默认 360)
  *   sm_asrd_sentry_hat_maxdist        头顶塔命令允许的最大距离 (默认 100, 0=不限制)
+ *   sm_asrd_sentry_hat_layerspace     头顶多座塔的层间距 (默认 60, 20~200)
  *   sm_asrd_sentry_hud_default        新玩家默认开启 HUD (默认 0)
+ *   sm_asrd_sentry_drop_limit         场上最多可同时存在的拾取箱数量 (默认 20, 0=不限制)
+ *   sm_asrd_sentry_drop_public        允许所有玩家使用掉落命令 (默认 0)
  *   sm_asrd_sentry_debug              调试输出 (默认 0)
  *
  *  依赖: SourceMod 1.11+ (不依赖任何扩展)
@@ -50,7 +55,14 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Sentry Enhancer + Sentry Hat"
-#define PLUGIN_VERSION "6.2.0"
+#define PLUGIN_VERSION "6.3.0"
+
+// 子弹伤害倍率的基础伤害值 (来自官方源码 asw_sentry_top*.cpp 的默认伤害):
+//   机枪 GetSentryDamage=10*m_fDamageScale, 炮 fBaseGrenadeDamage=60, 喷火 GetSentryDamage=4*m_fDamageScale
+// 冰冻塔伤害硬编码为 1 且无官方覆盖 ConVar, 不做增强。伤害倍率只作用于机枪/炮/喷火。
+#define SENTRY_DMG_MACHINEGUN 10.0     // 机枪每发基础伤害
+#define SENTRY_DMG_CANNON     60.0     // 炮每发基础伤害 (实际还会叠加 marine 技能增益)
+#define SENTRY_DMG_FLAMER      4.0     // 喷火每发基础伤害
 
 // HUD 文字相关参数
 #define HUD_CHANNEL    4        // 文字通道号 (多个 HUD 同时显示时互不覆盖)
@@ -66,13 +78,18 @@ ConVar g_cvHealthMult;
 ConVar g_cvFireRateMult;
 ConVar g_cvRangeMult;
 ConVar g_cvAmmoMult;
+ConVar g_cvDamageMult;   // 子弹伤害倍率 (作用于机枪/炮/喷火, 冰冻塔无法增强)
 ConVar g_cvInvulnerable;
 ConVar g_cvNoPlayerDamage;
 ConVar g_cvHatTurnSpeed;
 ConVar g_cvHatPublic;
 ConVar g_cvHatMaxDist;
+ConVar g_cvHatLayerSpace;   // 头顶多座塔的层间距 (世界单位)
+ConVar g_cvTurnRate;     // 哨戒塔顶转向速度 (度/秒, 0=瞬间转向)
 ConVar g_cvDebug;
 ConVar g_cvHudDefault;   // 新玩家进服时 HUD 的默认开关
+ConVar g_cvDropLimit;    // 场上最多可同时存在的哨戒炮塔拾取箱数量 (0=不限制)
+ConVar g_cvDropPublic;   // 允许所有玩家使用掉落命令 (0=仅管理员, 1=所有玩家)
 
 // ============================================================================
 //  属性偏移缓存
@@ -86,6 +103,7 @@ ConVar g_cvHudDefault;   // 新玩家进服时 HUD 的默认开关
 int g_offBaseMaxHealth    = -1;
 int g_offBaseHealth       = -1;
 int g_offBaseAmmo         = -1;
+int g_offBaseMaxAmmo      = -1;  // 最大弹药 (仅网络属性, 用 FindSendPropInfo 查)
 int g_offBaseGunType      = -1;
 int g_offBaseSentryTop    = -1;
 int g_offBaseTakedamage   = -1;
@@ -95,6 +113,9 @@ int g_offTopShootRange    = -1;
 int g_offTopNextFireTime  = -1;
 int g_offTopFriendlyFire  = -1;
 int g_offTopSentryBase    = -1;
+// 塔顶转向速度字段 (炮口基类成员, 引擎默认 回正75/瞄准150 度每秒)
+int g_offTopBaseTurnRate  = -1;
+int g_offTopEnemyTurnRate = -1;
 // 喷火/冰冻塔的"射速时钟" m_flLastFireTime 的偏移。
 // 特殊点: 这个属性没在游戏的属性表里登记, 无法按名字访问,
 // 于是借用它前面紧挨着的网络属性 m_bFiring 的位置 +4 字节来定位 (详见
@@ -167,8 +188,8 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 1.0
     );
     g_cvFireRateMult = CreateConVar(
-        "sm_asrd_sentry_firerate_mult", "2.0",
-        "哨戒塔射速倍率 (1.0=默认, 2.0=两倍射速)",
+        "sm_asrd_sentry_firerate_mult", "35",
+        "哨戒塔射速倍率 (1.0=默认, 35=35倍射速)",
         FCVAR_NOTIFY, true, 1.0
     );
     g_cvRangeMult = CreateConVar(
@@ -177,8 +198,13 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 1.0
     );
     g_cvAmmoMult = CreateConVar(
-        "sm_asrd_sentry_ammo_mult", "2.0",
-        "哨戒塔弹药倍率 (1.0=默认, 2.0=双倍弹药)",
+        "sm_asrd_sentry_ammo_mult", "100",
+        "哨戒塔弹药倍率 (1.0=默认, 100=百倍弹药)",
+        FCVAR_NOTIFY, true, 1.0
+    );
+    g_cvDamageMult = CreateConVar(
+        "sm_asrd_sentry_damage_mult", "1.0",
+        "哨戒塔子弹伤害倍率 (1.0=默认, 基于机枪10/炮60/喷火4, 冰冻塔不增强)",
         FCVAR_NOTIFY, true, 1.0
     );
     g_cvInvulnerable = CreateConVar(
@@ -201,8 +227,18 @@ public void OnPluginStart()
         "头顶哨戒塔命令允许的最大距离 (0=不限制)",
         FCVAR_NOTIFY, true, 0.0
     );
+    g_cvHatLayerSpace = CreateConVar(
+        "sm_asrd_sentry_hat_layerspace", "60.0",
+        "头顶多座哨戒塔的层间距 (世界单位, 每多一座塔往上叠一层)",
+        FCVAR_NOTIFY, true, 20.0, true, 200.0
+    );
+    g_cvTurnRate = CreateConVar(
+        "sm_asrd_sentry_turn_rate", "0",
+        "哨戒塔顶转向速度 (度/秒, 0=瞬间转向, 150=引擎默认速度)",
+        FCVAR_NOTIFY, true, 0.0
+    );
     g_cvHatPublic = CreateConVar(
-        "sm_asrd_sentry_hat_public", "0",
+        "sm_asrd_sentry_hat_public", "1",
         "允许所有玩家使用头顶哨戒塔命令 (0=仅管理员, 1=所有玩家)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
@@ -214,6 +250,16 @@ public void OnPluginStart()
     g_cvHudDefault = CreateConVar(
         "sm_asrd_sentry_hud_default", "0",
         "新玩家默认显示哨戒塔信息HUD (0=默认不显示, 玩家可用 sm_sentryhud 自行切换)",
+        FCVAR_NOTIFY, true, 0.0, true, 1.0
+    );
+    g_cvDropLimit = CreateConVar(
+        "sm_asrd_sentry_drop_limit", "20",
+        "场上最多可同时存在的哨戒炮塔拾取箱数量 (0=不限制)",
+        FCVAR_NOTIFY, true, 0.0
+    );
+    g_cvDropPublic = CreateConVar(
+        "sm_asrd_sentry_drop_public", "0",
+        "允许所有玩家使用掉落哨戒炮塔命令 (0=仅管理员, 1=所有玩家)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
 
@@ -230,6 +276,7 @@ public void OnPluginStart()
     RegAdminCmd("sm_sentry_boost",     Command_SentryBoost,     ADMFLAG_GENERIC, "一键满配增强所有哨戒塔");
     RegAdminCmd("sm_sentry_unboost",   Command_SentryUnboost,   ADMFLAG_GENERIC, "一键还原哨戒塔增强倍率(默认档)");
     RegAdminCmd("sm_sentry_drop",      Command_SentryDrop,      ADMFLAG_GENERIC, "在身边掉落一座哨戒塔(默认炮)");
+    RegConsoleCmd("sm_sentrydrop",    Command_SentryDropPublic, "在身边掉落一座哨戒炮塔拾取箱 (需管理员开启)");
     RegConsoleCmd("sm_hat",            Command_HatPublic,       "把最近的哨戒塔放到自己头顶 (需管理员开启)");
     RegConsoleCmd("sm_hat_off",        Command_HatOffPublic,    "取消自己的头顶哨戒塔 (需管理员开启)");
     RegConsoleCmd("sm_sentryhud",      Command_SentryHudToggle, "切换哨戒塔信息HUD显示 (默认不显示)");
@@ -239,6 +286,7 @@ public void OnPluginStart()
     g_cvFireRateMult.AddChangeHook(OnMultCvarChanged);
     g_cvRangeMult.AddChangeHook(OnMultCvarChanged);
     g_cvAmmoMult.AddChangeHook(OnMultCvarChanged);
+    g_cvDamageMult.AddChangeHook(OnDamageMultCvarChanged);
     g_cvInvulnerable.AddChangeHook(OnInvulnCvarChanged);
     g_cvNoPlayerDamage.AddChangeHook(OnNoDamageCvarChanged);
 
@@ -252,6 +300,14 @@ public void OnPluginStart()
 
     // HUD 刷新定时器: 每 1 秒重发一次文字 (只发给开着的玩家)
     CreateTimer(1.0, Timer_UpdateHud, _, TIMER_REPEAT);
+}
+
+// ============================================================================
+//  配置文件加载完成后: 应用伤害覆盖 (此时 cfg 里的自定义值已生效)
+// ============================================================================
+public void OnConfigsExecuted()
+{
+    ApplyDamageOverrides();
 }
 
 // ============================================================================
@@ -529,6 +585,7 @@ void CacheBasePropOffsets(int iBase)
     g_offBaseMaxHealth    = FindDataMapInfo(iBase, "m_iMaxHealth");
     g_offBaseHealth       = FindDataMapInfo(iBase, "m_iHealth");
     g_offBaseAmmo         = FindDataMapInfo(iBase, "m_iAmmo");
+    g_offBaseMaxAmmo      = FindSendPropInfo("asw_sentry_base", "m_iMaxAmmo");
     g_offBaseGunType      = FindDataMapInfo(iBase, "m_nGunType");
     g_offBaseSentryTop    = FindDataMapInfo(iBase, "m_hSentryTop");
     g_offBaseTakedamage   = FindDataMapInfo(iBase, "m_takedamage");
@@ -539,8 +596,8 @@ void CacheBasePropOffsets(int iBase)
     if (g_cvDebug.BoolValue)
     {
         PrintToServer("[哨戒塔] base 属性偏移缓存完成:");
-        PrintToServer("  MaxHealth=%d Health=%d Ammo=%d GunType=%d SentryTop=%d Takedamage=%d Coll=%d",
-            g_offBaseMaxHealth, g_offBaseHealth, g_offBaseAmmo, g_offBaseGunType,
+        PrintToServer("  MaxHealth=%d Health=%d Ammo=%d MaxAmmo=%d GunType=%d SentryTop=%d Takedamage=%d Coll=%d",
+            g_offBaseMaxHealth, g_offBaseHealth, g_offBaseAmmo, g_offBaseMaxAmmo, g_offBaseGunType,
             g_offBaseSentryTop, g_offBaseTakedamage, g_offBaseCollisionGrp);
     }
 }
@@ -554,19 +611,22 @@ void CacheTopPropOffsets(int iTop)
     if (g_bTopPropsCached || iTop <= 0)
         return;
 
-    // 下面四个属性都在哨戒塔通用的炮口基类里, 各种塔 (机枪/炮/喷火/冰冻) 通用
+    // 下面六个属性都在哨戒塔通用的炮口基类里, 各种塔 (机枪/炮/喷火/冰冻) 通用
     g_offTopShootRange   = FindDataMapInfo(iTop, "m_flShootRange");   // 射程
     g_offTopNextFireTime = FindDataMapInfo(iTop, "m_fNextFireTime");  // 下次开火时间
     g_offTopFriendlyFire = FindDataMapInfo(iTop, "m_bFriendlyFire");  // 是否误伤队友
     g_offTopSentryBase   = FindDataMapInfo(iTop, "m_hSentryBase");    // 指向底座
+    g_offTopBaseTurnRate  = FindDataMapInfo(iTop, "m_iBaseTurnRate");  // 回正速度(度/秒)
+    g_offTopEnemyTurnRate = FindDataMapInfo(iTop, "m_iEnemyTurnRate"); // 瞄准敌人速度(度/秒)
 
     g_bTopPropsCached = true;
 
     if (g_cvDebug.BoolValue)
     {
         PrintToServer("[哨戒塔] top 属性偏移缓存完成:");
-        PrintToServer("  ShootRange=%d NextFire=%d FriendlyFire=%d SentryBase=%d",
-            g_offTopShootRange, g_offTopNextFireTime, g_offTopFriendlyFire, g_offTopSentryBase);
+        PrintToServer("  ShootRange=%d NextFire=%d FriendlyFire=%d SentryBase=%d BaseTurn=%d EnemyTurn=%d",
+            g_offTopShootRange, g_offTopNextFireTime, g_offTopFriendlyFire, g_offTopSentryBase,
+            g_offTopBaseTurnRate, g_offTopEnemyTurnRate);
     }
 }
 
@@ -652,6 +712,26 @@ void ApplyTopEnhancements(SentryData data, int iTop)
     {
         SetEntProp(iTop, Prop_Data, "m_bFriendlyFire", 0);
     }
+
+    // 炮塔自身转向速度: ConVar>0 用指定值, =0 瞬间转向 (引擎默认 150 度/秒)
+    if (g_offTopBaseTurnRate >= 0 && g_offTopEnemyTurnRate >= 0)
+    {
+        float fTurn = g_cvTurnRate.FloatValue;
+        int iEnemyRate, iBaseRate;
+        if (fTurn <= 0.0)
+        {
+            // 瞬间转向: 设极大值, 单帧即可转过最大 180° 视角差
+            iEnemyRate = 100000;
+            iBaseRate  = 100000;
+        }
+        else
+        {
+            iEnemyRate = RoundToNearest(fTurn);
+            iBaseRate  = RoundToNearest(fTurn / 2.0);
+        }
+        SetEntProp(iTop, Prop_Data, "m_iEnemyTurnRate", iEnemyRate);   // 瞄准敌人速度
+        SetEntProp(iTop, Prop_Data, "m_iBaseTurnRate", iBaseRate);     // 无敌人回正速度
+    }
 }
 
 // ============================================================================
@@ -691,6 +771,9 @@ void EnhanceSentry(int iBase, bool bForce)
         {
             int iFullAmmo = RoundToFloor(float(data.origAmmo) * fAmmoMult);
             SetEntProp(iBase, Prop_Data, "m_iAmmo", iFullAmmo);
+            // 同步放大最大弹药, 让 HUD 弹药条按增强后的上限递减, 否则会一直显示满格
+            if (g_offBaseMaxAmmo >= 0)
+                SetEntData(iBase, g_offBaseMaxAmmo, iFullAmmo);
         }
 
         // 重新应用无敌
@@ -727,12 +810,15 @@ void EnhanceSentry(int iBase, bool bForce)
     data.nextTopSearch    = 0.0;
 
     // 记录初始值 (底座属性在生成时已就绪)
+    data.gunType       = (g_offBaseGunType  >= 0) ? GetEntProp(iBase, Prop_Data, "m_nGunType")    : 0;
     data.origMaxHealth = (g_offBaseMaxHealth >= 0) ? GetEntProp(iBase, Prop_Data, "m_iMaxHealth") : 0;
-    data.origAmmo      = (g_offBaseAmmo     >= 0) ? GetEntProp(iBase, Prop_Data, "m_iAmmo")       : 0;
+    // 弹药基准用该类型的"自然满弹药量", 而非当前 m_iAmmo。
+    // 重部署时当前 m_iAmmo 已经是增强过的值, 拿它再乘倍率会导致弹药越叠越高;
+    // 改用固定基准后, 每座塔的弹药永远是 满弹药 x 倍率, 稳定一致。
+    data.origAmmo      = GetSentryMaxAmmo(data.gunType);
     data.origCollision = (g_offBaseCollisionGrp >= 0) ? GetEntProp(iBase, Prop_Send, "m_CollisionGroup") : 0;
     data.origMoveType  = GetEntityMoveType(iBase);
     data.origTakedamage= (g_offBaseTakedamage >= 0) ? GetEntProp(iBase, Prop_Data, "m_takedamage") : 1;
-    data.gunType       = (g_offBaseGunType  >= 0) ? GetEntProp(iBase, Prop_Data, "m_nGunType")    : 0;
     data.origShootRange  = 0.0;   // 炮口出现后再记录
     data.origFriendlyFire = -1;   // 炮口出现后再记录
 
@@ -749,6 +835,9 @@ void EnhanceSentry(int iBase, bool bForce)
     {
         int iNewAmmo = RoundToFloor(float(data.origAmmo) * fAmmoMult);
         SetEntProp(iBase, Prop_Data, "m_iAmmo", iNewAmmo);
+        // 同步放大最大弹药, 让 HUD 弹药条按增强后的上限递减, 否则会一直显示满格
+        if (g_offBaseMaxAmmo >= 0)
+            SetEntData(iBase, g_offBaseMaxAmmo, iNewAmmo);
     }
 
     // 应用无敌
@@ -920,6 +1009,31 @@ public void OnGameFrame()
 //  头顶塔位置跟随: 每帧把塔贴到所属角色头顶
 //  (内部自己读/写列表, 避免和 OnGameFrame 的临时副本打架)
 // ============================================================================
+// 计算某座塔在"同一玩家头顶"里的层序号 (0 起), 用于分层堆叠。
+// 层序号按底座实体索引升序确定, 保证每座塔都有一个稳定且唯一的高度,
+// 避免多座塔叠在同一高度、炮口互相遮挡视线导致射不出子弹。
+int GetHatLayerIndex(int listIdx, int iUserId)
+{
+    SentryData myData;
+    g_hSentries.GetArray(listIdx, myData);
+    int iMyBase = EntRefToEntIndex(myData.baseRef);
+
+    int iLayer = 0;
+    for (int i = 0; i < g_hSentries.Length; i++)
+    {
+        SentryData d;
+        g_hSentries.GetArray(i, d);
+        if (d.hatUserId != iUserId)
+            continue;
+        int iBase = EntRefToEntIndex(d.baseRef);
+        if (iBase == INVALID_ENT_REFERENCE || !IsValidEntity(iBase))
+            continue;
+        if (iBase < iMyBase)
+            iLayer++;
+    }
+    return iLayer;
+}
+
 void UpdateHatSentry(int listIdx, int iBase, float fTurnSpeed, float fTickInterval)
 {
     SentryData data;
@@ -957,11 +1071,9 @@ void UpdateHatSentry(int listIdx, int iBase, float fTurnSpeed, float fTickInterv
     // 拿角色位置, 把塔放到头顶上方
     float fOrigin[3], fAngles[3];
     GetEntPropVector(iMarine, Prop_Send, "m_vecOrigin", fOrigin);   // 必须是 Send, Data 读出来是占位值
-    fOrigin[2] += 80.0;   // 抬高 80 (游戏里向上是 Z 轴)
-
-    // 有朝向偏移的塔再抬高些, 避免和别的塔叠一起
-    if (data.hatYawOffset != 0.0)
-        fOrigin[2] += 70.0;
+    // 同一玩家头顶多座塔时按层序号逐层往上叠 (第一座 +80, 之后每座 +层间距),
+    // 避免叠在同一高度、炮口互相遮挡视线导致射不出子弹
+    fOrigin[2] += 80.0 + GetHatLayerIndex(listIdx, data.hatUserId) * g_cvHatLayerSpace.FloatValue;
 
     // 塔朝向跟随玩家视角前方, 加自定义偏移
     float fEyeAngles[3];
@@ -1034,6 +1146,23 @@ void GetSentryTypeName(int iGunType, char[] sName, int iLen)
         case 4: strcopy(sName, iLen, "电磁型");
         default: Format(sName, iLen, "未知(%d)", iGunType);
     }
+}
+
+// ============================================================================
+//  各类型哨戒塔的"自然满弹药量" (与玩家自带/地图默认塔一致, 取自官方 FGD)
+//  用作弹药增强的固定基准, 避免拿"已被增强过的当前弹药"再乘倍率导致越叠越高。
+// ============================================================================
+int GetSentryMaxAmmo(int iGunType)
+{
+    switch (iGunType)
+    {
+        case 0: return 450;    // 哨戒枪 (机枪)
+        case 1: return 40;     // 哨戒炮 (榴弹炮)
+        case 2: return 1200;   // 喷火型
+        case 3: return 800;    // 冰冻型
+        case 4: return 300;    // 电磁型
+    }
+    return 0;
 }
 
 // ============================================================================
@@ -1182,6 +1311,43 @@ void OnMultCvarChanged(ConVar cv, const char[] oldValue, const char[] newValue)
 }
 
 // ============================================================================
+//  子弹伤害倍率: 应用到官方伤害覆盖 ConVar (均带 FCVAR_CHEAT)
+//  官方覆盖是"固定值"而非倍率, 所以这里用 基础伤害 x 倍率 算出目标值写入。
+//  倍率<=1.0 时还原为 0 (0=官方不覆盖, 使用引擎默认伤害)。
+//  这些 ConVar 是全局的, 设一次对所有同类塔生效, 无需每帧重复。
+// ============================================================================
+void ApplyDamageOverrides()
+{
+    float fMult = g_cvDamageMult.FloatValue;
+
+    SetSentryDamageOverride("asw_sentry_top_machinegun_dmg_override", SENTRY_DMG_MACHINEGUN, fMult);
+    SetSentryDamageOverride("asw_sentry_top_cannon_dmg_override",     SENTRY_DMG_CANNON,     fMult);
+    SetSentryDamageOverride("asw_sentry_top_flamer_dmg_override",     SENTRY_DMG_FLAMER,     fMult);
+}
+
+// 写单个官方伤害覆盖 ConVar: 摘掉 FCVAR_CHEAT 后按 基础*倍率 赋值 (倍率<=1 归零还原)
+void SetSentryDamageOverride(const char[] sCvar, float fBase, float fMult)
+{
+    ConVar cv = FindConVar(sCvar);
+    if (cv == null)
+        return;
+
+    // 官方覆盖 ConVar 带 FCVAR_CHEAT, sv_cheats=0 时插件改不动, 先摘掉该标志
+    int iFlags = cv.Flags;
+    if (iFlags & FCVAR_CHEAT)
+        cv.Flags = iFlags & ~FCVAR_CHEAT;
+
+    float fDamage = (fMult > 1.0) ? (fBase * fMult) : 0.0;
+    cv.FloatValue = fDamage;
+}
+
+// 伤害倍率 ConVar 变化时自动重新应用
+void OnDamageMultCvarChanged(ConVar cv, const char[] oldValue, const char[] newValue)
+{
+    ApplyDamageOverrides();
+}
+
+// ============================================================================
 //  无敌开关变化时: 切换所有塔的"是否可被打"
 // ============================================================================
 void OnInvulnCvarChanged(ConVar cv, const char[] oldValue, const char[] newValue)
@@ -1264,6 +1430,9 @@ void ReapplyEnhance(int iBase, SentryData data)
     {
         int iNewAmmo = RoundToFloor(float(data.origAmmo) * fAmmoMult);
         SetEntProp(iBase, Prop_Data, "m_iAmmo", iNewAmmo);
+        // 同步放大最大弹药, 让 HUD 弹药条按增强后的上限递减, 否则会一直显示满格
+        if (g_offBaseMaxAmmo >= 0)
+            SetEntData(iBase, g_offBaseMaxAmmo, iNewAmmo);
     }
 }
 
@@ -1339,7 +1508,8 @@ public Action Command_SentryHat(int client, int args)
     // 先把塔传送到头顶 (朝向前方, 之后每帧跟随)
     float fOrigin[3], fAngles[3], fEyeAngles[3];
     GetEntPropVector(iMarine, Prop_Send, "m_vecOrigin", fOrigin);   // 必须是 Send, Data 读出来是占位值
-    fOrigin[2] += (fYawOffset != 0.0) ? 150.0 : 80.0;
+    // 与 UpdateHatSentry 一致的分层高度 (此时 data.hatUserId 已写入)
+    fOrigin[2] += 80.0 + GetHatLayerIndex(idx, GetClientUserId(client)) * g_cvHatLayerSpace.FloatValue;
     GetClientEyeAngles(client, fEyeAngles);
     fAngles[0] = 0.0;
     fAngles[1] = fEyeAngles[1] + fYawOffset;   // 前方 + 自定义偏移
@@ -1425,8 +1595,9 @@ public Action Command_SentryBoost(int client, int args)
     g_cvEnabled.SetInt(1);
     g_cvHealthMult.SetFloat(3.0);
     g_cvFireRateMult.SetFloat(20.0);
-    g_cvRangeMult.SetFloat(5.0);
+    g_cvRangeMult.SetFloat(1.0);
     g_cvAmmoMult.SetFloat(50.0);
+    g_cvDamageMult.SetFloat(5.0);
     g_cvInvulnerable.SetInt(1);
     g_cvNoPlayerDamage.SetInt(1);
     g_cvDebug.SetInt(1);
@@ -1443,7 +1614,7 @@ public Action Command_SentryBoost(int client, int args)
         count++;
     }
 
-    ReplyToCommand(client, "已一键开启哨戒塔满配增强并强化 %d 座塔 (生命x3 射速x20 射程x5 弹药x50 无敌 禁伤 调试开)", count);
+    ReplyToCommand(client, "已一键开启哨戒塔满配增强并强化 %d 座塔 (生命x3 射速x20 射程x1 弹药x50 伤害x5 无敌 禁伤 调试开)", count);
     return Plugin_Handled;
 }
 
@@ -1458,6 +1629,7 @@ public Action Command_SentryUnboost(int client, int args)
     g_cvFireRateMult.SetFloat(1.0);
     g_cvRangeMult.SetFloat(1.0);
     g_cvAmmoMult.SetFloat(1.0);
+    g_cvDamageMult.SetFloat(1.0);
     g_cvInvulnerable.SetInt(0);
     g_cvNoPlayerDamage.SetInt(1);
 
@@ -1483,6 +1655,18 @@ public Action Command_SentryDrop(int client, int args)
     {
         ReplyToCommand(client, "未找到你控制的 marine");
         return Plugin_Handled;
+    }
+
+    // 掉落数量上限: 场上未被拾取的哨戒枪拾取箱已满则拒绝 (0=不限制)
+    int iLimit = g_cvDropLimit.IntValue;
+    if (iLimit > 0)
+    {
+        int iDropped = CountSentryPickups();
+        if (iDropped >= iLimit)
+        {
+            ReplyToCommand(client, "场上哨戒枪拾取箱已达上限(%d个), 请先拾取或部署后再掉落", iLimit);
+            return Plugin_Handled;
+        }
     }
 
     // 类型: 默认炮(1), 可选参数覆盖
@@ -1522,6 +1706,12 @@ public Action Command_SentryDrop(int client, int args)
         return Plugin_Handled;
     }
 
+    // 关键: 拾取箱默认近乎空弹 (BulletsInGun=1), 拾取后部署会提示"弹药耗尽"。
+    // 这里按类型填入满弹药, 让掉落的塔和玩家自带的塔属性一致。
+    char sAmmo[8];
+    IntToString(GetSentryMaxAmmo(iGunType), sAmmo, sizeof(sAmmo));
+    DispatchKeyValue(iPickup, "BulletsInGun", sAmmo);
+
     float fZeroAng[3];
     TeleportEntity(iPickup, fPos, fZeroAng, NULL_VECTOR);
     DispatchSpawn(iPickup);
@@ -1531,6 +1721,40 @@ public Action Command_SentryDrop(int client, int args)
     GetSentryTypeName(iGunType, sTypeName, sizeof(sTypeName));
     ReplyToCommand(client, "已在身边掉落一座[%s]哨戒枪箱, 拾取后自行部署组装", sTypeName);
     return Plugin_Handled;
+}
+
+// 命令 (玩家): 在身边掉落一座哨戒炮塔拾取箱 (需管理员开启该功能)
+public Action Command_SentryDropPublic(int client, int args)
+{
+    if (!g_cvDropPublic.BoolValue)
+    {
+        ReplyToCommand(client, "哨戒炮塔掉落功能未对玩家开放");
+        return Plugin_Handled;
+    }
+    return Command_SentryDrop(client, args);
+}
+
+// ============================================================================
+//  统计场上未被拾取的哨戒枪拾取箱数量 (用于限制最多掉落数量)
+//  只在掉落命令触发时执行一次, 不做每帧扫描。
+// ============================================================================
+int CountSentryPickups()
+{
+    static const char sPickupClasses[][] = {
+        "asw_pickup_sentry",         // 哨戒枪
+        "asw_pickup_sentry_cannon",  // 哨戒炮
+        "asw_pickup_sentry_flamer",  // 喷火型
+        "asw_pickup_sentry_freeze"   // 冰冻型
+    };
+
+    int count = 0;
+    for (int c = 0; c < sizeof(sPickupClasses); c++)
+    {
+        int entity = -1;
+        while ((entity = FindEntityByClassname(entity, sPickupClasses[c])) != -1)
+            count++;
+    }
+    return count;
 }
 
 // ============================================================================

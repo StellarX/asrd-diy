@@ -10,6 +10,8 @@
 | 欢迎/告别消息 | `asrd_welcome.smx` | 玩家进出服务器时广播打招呼语 |
 | 电锯高速旋转 | `asrd_chainsaw_turbo.smx` | 手持电锯按攻击键时高速旋转，转速可调 |
 | 哨戒塔增强 | `asrd_sentry_enhancer.smx` | 哨戒塔属性倍率增强 + 头顶哨戒塔 |
+| 陆战队员强化 | `asrd_marine_power.smx` | 按键调大/调小血量/体型/移速与近战，放大5级+缩小3级 |
+| 叛变虫群 | `asrd_alien_civilwar.smx` | 生成一批攻击虫族(而非玩家)的着色叛变虫，可自选虫种、免冷却 |
 
 ## 🔧 前置要求
 
@@ -137,6 +139,51 @@ sm_asrd_welcome_sound "ui/menu_enter.wav"
 ```
 sm_asrd_chainsaw_speed 6.0
 ```
+
+### 陆战队员强化 (`asrd_marine_power`)
+
+配置文件自动生成在 `cfg/sourcemod/asrd_marine_power.cfg`；完整命令参考见 `docs/陆战队员强化插件命令.md`。
+
+| CVar | 默认值 | 说明 |
+|------|--------|------|
+| `sm_asrd_power_enabled` | `1` | 启用/禁用 |
+| `sm_asrd_power_public` | `1` | 普通玩家是否可自行强化 |
+| `sm_asrd_power_max_level` | `5` | 最大等级 (1~10) |
+| `sm_asrd_power_hp_step` | `400` | 每级血量增量 (5级=2000) |
+| `sm_asrd_power_scale_step` | `0.4` | 每级体型增量 (5级=x3.0) |
+| `sm_asrd_power_shrink_max` | `3` | 缩小最大等级 (仅缩模型) |
+| `sm_asrd_power_shrink_step` | `0.2` | 每级缩小比例 (3级=x0.4) |
+| `sm_asrd_power_speed_enabled` | `1` | 放大时同步提高移速 |
+| `sm_asrd_power_speed_step` | `0.4` | 每级移速增量 (与体型同比例) |
+| `sm_asrd_power_melee_enabled` | `1` | 启用全局近战放大 |
+| `sm_asrd_power_melee_max` | `8.0` | 最高等级时近战倍率 (基础12→最高96) |
+
+**绑定按键（玩家控制台输入一次）：**
+```
+bind F6 "sm_power_up"
+bind F7 "sm_power_down"
+```
+
+### 叛变虫群 (`asrd_alien_civilwar`)
+
+生成一批会**攻击虫族、而不是玩家**的叛变虫，外观已着色(默认红色)区分，免冷却，可自选虫种。
+
+| CVar | 默认值 | 说明 |
+|------|--------|------|
+| `sm_asrd_betray_enabled` | `1` | 总开关 |
+| `sm_asrd_betray_type` | `asw_drone` | 默认生成的虫种类名 |
+| `sm_asrd_betray_count` | `10` | 每批数量 (上限 80) |
+| `sm_asrd_betray_color` | `255 40 40` | 着色 RGB (空格分隔) |
+| `sm_asrd_betray_spread` | `120.0` | 生成散布半径 |
+| `sm_asrd_betray_hostile` | `1` | 是否与虫族互相敌对 (0=仅着色仍打玩家, 调试用) |
+| `sm_asrd_betray_public` | `0` | 普通玩家是否可召唤 |
+| `sm_asrd_betray_debug` | `0` | 调试输出 |
+
+**命令:** `sm_betray [type] [count]`(管理员)、`sm_betraypub`(玩家)、`sm_betray_list`(列虫种)、`sm_betray_clear`(清除)。绑定按键：`bind F8 "sm_betraypub"`。
+
+> `type` 支持类名/别名/中文名，如 `asw_boomer`、`uber`、`盾甲虫`；可生成虫种见 `sm_betray_list`。
+>
+> 想让叛变虫立刻开打，最好在虫潮进攻时召唤——叛变虫会就近寻找普通虫族交战。
 
 ## 🧪 测试
 
