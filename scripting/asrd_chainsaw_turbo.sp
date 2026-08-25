@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 电锯高速旋转 (Chainsaw Turbo)
- *  版本 1.1.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.2.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ─────────────────────────────────────
  *  玩家手持电锯 (asw_weapon_chainsaw) 且【按住攻击键】时, 让锯片转得更快:
@@ -17,6 +17,9 @@
  *   sm_asrd_chainsaw_enabled   总开关 (0=关 1=开, 默认 1)
  *   sm_asrd_chainsaw_speed     锯片旋转速度倍率 (1.0~12.0, 默认 3.0)
  *                              3.0 = 按攻击键时比默认快 3 倍
+ *   sm_asrd_chainsaw_public    是否对普通玩家生效 (默认 0)
+ *                              0 = 仅管理员 (ADMFLAG_GENERIC) 生效
+ *                              1 = 所有玩家生效
  *   sm_asrd_chainsaw_debug     调试输出 (默认 0)
  *
  *  ── 实现原理 ───────────────────────────────────────────
@@ -38,7 +41,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Chainsaw Turbo"
-#define PLUGIN_VERSION "1.1.0"
+#define PLUGIN_VERSION "1.2.0"
 
 // 电锯实体类名 (游戏源码: asw_weapon_chainsaw_shared.cpp)
 #define CHAINSAW_CLASSNAME "asw_weapon_chainsaw"
@@ -49,6 +52,9 @@
 #define CHAINSAW_FIRE_STARTUP 1
 #define CHAINSAW_FIRE_CHARGE  2
 
+// 享受电锯增强所需的管理员权限 (仅当 sm_asrd_chainsaw_public 为 0 时要求)
+#define CHAINSAW_ADMIN_FLAG   ADMFLAG_GENERIC
+
 // 每 0.25 秒重新检测一次"是否手持电锯", 避免每帧都扫描实体
 #define RESOLVE_INTERVAL 0.25
 
@@ -57,6 +63,7 @@
 // ============================================================================
 ConVar g_cvEnabled;
 ConVar g_cvSpeed;
+ConVar g_cvPublic;
 ConVar g_cvDebug;
 
 // ============================================================================
@@ -92,6 +99,11 @@ public void OnPluginStart()
         "sm_asrd_chainsaw_speed", "3.0",
         "锯片旋转速度倍率 (1.0=默认, 3.0=快3倍; 上限 12.0 是引擎网络同步上限)",
         FCVAR_NOTIFY, true, 1.0, true, 12.0
+    );
+    g_cvPublic = CreateConVar(
+        "sm_asrd_chainsaw_public", "0",
+        "是否对普通玩家生效 (0=仅管理员生效 1=所有玩家生效)",
+        FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
     g_cvDebug = CreateConVar(
         "sm_asrd_chainsaw_debug", "0",
@@ -139,10 +151,18 @@ public void OnGameFrame()
 
     float fGameTime = GetGameTime();
     float fSpeed    = g_cvSpeed.FloatValue;
+    bool  bAll      = g_cvPublic.BoolValue;   // public 开启时对所有人生效, 否则仅管理员
 
     for (int i = 1; i <= MaxClients; i++)
     {
         if (!IsClientInGame(i) || IsFakeClient(i) || !IsPlayerAlive(i))
+        {
+            g_iChainsawRef[i] = 0;
+            continue;
+        }
+
+        // 非 public 模式下, 跳过没有管理员权限的玩家
+        if (!bAll && !CheckCommandAccess(i, "sm_chainsaw_status", CHAINSAW_ADMIN_FLAG, true))
         {
             g_iChainsawRef[i] = 0;
             continue;
