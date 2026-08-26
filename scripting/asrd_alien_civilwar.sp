@@ -62,18 +62,19 @@
  *      切换挑战/新任务遍历该列表时段错误崩溃。修复: OnEntityDestroyed 里
  *      在析构前把 m_nFaction 改回 alien, 使析构从正确列表移除。
  *
- *  依赖: SourceMod 1.11+ (核心 + sdktools; 不依赖 SDKHooks)
+ *  依赖: SourceMod 1.11+ (核心 + sdktools + sdkhooks)
  * ============================================================================
  */
 
 #include <sourcemod>
 #include <sdktools>
+#include <sdkhooks>
 
 #pragma semicolon 1
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] 叛变虫群"
-#define PLUGIN_VERSION "4.1.0"
+#define PLUGIN_VERSION "4.5.1"
 
 // 叛变虫的统一 targetname, 供清除命令匹配
 #define INFECTED_NAME  "asrd_betray_swarm"
@@ -103,6 +104,9 @@ ConVar g_cvSpread;
 ConVar g_cvColor;
 ConVar g_cvPublic;
 ConVar g_cvDebug;
+ConVar g_cvDroneScale;
+ConVar g_cvDamageMult;
+ConVar g_cvHealthMult;
 
 // 缓存本批生成时从 marine 读到的真实 faction 值 (避免每只虫都扫一次 marine)
 int g_iCachedMarineFaction = -1;
@@ -160,7 +164,7 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 0.0, true, 500.0);
 
     g_cvColor = CreateConVar(
-        "sm_asrd_betray_color", "255 40 40",
+        "sm_asrd_betray_color", "37 217 73",
         "叛变虫着色 RGB (如 180 0 255 紫色), 用空格分隔",
         FCVAR_NOTIFY);
 
@@ -174,7 +178,20 @@ public void OnPluginStart()
         "调试输出 (0=关 1=开)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0);
 
-    AutoExecConfig(true, "asrd_alien_civilwar");
+    g_cvDroneScale = CreateConVar(
+        "sm_asrd_betray_drone_scale", "1.0",
+        "叛变 drone 体型缩放倍率 (仅 asw_drone, 1.0=默认大小)",
+        FCVAR_NOTIFY, true, 0.1, true, 10.0);
+
+    g_cvDamageMult = CreateConVar(
+        "sm_asrd_betray_damage_mult", "4.0",
+        "叛变虫攻击力倍率 (仅叛变虫造成的伤害, 1.0=不增强)",
+        FCVAR_NOTIFY, true, 1.0, true, 100.0);
+
+    g_cvHealthMult = CreateConVar(
+        "sm_asrd_betray_health_mult", "5.0",
+        "叛变虫血量倍率 (仅叛变虫, 1.0=默认血量)",
+        FCVAR_NOTIFY, true, 1.0, true, 100.0);
 
     g_hBetrayAliens = new ArrayList();
 
@@ -399,6 +416,10 @@ Action DoBetray(int client, int args)
     PrintToChatAll("\x04[叛变虫群]\x01 %s 召唤了 %d 只\x05叛变%s\x01!",
         sName, iOk, sType);
 
+    // 生成成功后扫描一次, 给场上已有虫族挂伤害回调 (新刷虫族由 OnEntityCreated 自动挂)
+    if (iOk > 0)
+        HookAllAliens();
+
     return Plugin_Handled;
 }
 
@@ -419,6 +440,14 @@ int SpawnAlien(const char[] sClass, const float fPos[3], int iMarineFaction, int
     DispatchKeyValue(ent, "targetname", INFECTED_NAME);
     // 强制睡眠时也渲染 (AS:RD 睡眠虫默认不渲染)
     DispatchKeyValue(ent, "visiblewhenasleep", "1");
+    // drone 体型缩放: sizescale 是 CASW_Inhabitable_NPC 的 keyvalue,
+    // 在 Spawn() 里 SetModelScale(m_fSizeScale) 应用 (仅 asw_drone, 其他虫种不变)
+    if (StrEqual(sClass, "asw_drone"))
+    {
+        char sScale[16];
+        FloatToString(g_cvDroneScale.FloatValue, sScale, sizeof(sScale));
+        DispatchKeyValue(ent, "sizescale", sScale);
+    }
 
     float fAng[3];
     fAng[1] = GetRandomFloat(0.0, 360.0);
@@ -444,6 +473,18 @@ int SpawnAlien(const char[] sClass, const float fPos[3], int iMarineFaction, int
         SetEntProp(ent, Prop_Send, "m_nDeathStyle", 2);
 
     ActivateEntity(ent);
+
+    // 血量增强: 生成后读取基础血量, 按倍率放大。
+    // m_iHealth/m_iMaxHealth 是标准 CBaseEntity 字段, 可直接读写;
+    // 放在 ActivateEntity 之后确保 Spawn 流程(含难度血量修正)已完成。
+    float fHealthMult = g_cvHealthMult.FloatValue;
+    if (fHealthMult > 1.0 && HasEntProp(ent, Prop_Data, "m_iMaxHealth"))
+    {
+        int iMax = GetEntProp(ent, Prop_Data, "m_iMaxHealth");
+        int iNew = RoundToCeil(float(iMax) * fHealthMult);
+        SetEntProp(ent, Prop_Data, "m_iMaxHealth", iNew);
+        SetEntProp(ent, Prop_Data, "m_iHealth", iNew);
+    }
 
     // 生成后再确认一次位置 (兜底, 防 NPC 出生重置回原点)
     TeleportEntity(ent, fPos, fAng, NULL_VECTOR);
@@ -648,6 +689,75 @@ void KillAllBetrayAliens()
 
     if (iCleaned > 0)
         PrintToServer("[叛变虫群] 销毁 %d 只叛变虫(含尸体/残留)", iCleaned);
+}
+
+// ============================================================================
+//  攻击力增强: 用 SDKHooks OnTakeDamage 精准放大叛变虫造成的伤害。
+//  AS:RD 虫子伤害全部来自全局 ConVar (sk_asw_xxx_damage), 无逐实体伤害字段,
+//  改全局 ConVar 会污染正常虫族。方案: 对虫族实体挂 OnTakeDamage 回调,
+//  当伤害来源(attacker)是叛变虫时放大伤害, 正常虫族打玩家完全不受影响。
+//  覆盖策略: 生成叛变虫时扫描一次 (HookAllAliens) + OnEntityCreated 自动
+//  给新刷出的虫族挂回调, 无需任何定时器。
+// ============================================================================
+// 新实体创建即挂回调 (只关心虫族类, 开销极小)
+public void OnEntityCreated(int entity, const char[] classname)
+{
+    if (!IsAlienClass(classname))
+        return;
+    SDKHookEx(entity, SDKHook_OnTakeDamage, OnAlienDamaged);
+}
+
+bool IsAlienClass(const char[] classname)
+{
+    for (int t = 0; t < sizeof(g_sTypes); t++)
+    {
+        if (StrEqual(classname, g_sTypes[t][0]))
+            return true;
+    }
+    return false;
+}
+
+// 生成叛变虫后调用: 给场上已存在的虫族补挂回调 (OnEntityCreated 只覆盖之后创建的)
+void HookAllAliens()
+{
+    for (int t = 0; t < sizeof(g_sTypes); t++)
+    {
+        int ent = -1;
+        while ((ent = FindEntityByClassname(ent, g_sTypes[t][0])) != -1)
+        {
+            if (!IsValidEntity(ent))
+                continue;
+            // SDKHookEx 对已挂过的实体返回 false, 天然去重
+            SDKHookEx(ent, SDKHook_OnTakeDamage, OnAlienDamaged);
+        }
+    }
+}
+
+// 虫族受伤回调: 攻击者是叛变虫则放大伤害
+Action OnAlienDamaged(int victim, int &attacker, int &inflictor, float &damage, int &damagetype)
+{
+    if (attacker <= 0 || !IsValidEntity(attacker))
+        return Plugin_Continue;
+    if (!IsBetrayAlien(attacker))
+        return Plugin_Continue;
+    float mult = g_cvDamageMult.FloatValue;
+    if (mult <= 1.0)
+        return Plugin_Continue;
+    float fOld = damage;
+    damage *= mult;
+    // 调试: 打印原始/放大后伤害, 便于验证倍率生效
+    if (g_cvDebug.BoolValue)
+        PrintToServer("[叛变虫群] 伤害增强 %d -> %d (x%.1f) victim=%d",
+            RoundToNearest(fOld), RoundToNearest(damage), mult, victim);
+    return Plugin_Changed;
+}
+
+// 按 targetname 识别叛变虫 (生成时统一打标)
+bool IsBetrayAlien(int ent)
+{
+    char sName[64];
+    GetEntPropString(ent, Prop_Data, "m_iName", sName, sizeof(sName));
+    return StrEqual(sName, INFECTED_NAME);
 }
 
 // ============================================================================
