@@ -12,6 +12,7 @@
 | 哨戒塔增强 | `asrd_sentry_enhancer.smx` | 哨戒塔属性倍率增强 + 头顶哨戒塔 |
 | 陆战队员强化 | `asrd_marine_power.smx` | 按键调大/调小血量/体型/移速与近战，放大5级+缩小3级 |
 | 叛变虫群 | `asrd_alien_civilwar.smx` | 生成一批攻击虫族(而非玩家)的着色叛变虫，可自选虫种、免冷却 |
+| 一键开锁 | `asrd_unlock.smx` | 一键破解门锁 mini-game，直接解锁上锁的按钮区/大门 |
 
 ## 🔧 前置要求
 
@@ -184,6 +185,32 @@ bind F7 "sm_power_down"
 > `type` 支持类名/别名/中文名，如 `asw_boomer`、`uber`、`盾甲虫`；可生成虫种见 `sm_betray_list`。
 >
 > 想让叛变虫立刻开打，最好在虫潮进攻时召唤——叛变虫会就近寻找普通虫族交战。
+
+### 一键开锁 (`asrd_unlock`)
+
+一键破解游戏内的门锁 mini-game（连线拼图/转盘破解），直接解锁上锁的按钮区（大门）让任务继续。
+
+| CVar | 默认值 | 说明 |
+|------|--------|------|
+| `sm_asrd_unlock_enabled` | `1` | 总开关 (0=关 1=开) |
+| `sm_asrd_unlock_public` | `1` | 允许普通玩家用 `sm_unlock` (0=仅管理员 1=公开) |
+| `sm_asrd_unlock_range` | `150` | `sm_unlock` 附近解锁范围(世界单位, 需贴近门锁才能解, 0=不限) |
+| `sm_asrd_unlock_forcepower` | `1` | 断电的门先送 `PowerOn` 再解锁 (0=只解锁) |
+| `sm_asrd_unlock_debug` | `0` | 调试输出 (0/1) |
+
+**命令:**
+- `sm_unlock`(玩家, 可 bind) — 解锁以你为中心 `unlock_range` 内最近的一扇上锁门锁，并自动开门
+- `sm_unlock_all`(管理员) — 解锁整张地图所有上锁按钮区
+- `sm_unlock_status`(管理员) — 列出场上按钮区锁/电状态，排查用
+
+> 注意：`sm_unlock` 会解锁以你为中心 `unlock_range`（默认 150 单位，很小）内最近的一扇上锁门锁，必须贴近门才生效，不会像早期版本那样在大范围内乱解锁。
+
+**绑定按键（玩家控制台输入一次）：**
+```
+bind F9 "sm_unlock"
+```
+
+> 原理：AS:RD 的门锁由实体 `trigger_asw_button_area`(CASW_Button_Area) 表示，破解完成后引擎调用 `InputUnlock`（`m_bIsLocked=false`、`m_fHackProgress=1.0`）开门。本插件直接向目标发送引擎输入 `"Unlock"` 触发同一解锁逻辑，从而绕过连线/转盘小游戏。
 
 ## 🧪 测试
 
