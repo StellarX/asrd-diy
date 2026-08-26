@@ -22,8 +22,8 @@
  *         的判定; 同 faction → D_LI (友好, 不攻击), 异 faction → D_HT。
  *       - m_bIgnoreMarines / m_AlienOrders 均不在 datadesc, SourceMod 无法
  *         设置, 所以"改 faction"是唯一可行路径。
- *    3. spawn 后立即改 + 0.1s 单次延迟重设 (Timer_ReassertFaction), 防
- *       AS:RD 在 NPCInit/Think 里把 faction 重置回 FACTION_ALIENS。
+ *    3. spawn 后 (ActivateEntity 之前) 立即改一次 faction —— 此后永不改写
+ *       (中途改写会导致 Source AI 段错误, 详见下方"踩过的坑")。
  *    4. SetEntProp(m_clrRender) 着色, 与正常虫族外观区分。
  *
  *  踩过的坑 (详见项目记忆):
@@ -33,14 +33,34 @@
  *      改 faction, 会段错误崩溃。只做单次/有限次重设。
  *    - GetEntProp(Prop_Send,"m_nFaction") 会抛 native error (类型不匹配),
  *      必须用 FindDataMapInfo + GetEntData/SetEntData 走 datamap。
- *    - 换图/换挑战前必须彻底清除: 叛变虫是"虫族实体+marine faction"的
- *      矛盾状态, 残留到下一挑战会被某些挑战(如 ASBI Weapon Balancing)
- *      段错误崩溃。做法: 游戏结束事件里先恢复 alien 阵营再 Kill 销毁
- *      全部叛变虫 (只恢复阵营不 Kill 仍会残留崩溃, v3.3.0 起改为
- *      恢复 + Kill + 清空列表)。
- *    - AS:RD 换挑战是软重启(不 changelevel), OnMapEnd 不触发, 必须靠
- *      HookEvent 监听 round_end/asw_mission_restart/mission_failed/
- *      mission_success/map_transition 事件清理。
+ *    - RemoveEntity native 在 AS:RD 未注册, 会导致插件加载失败, 一律用
+ *      AcceptEntityInput(ent, "Kill")。
+ *    - v4.0.0 核心结论 (经 reactivedrop_public_src 源码核实): 之前九轮
+ *      "换图/换挑战前恢复阵营+Kill 清理"全部失败且本身有害:
+ *      1) 游戏的 RestartMission(即时重启) 自己会按 classname 遍历
+ *         UTIL_Remove 所有虫族实体 + CleanupDeleteList, 实体销毁流程
+ *         (UpdateOnRemove→析构→AutoList 移除) 根本不读 faction, "恢复
+ *         阵营再删除"毫无必要;
+ *      2) 事件回调(asw_mission_restart 等)在游戏帧处理中段触发, 在其中
+ *         改写 AI 活跃实体的 faction 正是已知的段错误模式;
+ *      3) FindAndModifyAlienHealth (历史怀疑的崩溃点) 只做血量数学运算,
+ *         与 faction 无关, 历史诊断不成立;
+ *      4) 0.1s 重设定时器同理: 在 NPC 首次 think 后改 faction, 且日志
+ *         证实首写从未被游戏重置, 重设是多余的 no-op 写入。
+ *      故 v4.0.0 起: faction 只在 spawn 后立即写一次(实体首次 think 之前),
+ *      之后永不改写; 实体删除只用原生 Kill(游戏自己也在用); 不再挂钩
+ *      任何"结束/开始"事件做清理, 让游戏自己的重启流程删实体。
+ *    - 叛变虫残留崩溃的历史真相: 各版本崩溃时唯一恒定的因素是"对
+ *      AI 活跃中的实体中途改写 faction"(spawn 后 0.1s 重设 + 事件回调
+ *      清理), 而非实体残留本身。v4.0.0 移除全部中途改写后观察验证。
+ *    - 真正根因 (v4.1.0, 经源码核实): CBaseCombatCharacter 维护进程级全局
+ *      m_aFactions[阵营]->实体列表。虫子 Spawn() 时 ChangeFaction(FACTION_ALIENS)
+ *      把它加入 alien 列表; 插件 SetEntData 直接写 m_nFaction=marine (绕过
+ *      ChangeFaction), 造成 m_nFaction 与所在列表不一致。虫子被删时析构按
+ *      m_nFaction 从 marine 列表移除(no-op), 在 m_aFactions[FACTION_ALIENS]
+ *      留下悬空 EHANDLE; 该全局仅引擎关闭时 Purge, 悬空指针永不清理;
+ *      切换挑战/新任务遍历该列表时段错误崩溃。修复: OnEntityDestroyed 里
+ *      在析构前把 m_nFaction 改回 alien, 使析构从正确列表移除。
  *
  *  依赖: SourceMod 1.11+ (核心 + sdktools; 不依赖 SDKHooks)
  * ============================================================================
@@ -53,7 +73,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] 叛变虫群"
-#define PLUGIN_VERSION "3.7.0"
+#define PLUGIN_VERSION "4.1.0"
 
 // 叛变虫的统一 targetname, 供清除命令匹配
 #define INFECTED_NAME  "asrd_betray_swarm"
@@ -164,46 +184,46 @@ public void OnPluginStart()
     RegAdminCmd("sm_betray_list", Command_List, ADMFLAG_GENERIC, "列出可生成的虫种");
     RegAdminCmd("sm_betray_clear", Command_Clear, ADMFLAG_GENERIC, "清除本插件生成的叛变虫");
 
-    // 任务/回合结束事件 (Pre): 任务结束时尽早清理。
-    HookEvent("round_end",           Event_RestoreAliens, EventHookMode_Pre);
-    HookEvent("asw_mission_restart", Event_RestoreAliens, EventHookMode_Pre);
-    HookEvent("mission_failed",      Event_RestoreAliens, EventHookMode_Pre);
-    HookEvent("mission_success",     Event_RestoreAliens, EventHookMode_Pre);
-    HookEvent("map_transition",      Event_RestoreAliens, EventHookMode_Pre);
-
-    // 回合/游戏/任务开始事件 (Post): 换挑战/重新开始任务是软重启, 触发的是
-    // "开始"类事件而不是"结束"事件。round_start_pre_entity 在实体重新生成
-    // 之前触发, 此时旧叛变虫还在场上、新虫族还没生成 → 清理的最佳时机。
-    // 用 Post 确保事件已发生、旧叛变虫仍在场上时才清理。
-    HookEvent("round_start_pre_entity", Event_RestoreAliens, EventHookMode_Post);
-    HookEvent("round_start",         Event_RestoreAliens, EventHookMode_Post);
-    HookEvent("game_start",          Event_RestoreAliens, EventHookMode_Post);
-    HookEvent("asw_mission_start",   Event_RestoreAliens, EventHookMode_Post);
-
-    // 周期检测软重启兜底: 若上述事件因某些原因没触发, 用"场上无 marine"
-    // (软重启时 marine 被重建, 短暂消失) 作为备用信号, 立即清理。
-    CreateTimer(0.1, Timer_CheckSoftRestart, _, TIMER_REPEAT);
+    // v4.0.1 诊断探针: asw_mission_restart 是实测存在的事件 (v3.9.0 日志证明)。
+    // 挂它而非 asw_mission_start (后者在 AS:RD 不存在, v4.0.0 挂了从未触发)。
+    // 用途: 事件在 RestartMission 删实体**之前**触发, 延迟 1s 后统计实体数,
+    // 实证"游戏重启是否真的删掉了叛变虫"(源码 CASW_Map_Reset_Filter 分析
+    // 的结论), 并为崩溃日志提供时间锚点。
+    HookEventEx("asw_mission_restart", Event_DiagRestart, EventHookMode_Post);
 }
 
-// ============================================================================
-//  周期检测软重启: 场上没有 marine 且还有叛变虫残留 → 立即清理
-// ============================================================================
-Action Timer_CheckSoftRestart(Handle hTimer)
+// 重启事件: 调度 1s 后的实体清点 (此时实体删除早已完成)
+public void Event_DiagRestart(Event event, const char[] name, bool dontBroadcast)
 {
-    if (g_hBetrayAliens == null || g_hBetrayAliens.Length == 0)
-        return Plugin_Continue;
+    CreateTimer(1.0, Timer_DiagAfterRestart);
+}
 
-    // 场上没有 marine = 软重启/lobby/主菜单 (mission 进行中通常有 marine)。
-    // 此时若叛变虫残留(marine faction), 软重启处理虫族会崩, 立即清理。
-    if (FindEntityByClassname(-1, "asw_marine") == -1)
+// 1s 后清点: 存活叛变虫(按列表) + 场上全部虫族类实体(按 classname)
+Action Timer_DiagAfterRestart(Handle hTimer)
+{
+    int iBetrayAlive = 0;
+    if (g_hBetrayAliens != null)
     {
-        if (g_cvDebug.BoolValue)
-            PrintToServer("[叛变虫群] 检测到软重启(场上无 marine), 立即清理 %d 只叛变虫",
-                g_hBetrayAliens.Length);
-        RestoreAllBetrayAliens();
+        int n = g_hBetrayAliens.Length;
+        for (int i = 0; i < n; i++)
+        {
+            int ent = EntRefToEntIndex(g_hBetrayAliens.Get(i));
+            if (ent > 0 && IsValidEntity(ent) && GetEntProp(ent, Prop_Data, "m_iHealth") > 0)
+                iBetrayAlive++;
+        }
     }
 
-    return Plugin_Continue;
+    int iTotal = 0;
+    for (int t = 0; t < sizeof(g_sTypes); t++)
+    {
+        int ent = -1;
+        while ((ent = FindEntityByClassname(ent, g_sTypes[t][0])) != -1)
+            iTotal++;
+    }
+
+    PrintToServer("[叛变虫群] 重启后 1s: 存活叛变虫 %d / 列表 %d, 场上虫族类实体 %d",
+        iBetrayAlive, g_hBetrayAliens != null ? g_hBetrayAliens.Length : 0, iTotal);
+    return Plugin_Stop;
 }
 
 // ============================================================================
@@ -220,19 +240,58 @@ public void OnMapStart()
 }
 
 // ============================================================================
-//  地图结束(换图/换挑战): 把所有叛变虫恢复成正常虫族阵营。
-//  叛变虫是"虫族实体 + marine faction"的矛盾状态, 若带着这个状态被销毁或
-//  残留到下一个挑战, 遇到会处理场上虫族的挑战(如 ASBI Weapon Balancing)
-//  会段错误崩溃。所以在换图前把它们改回 alien 阵营, 消除矛盾状态。
+//  地图结束(换图): 只清空引用列表。
+// 实体随地图卸载由引擎销毁, 销毁流程不读 faction, 无需任何恢复/删除操作。
 // ============================================================================
 public void OnMapEnd()
 {
-    RestoreAllBetrayAliens();
+    if (g_hBetrayAliens != null)
+        g_hBetrayAliens.Clear();
 }
 
+// ============================================================================
+//  实体销毁前回调: 恢复 faction 一致性 (v4.1.0 崩溃根因修复)。
+//
+//  崩溃机制 (经 reactivedrop_public_src 源码核实):
+//    CBaseCombatCharacter 维护进程级全局 m_aFactions[阵营] -> 实体列表。
+//    1) 虫子 DispatchSpawn -> CASW_Alien::Spawn() -> ChangeFaction(FACTION_ALIENS)
+//       -> 虫子加入 m_aFactions[FACTION_ALIENS];
+//    2) 插件 SetEntData 直接写 m_nFaction=marine (绕过 ChangeFaction),
+//       m_nFaction 内存值=marine, 但虫子仍在 m_aFactions[FACTION_ALIENS] 里;
+//    3) 虫子被删(死亡尸体消失/重启/清理) -> ~CBaseCombatCharacter 按
+//       m_nFaction 从 m_aFactions[marine] 移除(虫子不在那, no-op)
+//       -> m_aFactions[FACTION_ALIENS] 留下悬空 EHANDLE;
+//    4) m_aFactions 是进程级全局(仅引擎关闭时 Purge), 悬空指针永不清理;
+//    5) 切换挑战/新任务刷虫时游戏遍历 m_aFactions[FACTION_ALIENS]
+//       -> 访问悬空指针 -> 段错误崩溃。
+//  修复: 在实体析构前把 m_nFaction 改回 alien, 使析构从正确列表移除,
+//        不产生悬空指针。OnEntityDestroyed 在实体真正析构前触发, 安全。
+// ============================================================================
+public void OnEntityDestroyed(int entity)
+{
+    // 只处理本插件生成的叛变虫 (targetname 判定, 快路径)
+    char sName[64];
+    GetEntPropString(entity, Prop_Data, "m_iName", sName, sizeof(sName));
+    if (!StrEqual(sName, INFECTED_NAME))
+        return;
+
+    // 改回 alien 阵营, 让 ~CBaseCombatCharacter 从 m_aFactions[FACTION_ALIENS]
+    // 正确移除自己 (m_nFaction 与所在列表一致), 消除悬空指针。
+    int off = FindDataMapInfo(entity, "m_nFaction");
+    if (off < 0)
+        off = FindDataMapInfo(entity, "m_iFaction");
+    if (off >= 0)
+        SetEntData(entity, off, (g_iAlienFaction >= 0) ? g_iAlienFaction : 2, 4, true);
+}
+
+// ============================================================================
+//  插件卸载: 用原生 Kill 销毁所有叛变虫 (绝不能留着 faction=marine 的虫
+//  在场上跑), 并清空列表。注意不改写 faction —— 对 AI 活跃实体中途改写
+//  faction 正是已知的段错误模式; 实体即将销毁, 恢复阵营毫无意义。
+// ============================================================================
 public void OnPluginEnd()
 {
-    RestoreAllBetrayAliens();
+    KillAllBetrayAliens();
 }
 
 // ============================================================================
@@ -303,8 +362,20 @@ Action DoBetray(int client, int args)
         return Plugin_Handled;
     }
 
-    // 每批生成开始时清空 marine faction 缓存, 重新从场上 marine 读真值
+    // 每批生成开始时清空 marine faction/team 缓存, 重新从场上 marine 读真值
     g_iCachedMarineFaction = -1;
+    g_iCachedMarineTeam = -1;
+
+    // 先解析 marine 阵营/队伍值, 失败则整批中止。绝不能兜底成 alien-1
+    // (会写出 team=-1/faction=1 的危险矛盾状态, 换挑战时被游戏处理虫族崩溃)。
+    int iAlienF = (g_iAlienFaction >= 0) ? g_iAlienFaction : 2;
+    int iMarineFaction = ResolveMarineFaction(iAlienF);
+    int iMarineTeam = ResolveMarineTeam();
+    if (iMarineFaction < 0 || iMarineTeam < 0)
+    {
+        ReplyToCommand(client, "[叛变虫群] 场上没有可用的陆战队员, 无法确定 marine 阵营, 已中止生成");
+        return Plugin_Handled;
+    }
 
     float fSpread = g_cvSpread.FloatValue;
     int iOk = 0;
@@ -316,7 +387,7 @@ Action DoBetray(int client, int args)
         fPos[1] = fCenter[1] + GetRandomFloat(-fSpread, fSpread);
         fPos[2] = fCenter[2];
 
-        if (SpawnAlien(sType, fPos) != -1)
+        if (SpawnAlien(sType, fPos, iMarineFaction, iMarineTeam) != -1)
             iOk++;
     }
 
@@ -334,7 +405,7 @@ Action DoBetray(int client, int args)
 // ============================================================================
 //  生成单个叛变虫
 // ============================================================================
-int SpawnAlien(const char[] sClass, const float fPos[3])
+int SpawnAlien(const char[] sClass, const float fPos[3], int iMarineFaction, int iMarineTeam)
 {
     int ent = CreateEntityByName(sClass);
     if (ent == -1)
@@ -355,6 +426,23 @@ int SpawnAlien(const char[] sClass, const float fPos[3])
     TeleportEntity(ent, fPos, fAng, NULL_VECTOR);
 
     DispatchSpawn(ent);
+
+    // v4.0.0: faction 改写放在 ActivateEntity 之前 (实体首次 think 之前)。
+    // 此后插件永不改写该实体的 faction —— AI think 中途改 faction 是已证实的
+    // 段错误模式 (历史崩溃时 0.1s 重设定时器一直在做这件事)。实测游戏不会
+    // 在 spawn 后重置 faction, 单次写入即可长期生效。
+    if (!SetToMarineFaction(ent, iMarineFaction, iMarineTeam))
+    {
+        AcceptEntityInput(ent, "Kill");
+        return -1;
+    }
+
+    // 死亡方式改为瞬间碎块(kDIE_INSTAGIB=2): 客户端视觉上死亡即碎块。
+    // (服务端 drone 的 ShouldGib 恒为 false, 死亡本来就走客户端 ragdoll,
+    // 此写入只影响客户端表现, 与崩溃无关, 保留做视觉区分。)
+    if (HasEntProp(ent, Prop_Send, "m_nDeathStyle"))
+        SetEntProp(ent, Prop_Send, "m_nDeathStyle", 2);
+
     ActivateEntity(ent);
 
     // 生成后再确认一次位置 (兜底, 防 NPC 出生重置回原点)
@@ -363,14 +451,7 @@ int SpawnAlien(const char[] sClass, const float fPos[3])
     // 着色区分
     ApplyTint(ent);
 
-    // 改阵营: spawn 后立即改 m_nFaction 为 marine 阵营
-    SetToMarineFaction(ent);
-
-    // 0.1s 后单次重设, 防 AS:RD 在 NPCInit/Think 里重置 faction。
-    // 只做单次 (持续守护在 think 中途改 faction 会段错误崩溃)。
-    CreateTimer(0.1, Timer_ReassertFaction, EntIndexToEntRef(ent));
-
-    // 记录实体引用, 供换图/换挑战前恢复阵营
+    // 记录实体引用, 供清除命令/插件卸载时销毁
     g_hBetrayAliens.Push(EntIndexToEntRef(ent));
 
     return ent;
@@ -439,18 +520,17 @@ bool WriteTeam(int ent, int val)
 //  让它成为"完整的 marine 阵营虫族" (team/faction 一致), 而非"虫族 team +
 //  marine faction"的矛盾状态。不假设枚举顺序, 从场上 asw_marine 读真值。
 // ============================================================================
-void SetToMarineFaction(int ent)
+bool SetToMarineFaction(int ent, int iMarineFaction, int iMarineTeam)
 {
     int iAlienFaction = GetFaction(ent);
     if (iAlienFaction < 0)
     {
         PrintToServer("[叛变虫群] #%d 未找到 faction 字段, 改阵营失败", ent);
-        return;
+        return false;
     }
 
     // 首次读到 alien 真值时缓存 (此时虫刚 spawn 还没被改, 值就是 alien 阵营),
-    // 供换图前恢复用。Timer_ReassertFaction 二次调用时读到的是已改后的值,
-    // 但因 g_iAlienFaction 已缓存, 不会被覆盖。
+    // 供 DoBetray 的 ResolveMarineFaction 做"marine 值 ≠ alien 值"有效性校验。
     if (g_iAlienFaction < 0)
         g_iAlienFaction = iAlienFaction;
 
@@ -458,13 +538,10 @@ void SetToMarineFaction(int ent)
     if (g_iAlienTeam < 0)
         g_iAlienTeam = iAlienTeam;
 
-    int iMarineFaction = ResolveMarineFaction(iAlienFaction);
-    int iMarineTeam = ResolveMarineTeam(iAlienTeam);
-
     if (!WriteFaction(ent, iMarineFaction))
     {
         PrintToServer("[叛变虫群] #%d 写 faction 失败", ent);
-        return;
+        return false;
     }
     WriteTeam(ent, iMarineTeam);
 
@@ -475,10 +552,14 @@ void SetToMarineFaction(int ent)
         (iAfterFaction == iMarineFaction) ? "(OK)" : "(失败)",
         iAlienTeam, iMarineTeam, iAfterTeam,
         (iAfterTeam == iMarineTeam) ? "(OK)" : "(失败)");
+
+    return true;
 }
 
 // ----------------------------------------------------------------------------
-//  取 marine 阵营值: 缓存优先, 否则扫场上 asw_marine 读真值, 兜底 alien-1。
+//  取 marine 阵营值: 缓存优先, 否则扫场上 asw_marine 读真值。
+//  找不到有效值返回 -1, 由调用方中止生成 (绝不兜底成 alien-1, 那会写出
+//  faction=1 的危险矛盾状态, 换挑战时被游戏处理虫族崩溃)。
 // ----------------------------------------------------------------------------
 int ResolveMarineFaction(int iAlienFaction)
 {
@@ -497,15 +578,15 @@ int ResolveMarineFaction(int iAlienFaction)
         }
     }
 
-    g_iCachedMarineFaction = iAlienFaction - 1;
-    PrintToServer("[叛变虫群] 场上无 marine, 兜底 marine faction=%d", g_iCachedMarineFaction);
-    return g_iCachedMarineFaction;
+    return -1;
 }
 
 // ----------------------------------------------------------------------------
-//  取 marine team 值: 缓存优先, 否则扫场上 asw_marine 读真值, 兜底 alien-1。
+//  取 marine team 值: 缓存优先, 否则扫场上 asw_marine 读真值。
+//  注意: AS:RD 里 alien team 与 marine team 实测相同(都=0), 所以不需要
+//  与 alien team 比较, 只要读到有效值即可。找不到返回 -1 由调用方中止。
 // ----------------------------------------------------------------------------
-int ResolveMarineTeam(int iAlienTeam)
+int ResolveMarineTeam()
 {
     if (g_iCachedMarineTeam >= 0)
         return g_iCachedMarineTeam;
@@ -514,7 +595,7 @@ int ResolveMarineTeam(int iAlienTeam)
     if (iMarine > 0 && IsValidEntity(iMarine))
     {
         int iMTeam = GetTeam(iMarine);
-        if (iMTeam >= 0 && iMTeam != iAlienTeam)
+        if (iMTeam >= 0)
         {
             g_iCachedMarineTeam = iMTeam;
             PrintToServer("[叛变虫群] marine #%d team=%d", iMarine, iMTeam);
@@ -522,60 +603,35 @@ int ResolveMarineTeam(int iAlienTeam)
         }
     }
 
-    g_iCachedMarineTeam = iAlienTeam - 1;
-    PrintToServer("[叛变虫群] 场上无 marine, 兜底 marine team=%d", g_iCachedMarineTeam);
-    return g_iCachedMarineTeam;
+    return -1;
 }
 
 // ============================================================================
-//  0.1s 后单次重设 faction
+//  销毁本插件生成的所有叛变虫 (列表 + targetname 双通道, 纯 Kill)。
+//  v4.0.0: 不再改写 faction —— 实体销毁流程(UTIL_Remove/析构)不读 faction,
+//  "恢复阵营再删"毫无必要, 且中途改写 AI 活跃实体的 faction 是已证实的
+//  段错误模式。只用游戏原生的 Kill (游戏 RestartMission 自己也在用)。
 // ============================================================================
-Action Timer_ReassertFaction(Handle hTimer, int iEntRef)
-{
-    int ent = EntRefToEntIndex(iEntRef);
-    if (ent > 0 && IsValidEntity(ent))
-        SetToMarineFaction(ent);
-    return Plugin_Stop;
-}
-
-// ============================================================================
-//  换图/换挑战前: 彻底清除本插件的所有影响 (含死亡的叛变虫尸体)。
-//
-//  关键教训: 之前的清理只处理 g_hBetrayAliens 列表里"活着"的叛变虫。但
-//  叛变虫死亡后, 原实体的 EntRef 失效(从列表跳过), 而它生成的"marine
-//  阵营尸体"是个新实体、不在列表里, 残留到换挑战 → ASBI WB 处理虫族时
-//  撞上 marine 阵营的虫族尸体 → 段错误。这就是为什么"只有虫子死亡才崩"。
-//
-//  做法: 1) 清理列表里活着的叛变虫; 2) 按 targetname 遍历场上所有虫族类
-//  实体, 清理匹配 asrd_betray_swarm 的(含尸体), 全部恢复 faction+team 成
-//  alien 再 RemoveEntity, 不留任何残留。
-// ============================================================================
-void RestoreAllBetrayAliens()
+void KillAllBetrayAliens()
 {
     if (g_hBetrayAliens == null)
         return;
 
-    int iAlien = (g_iAlienFaction >= 0) ? g_iAlienFaction : 2;  // 兜底 2 (实测 alien 阵营值)
-    int iAlienTeam = (g_iAlienTeam >= 0) ? g_iAlienTeam : 2;    // 兜底 2 (实测 alien team 值)
-
     int iCleaned = 0;
 
-    // 1) 清理 g_hBetrayAliens 列表里活着的叛变虫
+    // 1) 列表里活着的叛变虫
     int n = g_hBetrayAliens.Length;
     for (int i = 0; i < n; i++)
     {
-        int ref = g_hBetrayAliens.Get(i);
-        int ent = EntRefToEntIndex(ref);
+        int ent = EntRefToEntIndex(g_hBetrayAliens.Get(i));
         if (ent == INVALID_ENT_REFERENCE || !IsValidEntity(ent))
             continue;
-        RestoreAlienAndRemove(ent, iAlien, iAlienTeam);
+        AcceptEntityInput(ent, "Kill");
         iCleaned++;
     }
     g_hBetrayAliens.Clear();
 
-    // 2) 清理死亡的叛变虫尸体/残留: 死亡的叛变虫不在列表里, 但其尸体实体
-    //    可能保留 targetname=asrd_betray_swarm。按 targetname 遍历场上所有
-    //    虫族类实体, 清理匹配的 (含尸体/半死亡实体)。
+    // 2) 按 targetname 扫描残留 (含死亡未消失的尸体实体)
     for (int t = 0; t < sizeof(g_sTypes); t++)
     {
         int ent = -1;
@@ -585,47 +641,13 @@ void RestoreAllBetrayAliens()
             GetEntPropString(ent, Prop_Data, "m_iName", sName, sizeof(sName));
             if (!StrEqual(sName, INFECTED_NAME))
                 continue;
-            RestoreAlienAndRemove(ent, iAlien, iAlienTeam);
+            AcceptEntityInput(ent, "Kill");
             iCleaned++;
         }
     }
 
-    if (g_cvDebug.BoolValue)
-        PrintToServer("[叛变虫群] 游戏结束清理: 恢复并销毁 %d 只叛变虫(含尸体)", iCleaned);
-}
-
-// ----------------------------------------------------------------------------
-//  恢复单个实体的 faction+team 成 alien, 然后 RemoveEntity 立即移除。
-//  RemoveEntity 而非 Kill: Kill 走死亡流程(死亡动画+尸体+延迟移除)会残留,
-//  RemoveEntity 直接移除不留残留。
-// ----------------------------------------------------------------------------
-void RestoreAlienAndRemove(int ent, int iAlien, int iAlienTeam)
-{
-    int off = FindDataMapInfo(ent, "m_nFaction");
-    if (off < 0)
-        off = FindDataMapInfo(ent, "m_iFaction");
-    if (off >= 0)
-        SetEntData(ent, off, iAlien, 4, true);
-
-    int toff = FindDataMapInfo(ent, "m_iTeamNum");
-    if (toff >= 0)
-        SetEntData(ent, toff, iAlienTeam, 4, true);
-
-    RemoveEntity(ent);
-}
-
-// ============================================================================
-//  任务/回合结束事件回调: 换挑战/退出任务前恢复叛变虫阵营。
-//  AS:RD 换挑战是软重启(不 changelevel), 不触发 OnMapEnd, 只能靠游戏事件
-//  在这些时点主动清理, 消除"虫族实体 + marine faction"的矛盾状态。
-// ============================================================================
-public Action Event_RestoreAliens(Event event, const char[] name, bool dontBroadcast)
-{
-    if (g_cvDebug.BoolValue)
-        PrintToServer("[叛变虫群] 收到事件 %s, 恢复叛变虫阵营", name);
-
-    RestoreAllBetrayAliens();
-    return Plugin_Continue;
+    if (iCleaned > 0)
+        PrintToServer("[叛变虫群] 销毁 %d 只叛变虫(含尸体/残留)", iCleaned);
 }
 
 // ============================================================================
@@ -714,23 +736,8 @@ public Action Command_List(int client, int args)
 // ============================================================================
 public Action Command_Clear(int client, int args)
 {
-    int iCount = 0;
-    for (int t = 0; t < sizeof(g_sTypes); t++)
-    {
-        int ent = -1;
-        while ((ent = FindEntityByClassname(ent, g_sTypes[t][0])) != -1)
-        {
-            char sName[64];
-            GetEntPropString(ent, Prop_Data, "m_iName", sName, sizeof(sName));
-            if (StrEqual(sName, INFECTED_NAME))
-            {
-                AcceptEntityInput(ent, "Kill");
-                iCount++;
-            }
-        }
-    }
-
-    ReplyToCommand(client, "[叛变虫群] 已清除 %d 只叛变虫", iCount);
+    KillAllBetrayAliens();
+    ReplyToCommand(client, "[叛变虫群] 已清除场上所有叛变虫");
     return Plugin_Handled;
 }
 
