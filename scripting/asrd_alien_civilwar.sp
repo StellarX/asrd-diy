@@ -74,7 +74,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] 叛变虫群"
-#define PLUGIN_VERSION "4.5.1"
+#define PLUGIN_VERSION "4.6.0"
 
 // 叛变虫的统一 targetname, 供清除命令匹配
 #define INFECTED_NAME  "asrd_betray_swarm"
@@ -107,6 +107,8 @@ ConVar g_cvDebug;
 ConVar g_cvDroneScale;
 ConVar g_cvDamageMult;
 ConVar g_cvHealthMult;
+ConVar g_cvSpeedMult;
+ConVar g_cvAnimMult;
 
 // 缓存本批生成时从 marine 读到的真实 faction 值 (避免每只虫都扫一次 marine)
 int g_iCachedMarineFaction = -1;
@@ -192,6 +194,16 @@ public void OnPluginStart()
         "sm_asrd_betray_health_mult", "5.0",
         "叛变虫血量倍率 (仅叛变虫, 1.0=默认血量)",
         FCVAR_NOTIFY, true, 1.0, true, 100.0);
+
+    g_cvSpeedMult = CreateConVar(
+        "sm_asrd_betray_speed_mult", "2.0",
+        "叛变虫移动速度倍率 (仅叛变虫, 1.0=默认速度)",
+        FCVAR_NOTIFY, true, 1.0, true, 10.0);
+
+    g_cvAnimMult = CreateConVar(
+        "sm_asrd_betray_anim_mult", "2.0",
+        "叛变虫动画速度倍率 (仅叛变虫, 1.0=默认动画速度)",
+        FCVAR_NOTIFY, true, 1.0, true, 10.0);
 
     g_hBetrayAliens = new ArrayList();
 
@@ -484,6 +496,32 @@ int SpawnAlien(const char[] sClass, const float fPos[3], int iMarineFaction, int
         int iNew = RoundToCeil(float(iMax) * fHealthMult);
         SetEntProp(ent, Prop_Data, "m_iMaxHealth", iNew);
         SetEntProp(ent, Prop_Data, "m_iHealth", iNew);
+    }
+
+    // 移速增强: 读取基础移动速度, 按倍率放大 (m_flMaxSpeed 优先, 防 AI 覆盖)
+    float fSpeedMult = g_cvSpeedMult.FloatValue;
+    if (fSpeedMult > 1.0)
+    {
+        float fBase = 0.0;
+        if (HasEntProp(ent, Prop_Data, "m_flMaxSpeed"))
+            fBase = GetEntPropFloat(ent, Prop_Data, "m_flMaxSpeed");
+        if (fBase <= 0.0 && HasEntProp(ent, Prop_Data, "m_flSpeed"))
+            fBase = GetEntPropFloat(ent, Prop_Data, "m_flSpeed");
+        if (fBase > 0.0)
+        {
+            SetEntPropFloat(ent, Prop_Data, "m_flMaxSpeed", fBase * fSpeedMult);
+            SetEntPropFloat(ent, Prop_Data, "m_flSpeed", fBase * fSpeedMult);
+        }
+    }
+
+    // 动画速度增强: 播放速率倍率 (默认 1.0, 直接设为倍率)
+    float fAnimMult = g_cvAnimMult.FloatValue;
+    if (fAnimMult > 1.0)
+    {
+        if (HasEntProp(ent, Prop_Send, "m_flPlaybackRate"))
+            SetEntPropFloat(ent, Prop_Send, "m_flPlaybackRate", fAnimMult);
+        else if (HasEntProp(ent, Prop_Data, "m_flPlaybackRate"))
+            SetEntPropFloat(ent, Prop_Data, "m_flPlaybackRate", fAnimMult);
     }
 
     // 生成后再确认一次位置 (兜底, 防 NPC 出生重置回原点)
