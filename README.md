@@ -12,6 +12,7 @@
 | 哨戒塔增强 | `asrd_sentry_enhancer.smx` | 哨戒塔属性倍率增强 + 头顶哨戒塔 |
 | 陆战队员强化 | `asrd_marine_power.smx` | 按键调大/调小血量/体型/移速与近战，放大5级+缩小3级 |
 | 叛变虫群 | `asrd_alien_civilwar.smx` | 生成一批攻击虫族(而非玩家)的着色叛变虫，可自选虫种、免冷却 |
+| 范围击退 | `asrd_repulse.smx` | 按键震开周围虫族(平滑推进不瞬移)，可选持续斥力护盾 |
 | 一键开锁 | `asrd_unlock.smx` | 一键破解门锁 mini-game，直接解锁上锁的按钮区/大门 |
 
 ## 🔧 前置要求
