@@ -7,8 +7,8 @@
  *  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  命令:
- *    sm_betray     [type] [count]   管理员: 生成一批叛变虫群 (可指定虫种/数量)
- *    sm_betraypub  [type] [count]   玩家:   同上 (需管理员开启 public)
+ *    sm_betray     [type] [count] [target]  管理员: 生成一批叛变虫群 (可指定虫种/数量/生成到某玩家身旁)
+ *    sm_betraypub  [type] [count]           玩家:   同上 (需管理员开启 public, 只能生成在自己身旁)
  *    sm_betray_list                 列出可生成的虫种
  *    sm_betray_clear                清除本插件生成的所有叛变虫
  *
@@ -191,7 +191,7 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 1.0, true, 100.0);
 
     g_cvHealthMult = CreateConVar(
-        "sm_asrd_betray_health_mult", "5.0",
+        "sm_asrd_betray_health_mult", "10.0",
         "叛变虫血量倍率 (仅叛变虫, 1.0=默认血量)",
         FCVAR_NOTIFY, true, 1.0, true, 100.0);
 
@@ -208,7 +208,7 @@ public void OnPluginStart()
     g_hBetrayAliens = new ArrayList();
 
     RegAdminCmd("sm_betray", Command_Betray, ADMFLAG_GENERIC,
-        "生成一批叛变虫群. 用法: sm_betray [type] [count]");
+        "生成一批叛变虫群. 用法: sm_betray [type] [count] [target]");
     RegConsoleCmd("sm_betraypub", Command_BetrayPublic, "生成叛变虫群 (需管理员开启)");
     RegAdminCmd("sm_betray_list", Command_List, ADMFLAG_GENERIC, "列出可生成的虫种");
     RegAdminCmd("sm_betray_clear", Command_Clear, ADMFLAG_GENERIC, "清除本插件生成的叛变虫");
@@ -328,7 +328,7 @@ public void OnPluginEnd()
 // ============================================================================
 public Action Command_Betray(int client, int args)
 {
-    return DoBetray(client, args);
+    return DoBetray(client, args, true);   // 管理员: 允许指定生成到某玩家身旁
 }
 
 // ============================================================================
@@ -341,13 +341,14 @@ public Action Command_BetrayPublic(int client, int args)
         ReplyToCommand(client, "[叛变虫群] 该功能未对玩家开放");
         return Plugin_Handled;
     }
-    return DoBetray(client, args);
+    return DoBetray(client, args, false);   // 普通玩家: 只能生成在自己身旁
 }
 
 // ============================================================================
-//  核心: 解析参数并生成
+//  核心: 解析参数并生成。
+//  bAllowTarget=true 时, 可选参数3 指定生成到某玩家身旁; 缺省=召唤者自己。
 // ============================================================================
-Action DoBetray(int client, int args)
+Action DoBetray(int client, int args, bool bAllowTarget)
 {
     if (!g_cvEnabled.BoolValue)
     {
@@ -383,9 +384,19 @@ Action DoBetray(int client, int args)
     if (iCount < 1) iCount = 1;
     if (iCount > MAX_BATCH) iCount = MAX_BATCH;
 
-    // ── 生成中心: 召唤者控制的陆战队员 ──
+    // ── 生成中心: 默认召唤者自己; 管理员可在参数3 指定目标玩家 ──
+    int iTargetClient = 0;   // 0 = 召唤者自己
+    if (bAllowTarget && args >= 3)
+    {
+        char sArg[64];
+        GetCmdArg(3, sArg, sizeof(sArg));
+        iTargetClient = FindTargetPlayer(client, sArg);
+        if (iTargetClient == 0)
+            return Plugin_Handled;
+    }
+
     float fCenter[3];
-    if (!GetMarineOrigin(client, fCenter))
+    if (!GetMarineOrigin((iTargetClient != 0) ? iTargetClient : client, fCenter))
     {
         ReplyToCommand(client, "[叛变虫群] 无法确定生成位置");
         return Plugin_Handled;
@@ -423,10 +434,19 @@ Action DoBetray(int client, int args)
     if (g_cvDebug.BoolValue)
         PrintToServer("[叛变虫群] type=%s count=%d 成功=%d", sType, iCount, iOk);
 
-    char sName[MAX_NAME_LENGTH];
-    GetClientName(client, sName, sizeof(sName));
-    PrintToChatAll("\x04[叛变虫群]\x01 %s 召唤了 %d 只\x05叛变%s\x01!",
-        sName, iOk, sType);
+    char sCaster[MAX_NAME_LENGTH], sTarget[MAX_NAME_LENGTH];
+    GetClientName(client, sCaster, sizeof(sCaster));
+    if (iTargetClient != 0)
+    {
+        GetClientName(iTargetClient, sTarget, sizeof(sTarget));
+        PrintToChatAll("\x04[叛变虫群]\x01 %s 在 \x05%s\x01 身旁召唤了 %d 只\x05叛变%s\x01!",
+            sCaster, sTarget, iOk, sType);
+    }
+    else
+    {
+        PrintToChatAll("\x04[叛变虫群]\x01 %s 召唤了 %d 只\x05叛变%s\x01!",
+            sCaster, iOk, sType);
+    }
 
     // 生成成功后扫描一次, 给场上已有虫族挂伤害回调 (新刷虫族由 OnEntityCreated 自动挂)
     if (iOk > 0)
@@ -905,6 +925,49 @@ bool ResolveType(const char[] sInput, char[] sOut, int outLen)
         }
     }
     return false;
+}
+
+// ============================================================================
+//  按 名字 / 部分名字 / #userid 找一个在线玩家 (找不到或歧义时返回 0)
+// ============================================================================
+int FindTargetPlayer(int client, const char[] szArg)
+{
+    // #userid 形式
+    if (szArg[0] == '#')
+    {
+        int who = GetClientOfUserId(StringToInt(szArg[1]));
+        if (who > 0 && IsClientInGame(who) && !IsFakeClient(who))
+            return who;
+        PrintToConsole(client, "找不到该 userid 对应的在线玩家");
+        return 0;
+    }
+
+    int found = 0;
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsClientInGame(i) || IsFakeClient(i))
+            continue;
+
+        char sName[MAX_NAME_LENGTH];
+        GetClientName(i, sName, sizeof(sName));
+
+        if (StrEqual(sName, szArg, false))   // 精确匹配: 直接命中
+            return i;
+
+        if (StrContains(sName, szArg, false) != -1)   // 部分匹配
+        {
+            if (found != 0)
+            {
+                PrintToConsole(client, "匹配到多名玩家, 请用更完整的名字或 #userid 精确定位");
+                return 0;
+            }
+            found = i;
+        }
+    }
+
+    if (found == 0)
+        PrintToConsole(client, "找不到在线玩家 \"%s\"", szArg);
+    return found;
 }
 
 // ============================================================================
