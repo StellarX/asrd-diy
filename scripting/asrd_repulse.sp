@@ -37,9 +37,13 @@
  *   sm_asrd_repulse_pull_time      单次击退推进时长/秒 (默认 0.35, 越大越慢越平滑)
  *   sm_asrd_repulse_cooldown       两次触发最小间隔秒 (默认 0=无冷却可连按)
  *
- *   sm_asrd_repulse_aura           持续护盾开关 (默认 0)
+ *   sm_asrd_repulse_aura           持续护盾开关 (默认 0) — 配合 sm_repulseaura 指定玩家
  *   sm_asrd_repulse_aura_radius    护盾半径/游戏单位 (默认 260)
  *   sm_asrd_repulse_aura_mode      护盾模式 (默认 1: 1=直接阻挡钉在圈外; 0=斥力击退平滑弹开)
+ *
+ *   sm_asrd_repulse_armor          护甲护盾模式 (默认 0): 开启后, 佩戴 asw_weapon_normal_armor
+ *                                  的玩家自动获得护盾且只针对该玩家; 不依赖 sm_asrd_repulse_aura,
+ *                                  护盾方式(阻挡/斥力)仍由 sm_asrd_repulse_aura_mode 决定
  *
  *   sm_asrd_repulse_classes        追加要击退的实体类名 (空格分隔, 空=不追加)
  *   sm_asrd_repulse_debug          调试输出 (默认 0; 1 会列出半径内所有 asw_ 与 npc_ 实体的真实类名)
@@ -55,7 +59,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] 范围击退"
-#define PLUGIN_VERSION "1.5.3"
+#define PLUGIN_VERSION "1.6.0"
 
 // ─── 平滑推进动画池 (手动击退用) ──
 #define MAX_PUSH 512
@@ -133,6 +137,7 @@ ConVar g_cvCooldown;
 ConVar g_cvAura;
 ConVar g_cvAuraRadius;
 ConVar g_cvAuraMode;
+ConVar g_cvArmor;
 ConVar g_cvClasses;
 ConVar g_cvProjectiles;
 ConVar g_cvProjSpeed;
@@ -141,6 +146,14 @@ ConVar g_cvDebug;
 
 // ─── 按玩家激活的护盾 (由管理员命令 sm_repulseaura 指定, 默认全场无护盾) ──
 bool g_bAuraOn[MAXPLAYERS + 1];
+
+// ─── 护甲触发的护盾 ─────────────────────────────
+// 仅在 护甲模式(asw_weapon_normal_armor 归该玩家 marine)开启时, 该玩家才获得护盾。
+// g_bPlayerHasArmor 由 RefreshArmor() 每 0.2s 缓存一次, 避免每帧全遍历。
+static const char ARMOR_CLASS[] = "asw_weapon_normal_armor";
+bool   g_bPlayerHasArmor[MAXPLAYERS + 1];
+bool   g_bPrevArmor[MAXPLAYERS + 1];   // 上一轮扫描是否已穿戴(用于穿戴瞬间提示一次)
+float  g_fLastArmorScan;
 
 float g_fLastUse[MAXPLAYERS + 1];   // 手动击退冷却用
 
@@ -176,6 +189,9 @@ public void OnPluginStart()
         "手动触发最小间隔秒 (0=无冷却可连按)", FCVAR_NOTIFY, true, 0.0, true, 60.0);
     g_cvAura = CreateConVar("sm_asrd_repulse_aura", "0",
         "持续斥力护盾 (1=开 0=关)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_cvArmor = CreateConVar("sm_asrd_repulse_armor", "0",
+        "护甲护盾模式 (1=开 0=关), 开启后佩戴 asw_weapon_normal_armor 的玩家自动获得护盾, 不依赖 sm_asrd_repulse_aura, 护盾方式由 sm_asrd_repulse_aura_mode 决定",
+        FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_cvAuraRadius = CreateConVar("sm_asrd_repulse_aura_radius", "260",
         "护盾半径 (游戏单位)", FCVAR_NOTIFY, true, 50.0, true, 3000.0);
     g_cvAuraMode = CreateConVar("sm_asrd_repulse_aura_mode", "1",
@@ -615,8 +631,9 @@ int PushClassAliens(const char[] sClass, const float fCenter[3], float fRadius2,
 // ============================================================================
 public void OnGameFrame()
 {
-    // 无动画且未开护盾时直接跳过, 避免空转
-    bool bHasAura = g_cvEnabled.BoolValue && g_cvAura.BoolValue;
+    // 无动画且未开任何护盾模式时直接跳过, 避免空转
+    bool bHasAura = g_cvEnabled.BoolValue
+        && (g_cvAura.BoolValue || g_cvArmor.BoolValue);
     if (!bHasAura && !g_bAnyPushActive)
         return;
 
@@ -683,12 +700,20 @@ void ThinkAura()
         && (GetGameTime() - g_fLastAuraDump >= 3.0);
     bool bDumped = false;
 
+    // 若启用了护甲模式, 先刷新"谁正佩戴护甲"的缓存
+    if (g_cvArmor.BoolValue)
+        RefreshArmor();
+
     for (int client = 1; client <= MaxClients; client++)
     {
         if (!IsClientInGame(client) || IsFakeClient(client))
             continue;
-        if (!g_bAuraOn[client])
-            continue;   // 只有被管理员 sm_repulseaura 指定的玩家才有效盾
+
+        // 该玩家是否有效盾: 手动指定 或 佩戴护甲且护甲模式开启
+        bool bActive = (g_cvAura.BoolValue  && g_bAuraOn[client])
+                    || (g_cvArmor.BoolValue && g_bPlayerHasArmor[client]);
+        if (!bActive)
+            continue;
 
         float fCenter[3];
         if (!GetMarineOrigin(client, fCenter))
@@ -830,4 +855,78 @@ int GetPlayerMarine(int client)
     }
 
     return 0;
+}
+
+// ============================================================================
+//  刷新"哪名玩家正在佩戴护甲"缓存 (上限 0.2s 一次, 避免每帧全遍历)
+//  识别方式: 遍历 asw_weapon_normal_armor 实体, 取其归属者(marine),
+//  再找到控制该 marine 的玩家 → 视为佩戴护甲。
+// ============================================================================
+void RefreshArmor()
+{
+    float now = GetGameTime();
+    if (now - g_fLastArmorScan < 0.2)
+        return;
+    g_fLastArmorScan = now;
+
+    for (int c = 1; c <= MaxClients; c++)
+        g_bPlayerHasArmor[c] = false;
+
+    int ent = -1;
+    while ((ent = FindEntityByClassname(ent, ARMOR_CLASS)) != -1)
+    {
+        if (!IsValidEdict(ent))
+            continue;
+
+        // 取护甲归属者: 优先 Prop_Data m_hOwner, 兜底 Prop_Send m_hOwnerEntity
+        int owner = 0;
+        if (HasEntProp(ent, Prop_Data, "m_hOwner"))
+            owner = GetEntPropEnt(ent, Prop_Data, "m_hOwner");
+        if (owner <= 0 && HasEntProp(ent, Prop_Send, "m_hOwnerEntity"))
+            owner = GetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity");
+        if (owner <= 0 || !IsValidEdict(owner))
+            continue;
+
+        int c = ClientOfMarine(owner);
+        if (c > 0)
+            g_bPlayerHasArmor[c] = true;
+    }
+
+    // 穿戴瞬间公开提示一次 (边缘触发: 上一轮未穿戴 → 本轮穿戴)
+    for (int c = 1; c <= MaxClients; c++)
+    {
+        if (!g_bPlayerHasArmor[c])
+        {
+            g_bPrevArmor[c] = false;
+            continue;
+        }
+        if (!g_bPrevArmor[c])
+        {
+            char sName[64];
+            GetClientName(c, sName, sizeof(sName));
+            PrintToChatAll("\x04%s\x01 已穿戴 \x05IAF 力场护盾", sName);
+        }
+        g_bPrevArmor[c] = true;
+    }
+}
+
+// 找控制某 marine 实体的玩家 (找不到返回 0)
+int ClientOfMarine(int iMarine)
+{
+    for (int c = 1; c <= MaxClients; c++)
+    {
+        if (!IsClientInGame(c) || IsFakeClient(c))
+            continue;
+        if (GetPlayerMarine(c) == iMarine)
+            return c;
+    }
+    return 0;
+}
+
+// 玩家离开时清掉护甲缓存与非空标志, 避免残留
+public void OnClientDisconnect(int client)
+{
+    g_bPlayerHasArmor[client] = false;
+    g_bPrevArmor[client] = false;
+    g_bAuraOn[client] = false;
 }
