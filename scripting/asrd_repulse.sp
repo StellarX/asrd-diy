@@ -8,7 +8,13 @@
  *     每游戏帧推进(OnGameFrame)并附带速度, 客户端帧间插值 → 短击退也平滑,
  *     推进速度可用时长控制, 不会"瞬移"也不会"一顿一顿"。
  *  2. 持续护盾: (可选) 开启后就像能量斥力场, 自动把靠近你的虫族
- *     缓慢持续往外推, 保持在护盾半径之外。
+ *     缓慢持续往外推, 保持在护盾半径之外。同时也会弹开敌方投射物(炮弹)。
+ *
+ *  ── 投射物(炮弹) ───────────────────────────────────────
+ *   已内置 mortarbug(迫击炮虫)的炮弹 asw_mortarbug_shell。
+ *   用"速度弹开"而非 teleport, 防止被投射物原速度拉回。
+ *   其余(如 ranger 的酸液)可在 debug 抓到类名后,
+ *   追加到 sm_asrd_repulse_projectile_classes 即可。
  *
  *  ── 为什么有些虫打不到? ────────────────────────────────
  *   内置清单包含绝大多数 asw_* 虫族 + 蚁狮 npc_* 变体。
@@ -33,7 +39,7 @@
  *
  *   sm_asrd_repulse_aura           持续护盾开关 (默认 0)
  *   sm_asrd_repulse_aura_radius    护盾半径/游戏单位 (默认 260)
- *   sm_asrd_repulse_aura_speed     护盾外推速度/单位每秒 (默认 180, 越小越柔和)
+ *   sm_asrd_repulse_aura_mode      护盾模式 (默认 1: 1=直接阻挡钉在圈外; 0=斥力击退平滑弹开)
  *
  *   sm_asrd_repulse_classes        追加要击退的实体类名 (空格分隔, 空=不追加)
  *   sm_asrd_repulse_debug          调试输出 (默认 0; 1 会列出半径内所有 asw_ 与 npc_ 实体的真实类名)
@@ -49,11 +55,12 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] 范围击退"
-#define PLUGIN_VERSION "1.2.1"
+#define PLUGIN_VERSION "1.5.3"
 
 // ─── 平滑推进动画池 (手动击退用) ──
 #define MAX_PUSH 512
 #define MAX_CUSTOM_CLASSES 32
+#define MAX_PROJ_CLASSES 32
 int    g_iPushEnt[MAX_PUSH];
 float  g_fPushSrc[MAX_PUSH][3];
 float  g_fPushDst[MAX_PUSH][3];
@@ -62,6 +69,22 @@ float  g_fPushDur[MAX_PUSH];
 float  g_fPushPrev[MAX_PUSH][3];   // 上一帧已应用的位置, 用于计算该帧速度(客户端插值更平滑)
 bool   g_bPushActive[MAX_PUSH];
 bool   g_bAnyPushActive;           // 是否有任意推进动画在跑, 用于跳过空闲帧
+float  g_fLastAuraLog;            // 护盾汇总日志节流
+float  g_fLastAuraDump;           // 护盾类名点名节流
+float  g_fLastProjLog;            // 投射物 owner 日志节流
+
+// ─── 敌方投射物清单 (用速度弹开, 不用 teleport) ──
+// asw_mortarbug_shell = mortarbug(迫击炮虫)的炮弹
+// asw_missile_round   = ranger 酸球 + 玩家的导弹/火箭, 共用同一实体!
+//   对 asw_missile_round 我们只弹"玩家之外"发射的(owner 是 alien), 避免误伤玩家武器。
+// 其余可在 debug 抓到类名后追加
+char g_sBuiltinProjClasses[][] =
+{
+    "asw_mortarbug_shell",
+    "asw_missile_round"
+};
+char g_sProjClasses[MAX_PROJ_CLASSES][64];
+int  g_iProjClassCount;
 
 // ─── 内置怪物实体类名清单 ──
 // asw_drone_antlion 等 asw_* 虫族 + npc_antlionguard 系列 (RD 的蚁狮用 npc_ 前缀!)
@@ -85,6 +108,7 @@ char g_sAlienClasses[][] =
     "asw_grub_sac",
     "asw_queen",
     "asw_mender",
+    "asw_shaman",
     "asw_xenomite",
     "asw_antlion_guard",
     // RD 蚁狮守卫/工蜂真实类名 (npc_ 前缀, 不是 asw_!)
@@ -108,9 +132,15 @@ ConVar g_cvPullTime;
 ConVar g_cvCooldown;
 ConVar g_cvAura;
 ConVar g_cvAuraRadius;
-ConVar g_cvAuraSpeed;
+ConVar g_cvAuraMode;
 ConVar g_cvClasses;
+ConVar g_cvProjectiles;
+ConVar g_cvProjSpeed;
+ConVar g_cvProjClasses;
 ConVar g_cvDebug;
+
+// ─── 按玩家激活的护盾 (由管理员命令 sm_repulseaura 指定, 默认全场无护盾) ──
+bool g_bAuraOn[MAXPLAYERS + 1];
 
 float g_fLastUse[MAXPLAYERS + 1];   // 手动击退冷却用
 
@@ -147,25 +177,128 @@ public void OnPluginStart()
     g_cvAura = CreateConVar("sm_asrd_repulse_aura", "0",
         "持续斥力护盾 (1=开 0=关)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_cvAuraRadius = CreateConVar("sm_asrd_repulse_aura_radius", "260",
-        "护盾作用半径 (游戏单位)", FCVAR_NOTIFY, true, 50.0, true, 3000.0);
-    g_cvAuraSpeed = CreateConVar("sm_asrd_repulse_aura_speed", "180",
-        "护盾外推速度 (游戏单位/秒, 越小越柔和)", FCVAR_NOTIFY, true, 10.0, true, 1000.0);
+        "护盾半径 (游戏单位)", FCVAR_NOTIFY, true, 50.0, true, 3000.0);
+    g_cvAuraMode = CreateConVar("sm_asrd_repulse_aura_mode", "1",
+        "护盾模式 (1=直接阻挡 钉在圈外; 0=斥力击退 平滑弹开)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_cvClasses = CreateConVar("sm_asrd_repulse_classes", "",
         "追加要击退的实体类名 (空格分隔, 空=不追加)", FCVAR_NOTIFY);
+    g_cvProjectiles = CreateConVar("sm_asrd_repulse_projectiles", "1",
+        "是否弹开敌方投射物(炮弹), 如 mortarbug 的炮弹 (0=关 1=开)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_cvProjSpeed = CreateConVar("sm_asrd_repulse_projectile_speed", "400",
+        "弹开投射物的速度 (游戏单位/秒)", FCVAR_NOTIFY, true, 50.0, true, 3000.0);
+    g_cvProjClasses = CreateConVar("sm_asrd_repulse_projectile_classes", "",
+        "追加要弹开的敌方投射物类名 (空格分隔, 空=不追加)", FCVAR_NOTIFY);
     g_cvDebug = CreateConVar("sm_asrd_repulse_debug", "0",
-        "调试输出 (0=关 1=开; 1还会列出半径内所有 asw_*/npc_* 实体的真实类名)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+        "调试输出 (0=关 1=开; 1还列出半径内所有实体的真实类名, 便于抓投射物/漏网虫种)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 
     HookConVarChange(g_cvClasses, OnClassesChanged);
+    HookConVarChange(g_cvProjClasses, OnProjClassesChanged);
 
     AutoExecConfig(true, "asrd_repulse");
 
     RegConsoleCmd("sm_repulse", Command_Repulse, "范围击退 (可绑定按键连按)");
+    RegAdminCmd("sm_repulseaura", Command_Aura, ADMFLAG_GENERIC,
+        "[管理员] 给指定玩家开关护盾: sm_repulseaura [玩家] [on|off|1|0] (无玩家=自己, 无状态=切换)");
 
     ParseCustomClasses();
+    ParseProjClasses();
 }
 
 // ============================================================================
-//  地图加载: 清空动画池, 重解析附加类名, 启动 Think 定时器
+//  [管理员] 按玩家开关护盾: sm_repulseaura [玩家] [on|off|1|0]
+//  默认只有管理员可用; 护盾仍受总开关 sm_asrd_repulse_aura 控制 (需=1 才真正生效)
+// ============================================================================
+public Action Command_Aura(int client, int args)
+{
+    if (client < 1 || client > MaxClients || !IsClientInGame(client))
+    {
+        ReplyToCommand(client, "[击退] 请在游戏内使用");
+        return Plugin_Handled;
+    }
+
+    // 目标 (默认自己)
+    int target = client;
+    if (args >= 1)
+    {
+        char sArg[64];
+        GetCmdArg(1, sArg, sizeof(sArg));
+        target = FindTargetPlayer(client, sArg);
+        if (target == -1)
+            return Plugin_Handled;   // 已提示
+    }
+
+    // 状态 (缺省切换)
+    if (args >= 2)
+    {
+        char sState[16];
+        GetCmdArg(2, sState, sizeof(sState));
+        if (StrEqual(sState, "on", false) || StrEqual(sState, "1", false))
+            g_bAuraOn[target] = true;
+        else if (StrEqual(sState, "off", false) || StrEqual(sState, "0", false))
+            g_bAuraOn[target] = false;
+        else
+        {
+            ReplyToCommand(client, "[击退] 状态参数仅支持 on/off/1/0");
+            return Plugin_Handled;
+        }
+    }
+    else
+    {
+        g_bAuraOn[target] = !g_bAuraOn[target];
+    }
+
+    char sName[64];
+    GetClientName(target, sName, sizeof(sName));
+    ReplyToCommand(client, "[击退] 已%s %s 的护盾 (需 sm_asrd_repulse_aura 1 才生效)",
+        g_bAuraOn[target] ? "开启" : "关闭", sName);
+    return Plugin_Handled;
+}
+
+// ============================================================================
+//  名字 / #userid 找在线玩家; 返回 client 或 -1 (找不到/有歧义时已提示)
+//  完整名精确匹配优先, 否则部分匹配去歧义
+// ============================================================================
+int FindTargetPlayer(int client, const char[] sArg)
+{
+    if (sArg[0] == '#')
+    {
+        int t = GetClientOfUserId(StringToInt(sArg[1]));
+        if (t > 0 && IsClientInGame(t))
+            return t;
+        ReplyToCommand(client, "[击退] 找不到该 userid 的在线玩家");
+        return -1;
+    }
+
+    int iMatch = 0;
+    int iFound = -1;
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsClientInGame(i) || IsFakeClient(i))
+            continue;
+
+        char sName[64];
+        GetClientName(i, sName, sizeof(sName));
+        if (StrEqual(sName, sArg, false))
+            return i;   // 全名精确命中, 直接取
+
+        if (StrContains(sName, sArg, false) != -1)
+        {
+            iMatch++;
+            iFound = i;
+        }
+    }
+
+    if (iMatch == 1)
+        return iFound;
+    if (iMatch == 0)
+        ReplyToCommand(client, "[击退] 未找到玩家 \"%s\"", sArg);
+    else
+        ReplyToCommand(client, "[击退] 名字 \"%s\" 有歧义, 请用完整名或 #userid", sArg);
+    return -1;
+}
+
+// ============================================================================
+//  地图加载: 清空动画池, 重解析附加类名
 // ============================================================================
 public void OnMapStart()
 {
@@ -174,7 +307,7 @@ public void OnMapStart()
     g_bAnyPushActive = false;
 
     ParseCustomClasses();
-    // 推进/护盾改由 OnGameFrame 每帧驱动 (更平滑), 不再需要定时器
+    ParseProjClasses();
 }
 
 // ============================================================================
@@ -201,6 +334,40 @@ void ParseCustomClasses()
         TrimString(sParts[i]);
         if (sParts[i][0] != '\0' && g_iCustomClassCount < MAX_CUSTOM_CLASSES)
             strcopy(g_sCustomClasses[g_iCustomClassCount++], 64, sParts[i]);
+    }
+}
+
+// ============================================================================
+//  投射物附加类名 ConVar 变化时重新解析
+// ============================================================================
+public void OnProjClassesChanged(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+    ParseProjClasses();
+}
+
+void ParseProjClasses()
+{
+    // 内置 + 自定义
+    g_iProjClassCount = 0;
+
+    for (int i = 0; i < sizeof(g_sBuiltinProjClasses); i++)
+    {
+        if (g_iProjClassCount < MAX_PROJ_CLASSES)
+            strcopy(g_sProjClasses[g_iProjClassCount++], 64, g_sBuiltinProjClasses[i]);
+    }
+
+    char sBuf[1024];
+    g_cvProjClasses.GetString(sBuf, sizeof(sBuf));
+    if (sBuf[0] == '\0')
+        return;
+
+    char sParts[MAX_PROJ_CLASSES][64];
+    int iCount = ExplodeString(sBuf, " ", sParts, MAX_PROJ_CLASSES, 64);
+    for (int i = 0; i < iCount; i++)
+    {
+        TrimString(sParts[i]);
+        if (sParts[i][0] != '\0' && g_iProjClassCount < MAX_PROJ_CLASSES)
+            strcopy(g_sProjClasses[g_iProjClassCount++], 64, sParts[i]);
     }
 }
 
@@ -261,20 +428,85 @@ void Repulse(int client)
     }
 
     for (int c = 0; c < sizeof(g_sAlienClasses); c++)
-        iPushed += PushClassAliens(g_sAlienClasses[c], fCenter, fRadius2, true, 0.0);
+        iPushed += PushClassAliens(g_sAlienClasses[c], fCenter, fRadius2, true);
 
     for (int c = 0; c < g_iCustomClassCount; c++)
-        iPushed += PushClassAliens(g_sCustomClasses[c], fCenter, fRadius2, true, 0.0);
+        iPushed += PushClassAliens(g_sCustomClasses[c], fCenter, fRadius2, true);
+
+    if (g_cvProjectiles.BoolValue)
+        iPushed += PushProjectiles(fCenter, fRadius2, false);
 
     if (g_cvDebug.BoolValue)
-        PrintToServer("[击退][debug] %N 登记 %d 只虫", client, iPushed);
+        PrintToServer("[击退][debug] %N 登记 %d 只虫/炮弹", client, iPushed);
 
     if (iPushed > 0)
-        PrintToChat(client, "\x04[击退]\x01 震开 \x05%d\x01 只异形", iPushed);
+        PrintToChat(client, "\x04[击退]\x01 震开 \x05%d\x01 只异形/炮弹", iPushed);
 }
 
 // ============================================================================
-//  debug: 列出玩家半径范围内所有 asw_*/npc_* 实体的真实类名, 便于发现漏网虫种
+//  弹开范围内的敌方投射物: 给一个从中心向外的速度, 而非 teleport
+//  (投射物常带物理/高速, 逐帧 teleport 会被它的飞行速度拉回, 用速度推开才有效)
+//  返回处理的投射物数量
+// ============================================================================
+int PushProjectiles(const float fCenter[3], float fRadius2, bool bKill)
+{
+    int iCount = 0;
+    for (int c = 0; c < g_iProjClassCount; c++)
+    {
+        int entity = -1;
+        while ((entity = FindEntityByClassname(entity, g_sProjClasses[c])) != -1)
+        {
+            if (!IsValidEntity(entity))
+                continue;
+
+            float fPos[3];
+            if (!GetEntOrigin(entity, fPos))
+                continue;
+
+            float dx = fPos[0] - fCenter[0];
+            float dy = fPos[1] - fCenter[1];
+            float dz = fPos[2] - fCenter[2];
+            float fDistSq = dx*dx + dy*dy + dz*dz;
+
+            // 只对击杀做范围判断, asw_missile_round 与玩家导弹共用: 一律按敌方投射物处理(不做敌我区分)
+            // debug: 枚举到 asw_missile_round 打印距离, 便于确认 ranger 酸球是否被截获
+            if (g_cvDebug.BoolValue
+                && StrEqual(g_sProjClasses[c], "asw_missile_round", false)
+                && GetGameTime() - g_fLastProjLog >= 1.0)
+            {
+                PrintToServer("[击退][debug] 命中 asw_missile_round 距离=%.0f",
+                    SquareRoot(fDistSq));
+                g_fLastProjLog = GetGameTime();
+            }
+
+            if (fDistSq > fRadius2)
+                continue;
+
+            // 在半径内: 护盾模式直接让它消失, 手动模式用速度弹开
+            // 例外: asw_mortarbug_shell(炮虫炮弹) 任何模式都只用速度弹开, 不删除
+            if (bKill && !StrEqual(g_sProjClasses[c], "asw_mortarbug_shell", false))
+            {
+                RemoveEntity(entity);
+                iCount++;
+                continue;
+            }
+
+            float fLen = SquareRoot(fDistSq) + 1.0;
+            float fSpeed = g_cvProjSpeed.FloatValue;
+            float fVel[3];
+            fVel[0] = (dx / fLen) * fSpeed;
+            fVel[1] = (dy / fLen) * fSpeed;
+            fVel[2] = (dz / fLen) * fSpeed + 40.0;   // 小幅上挑, 让它飞开而不是贴地
+
+            TeleportEntity(entity, NULL_VECTOR, NULL_VECTOR, fVel);
+            iCount++;
+        }
+    }
+    return iCount;
+}
+
+// ============================================================================
+//  debug: 列出玩家半径范围内所有实体的真实类名, 便于发现漏网虫种与投射物
 // ============================================================================
 void DebugListNearby(const float fCenter[3], float fRadius2)
 {
@@ -285,8 +517,6 @@ void DebugListNearby(const float fCenter[3], float fRadius2)
 
         char sCls[64];
         GetEntityClassname(e, sCls, sizeof(sCls));
-        if (strncmp(sCls, "asw_", 4, false) != 0 && strncmp(sCls, "npc_", 4, false) != 0)
-            continue;
 
         float fPos[3];
         if (!GetEntOrigin(e, fPos))
@@ -298,8 +528,7 @@ void DebugListNearby(const float fCenter[3], float fRadius2)
         if ((dx*dx + dy*dy + dz*dz) > fRadius2)
             continue;
 
-        PrintToServer("[击退][debug] 半径内实体类名: %s 位置=%.0f %.0f %.0f",
-            sCls, fPos[0], fPos[1], fPos[2]);
+        PrintToServer("[击退][debug] 半径内实体类名: %s", sCls);
     }
 }
 
@@ -307,7 +536,7 @@ void DebugListNearby(const float fCenter[3], float fRadius2)
 //  处理某类虫: bManual=true 平滑推进(带挑飞), false 护盾小步外推
 //  返回处理的虫数量
 // ============================================================================
-int PushClassAliens(const char[] sClass, const float fCenter[3], float fRadius2, bool bManual, float dt)
+int PushClassAliens(const char[] sClass, const float fCenter[3], float fRadius2, bool bManual)
 {
     int iCount = 0;
     int entity = -1;
@@ -339,20 +568,41 @@ int PushClassAliens(const char[] sClass, const float fCenter[3], float fRadius2,
         }
         else
         {
+            // 护盾分两模式, 由 sm_asrd_repulse_aura_mode 决定:
+            //   1 (默认) = 直接阻挡: 每帧把范围内怪物钉回半径边界, 形成"墙"
+            //   0        = 斥力推: 每帧沿径向小步向外推
             if ((dx*dx + dy*dy) > fRadius2)
-                continue;   // 护盾只看水平距离
+                continue;   // 护盾只看水平距离, 在界外无视
 
             float fLen = SquareRoot(dx*dx + dy*dy);
             if (fLen < 1.0)
                 continue;
 
-            float fStep = g_cvAuraSpeed.FloatValue * dt;
             float fNew[3];
-            fNew[0] = fPos[0] + (dx / fLen) * fStep;
-            fNew[1] = fPos[1] + (dy / fLen) * fStep;
-            fNew[2] = fPos[2];
-            TeleportEntity(entity, fNew, NULL_VECTOR, NULL_VECTOR);
-            iCount++;
+            fNew[2] = fPos[2];   // 管水平, 高度保持不动
+
+            if (g_cvAuraMode.BoolValue)
+            {
+                // ── 直接阻挡: 钉回半径边界 + 清零速度(压住飞行/高速虫) ──
+                float fRadius = SquareRoot(fRadius2);
+                fNew[0] = fCenter[0] + (dx / fLen) * fRadius;
+                fNew[1] = fCenter[1] + (dy / fLen) * fRadius;
+
+                float fZero[3];
+                fZero[0] = fZero[1] = fZero[2] = 0.0;
+                TeleportEntity(entity, fNew, NULL_VECTOR, fZero);
+            }
+            else
+            {
+                // ── 斥力 = 持续击退弹开: 对进入范围的怪施放一次平滑推进动画(力度/挑飞同手动)
+                // 同一只怪在动画未结束时不再重复施放(AddPush 内已防重), 既有击退弹开感又不抖动
+                float fDst[3];
+                fDst[0] = fPos[0] + (dx / fLen) * g_cvForce.FloatValue;
+                fDst[1] = fPos[1] + (dy / fLen) * g_cvForce.FloatValue;
+                fDst[2] = fPos[2] + g_cvLift.FloatValue;
+                AddPush(entity, fPos, fDst);
+                iCount++;
+            }
         }
     }
     return iCount;
@@ -373,7 +623,7 @@ public void OnGameFrame()
     float dt = GetTickInterval();
 
     if (bHasAura)
-        ThinkAura(dt);
+        ThinkAura();
 
     g_bAnyPushActive = ProcessPushAnim(dt);
 }
@@ -421,30 +671,52 @@ bool ProcessPushAnim(float dt)
     return bAny;
 }
 
-void ThinkAura(float dt)
+void ThinkAura()
 {
     float fRadius  = g_cvAuraRadius.FloatValue;
     float fRadius2 = fRadius * fRadius;
     int   iPushed  = 0;
 
+    // 护盾模式下若开了 debug, 每隔 3 秒点名一次半径内所有实体类名,
+    // 方便直接确认某只虫(如治疗虫)的真实类名, 不用改代码
+    bool bDumpPending = g_cvDebug.BoolValue
+        && (GetGameTime() - g_fLastAuraDump >= 3.0);
+    bool bDumped = false;
+
     for (int client = 1; client <= MaxClients; client++)
     {
         if (!IsClientInGame(client) || IsFakeClient(client))
             continue;
+        if (!g_bAuraOn[client])
+            continue;   // 只有被管理员 sm_repulseaura 指定的玩家才有效盾
 
         float fCenter[3];
         if (!GetMarineOrigin(client, fCenter))
             continue;
 
+        if (bDumpPending && !bDumped)
+        {
+            bDumped = true;
+            g_fLastAuraDump = GetGameTime();
+            DebugListNearby(fCenter, fRadius2);
+        }
+
         for (int c = 0; c < sizeof(g_sAlienClasses); c++)
-            iPushed += PushClassAliens(g_sAlienClasses[c], fCenter, fRadius2, false, dt);
+            iPushed += PushClassAliens(g_sAlienClasses[c], fCenter, fRadius2, false);
 
         for (int c = 0; c < g_iCustomClassCount; c++)
-            iPushed += PushClassAliens(g_sCustomClasses[c], fCenter, fRadius2, false, dt);
+            iPushed += PushClassAliens(g_sCustomClasses[c], fCenter, fRadius2, false);
+
+        if (g_cvProjectiles.BoolValue)
+            iPushed += PushProjectiles(fCenter, fRadius2, true);
     }
 
-    if (g_cvDebug.BoolValue && iPushed > 0)
-        PrintToServer("[击退][aura] 本 tick 推开 %d 只", iPushed);
+    if (g_cvDebug.BoolValue && iPushed > 0
+        && GetGameTime() - g_fLastAuraLog >= 1.0)
+    {
+        PrintToServer("[击退][aura] 本秒推开 %d 只", iPushed);
+        g_fLastAuraLog = GetGameTime();
+    }
 }
 
 // ============================================================================
@@ -452,6 +724,11 @@ void ThinkAura(float dt)
 // ============================================================================
 void AddPush(int ent, const float fSrc[3], const float fDst[3])
 {
+    // 该怪已在推进动画中 → 跳过, 避免重复施放造成叠加抖动
+    for (int i = 0; i < MAX_PUSH; i++)
+        if (g_bPushActive[i] && g_iPushEnt[i] == ent)
+            return;
+
     for (int i = 0; i < MAX_PUSH; i++)
     {
         if (g_bPushActive[i])

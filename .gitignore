@@ -9,3 +9,9 @@
 /.workbuddy/
 /plugins/asrd_drone_escort.smx
 /scripting/compiled/
+/plugins/asrd_entity_fun.smx
+/plugins/asrd_nuke.smx
+/plugins/asrd_repulse.smx
+/plugins/asrd_respawn.smx
+/plugins/asrd_unlock.smx
+/plugins/asrd_fh_revive.smx

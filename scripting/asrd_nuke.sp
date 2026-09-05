@@ -26,7 +26,7 @@
  *  ── 常用 ConVar (自动生成 cfg/sourcemod/asrd_nuke.cfg) ──
  *   sm_asrd_nuke_enabled    总开关 (0=关 1=开, 默认 1)
  *   sm_asrd_nuke_damage     对虫族造成的伤害 (默认 999999.0)
- *   sm_asrd_nuke_delay      预计抵达秒数 ETA (默认 5.0, 0=立即引爆)
+ *   sm_asrd_nuke_delay      预计抵达秒数 ETA (默认 3.0, 0=立即引爆)
  *   sm_asrd_nuke_public     允许所有玩家使用 sm_nukepub (默认 0)
  *   sm_asrd_nuke_debug      调试输出 (默认 0)
  *
@@ -116,7 +116,7 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 1.0, true, 10000000.0
     );
     g_cvDelay = CreateConVar(
-        "sm_asrd_nuke_delay", "5.0",
+        "sm_asrd_nuke_delay", "3.0",
         "支援抵达秒数 ETA (倒计时时长, 0=立即引爆)",
         FCVAR_NOTIFY, true, 0.0, true, 60.0
     );
