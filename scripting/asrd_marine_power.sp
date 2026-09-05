@@ -19,7 +19,9 @@
  *     bind F7 "sm_power_down"
  *
  *  ── 管理员命令 ─────────────────────────────────────
- *   sm_power_status   查看所有玩家强化状态
+ *   sm_power_status                查看所有玩家强化状态
+ *   sm_power_set <玩家> <等级>      指定强化某个玩家 (等级= -缩小max ~ 放大max, 0=恢复默认)
+ *                                  玩家可填 名字 / 部分名字 / #userid
  *
  *  ── 常用 ConVar (仅代码默认值, 不生成 cfg 文件) ─
  *   sm_asrd_power_enabled     总开关 (0=关 1=开, 默认 1)
@@ -126,7 +128,7 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 1.0
     );
     g_cvScaleStep = CreateConVar(
-        "sm_asrd_power_scale_step", "0.2",
+        "sm_asrd_power_scale_step", "0.1",
         "每级体型增量 (默认 0.2, 5级=2.0), 体型 = 1.0 + step*等级",
         FCVAR_NOTIFY, true, 0.0
     );
@@ -151,7 +153,7 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
     g_cvSpeedStep = CreateConVar(
-        "sm_asrd_power_speed_step", "0.2",
+        "sm_asrd_power_speed_step", "0.1",
         "每级移速增量 (默认0.2, 与体型同比例, 5级=x2.0)",
         FCVAR_NOTIFY, true, 0.0
     );
@@ -170,6 +172,7 @@ public void OnPluginStart()
 
     // 管理员命令
     RegAdminCmd("sm_power_status", Cmd_PowerStatus, ADMFLAG_GENERIC, "查看所有玩家强化状态");
+    RegAdminCmd("sm_power_set", Cmd_PowerSet, ADMFLAG_GENERIC, "指定强化某个玩家 (用法: sm_power_set <玩家> <等级>)");
 
     // 周期性重新断言(换人/复活后仍生效)
     g_hReapplyTimer = CreateTimer(REAPPLY_INTERVAL, Timer_Reapply, _, TIMER_REPEAT);
@@ -265,6 +268,97 @@ public Action Cmd_PowerReset(int client, int args)
     ApplyMeleeConvars();
     ShowStatus(client);
     return Plugin_Handled;
+}
+
+// ============================================================================
+//  管理员命令: 指定强化某个玩家
+//  sm_power_set <玩家> <等级>   (等级范围= -缩小max ~ 放大max, 0=恢复默认)
+// ============================================================================
+public Action Cmd_PowerSet(int client, int args)
+{
+    if (args < 2)
+    {
+        PrintToConsole(client, "用法: sm_power_set <玩家> <等级> (等级范围 %d~%d, 0=恢复默认)",
+            -g_cvShrinkMax.IntValue, g_cvMaxLevel.IntValue);
+        if (client > 0)
+            PrintToChat(client, "\x04[强化]\x01 用法: \x05sm_power_set <玩家> <等级>\x01");
+        return Plugin_Handled;
+    }
+
+    char sArg[64], sLevel[16];
+    GetCmdArg(1, sArg, sizeof(sArg));
+    GetCmdArg(2, sLevel, sizeof(sLevel));
+
+    int target = FindTargetPlayer(client, sArg);
+    if (target == 0)
+        return Plugin_Handled;
+
+    int level = StringToInt(sLevel);
+    int minLevel = -g_cvShrinkMax.IntValue;
+    int maxLevel = g_cvMaxLevel.IntValue;
+    if (level < minLevel || level > maxLevel)
+    {
+        PrintToConsole(client, "等级超出范围 (%d~%d)", minLevel, maxLevel);
+        if (client > 0)
+            PrintToChat(client, "\x04[强化]\x01 等级必须在 \x05%d\x01 ~ \x05%d\x01 之间", minLevel, maxLevel);
+        return Plugin_Handled;
+    }
+
+    // 写入目标玩家等级并应用(与普通玩家自调走同一套逻辑)
+    g_iLevel[target] = level;
+    ApplyPower(target, true);
+    ApplyMeleeConvars();
+    ShowStatus(target);
+
+    if (client > 0)
+        PrintToChat(client, "\x04[强化]\x01 已将 \x05%N\x01 设为等级 \x05%d\x01", target, level);
+    PrintToServer("[强化] 管理员(玩家 %N) 将 %N 设为等级 %d", client, target, level);
+    return Plugin_Handled;
+}
+
+// ============================================================================
+//  按 名字 / 部分名字 / #userid 找一个在线玩家 (找不到或歧义时返回 0)
+// ============================================================================
+int FindTargetPlayer(int client, const char[] szArg)
+{
+    // #userid 形式
+    if (szArg[0] == '#')
+    {
+        int who = GetClientOfUserId(StringToInt(szArg[1]));
+        if (who > 0 && IsClientInGame(who) && !IsFakeClient(who))
+            return who;
+        PrintToConsole(client, "找不到该 userid 对应的在线玩家");
+        return 0;
+    }
+
+    int found = 0;
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsClientInGame(i) || IsFakeClient(i))
+            continue;
+
+        char sName[MAX_NAME_LENGTH];
+        GetClientName(i, sName, sizeof(sName));
+
+        if (StrEqual(sName, szArg, false))   // 精确匹配: 直接命中
+            return i;
+
+        if (StrContains(sName, szArg, false) != -1)   // 部分匹配
+        {
+            if (found != 0)
+            {
+                PrintToConsole(client, "匹配到多名玩家, 请用更完整的名字或 #userid 精确定位");
+                if (client > 0)
+                    PrintToChat(client, "\x04[强化]\x01 匹配到多名玩家, 请用更完整的名字或 #userid");
+                return 0;
+            }
+            found = i;
+        }
+    }
+
+    if (found == 0)
+        PrintToConsole(client, "找不到在线玩家 \"%s\"", szArg);
+    return found;
 }
 
 // ============================================================================
