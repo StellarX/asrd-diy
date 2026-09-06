@@ -37,7 +37,7 @@
 
     if (hMarine == null || !hMarine.IsValid())
     {
-        ClientPrint(null, 3, "载具生成失败：找不到可用的陆战队员");
+        if (hPlayer && hPlayer.IsValid()) ClientPrint(hPlayer, 3, "载具生成失败：找不到可用的陆战队员");
         return false;
     }
 
@@ -50,7 +50,7 @@
 
     if (jeep == null)
     {
-        ClientPrint(null, 3, "载具生成失败：服务端不支持该实体(asw_vehicle_jeep)");
+        if (hPlayer && hPlayer.IsValid()) ClientPrint(hPlayer, 3, "载具生成失败：服务端不支持该实体(asw_vehicle_jeep)");
         return false;
     }
 
@@ -69,17 +69,17 @@
     }
     catch(e)
     {
-        ClientPrint(null, 3, "载具生成失败(异常): " + e);
+        if (hPlayer && hPlayer.IsValid()) ClientPrint(hPlayer, 3, "载具生成失败(异常): " + e);
         return false;
     }
 
     if (hPlayer && hPlayer.IsValid())
-        ClientPrint(null, 3, hPlayer.GetPlayerName() + "：生成了一辆吉普车");
+        ClientPrint(hPlayer, 3, hPlayer.GetPlayerName() + "：生成了一辆吉普车");
     return true;
 }
 
-// 删除所有已生成的吉普车
-::ASRD_DeleteJeeps <- function()
+// 删除所有已生成的吉普车（仅对调用者回显）
+::ASRD_DeleteJeeps <- function(hPlayer)
 {
     local n = 0;
     foreach (j in ::ASRD_Jeeps)
@@ -91,5 +91,6 @@
         }
     }
     ::ASRD_Jeeps.clear();
-    ClientPrint(null, 3, "已删除 " + n + " 辆吉普车");
+    if (hPlayer && hPlayer.IsValid())
+        ClientPrint(hPlayer, 3, "已删除 " + n + " 辆吉普车");
 }
