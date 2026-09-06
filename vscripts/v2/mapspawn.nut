@@ -6,7 +6,7 @@
 //  规则:
 //    - /fh 、/tp  每名玩家每局各一次; 本关重新开始(任务重开)时自动重置
 //    - /smfh <目标> 仅白名单管理员可用, 不限次数
-//    - /asft on|off 管理员开关普通玩家 /fh /tp（管理员自己不受限, 默认开）
+//    - /asft on|off 管理员开关普通玩家 /fh /tp（持久化到文件, 换图后保持, 管理员不受限）
 //    - /fhb <目标> 管理员恶搞复活: 全服大字+红光闪+音效(占位)
 //  自检:
 //    - /test : 显示名单是否读取、你的昵称、你的 XUID(SteamID64)、是否为管理员
@@ -21,6 +21,9 @@ if (!("SendToConsole" in this))
 // 改名单不用碰本文件; 文件缺失时表现为无管理员而不报错。
 try { IncludeScript("rd_admins"); } catch(e) {}
 
+// 载具(jeep)独立模块：定义 ::ASRD_SpawnJeep / ::ASRD_DeleteJeeps（仅管理员可调用，见下方分发）。
+try { IncludeScript("jeep"); } catch(e) {}
+
 // 名单是否成功加载（供 /test 自检用）
 ::g_ASRD_AdminsLoaded <- ("g_ASRD_AdminSteamIDs" in ::getroottable()) ? 1 : 0;
 
@@ -29,11 +32,19 @@ try { IncludeScript("rd_admins"); } catch(e) {}
 // 各命令使用标记; 换图时本文件重新执行 => 自动重置
 ::g_ASRD_FH_Used <- {};
 ::g_ASRD_TP_Used <- {};
-// 普通玩家 /fh /tp 总开关（默认启用）；管理员自己不受限, 管理员复活不受影响
-::g_ASRD_PlayerCommandsEnabled <- true;
+// 普通玩家 /fh /tp 总开关；用 save/vscripts/asrd_fh_switch.txt 持久化,
+// 换图后保持管理员上次设置的 on/off。无该文件时默认关闭。
+local _fhSwitchRead = "0";
+try {
+    local v = FileToString("asrd_fh_switch.txt");
+    if (v != null && v != "" && v.tostring().find("1") != null)
+        _fhSwitchRead = "1";
+} catch(e) {}
+::g_ASRD_PlayerCommandsEnabled <- (_fhSwitchRead == "1");
 // /fhb 恶搞复活的音效（留空则不播放）。
-// 之后把你准备的音效名填进来（并确保服务器 sound/ 下有该文件、可被 precache）
-::g_ASRD_FHB_Sound <- "";
+// 命名要不含 sound/ 前缀、不含扩展名, 全英文小写为佳（中文/特殊符号易失声）。
+// 示例: 文件放 sound/rd/fhb.mp3 → 这里填 "rd/fhb"
+::g_ASRD_FHB_Sound <- "rd/fhb";
 
 // 裁剪字符串首尾空白（空格/Tab）
 function TrimSpace(s)
@@ -285,9 +296,9 @@ function DoAdminResurrect(hAdmin, targetText)
         return;
     }
     if (RespawnPlayer(hTarget))
-        Chat(hAdmin.GetPlayerName() + "：已复活 " + hTarget.GetPlayerName() + "（管理员操作）");
+        Chat("已复活 " + hTarget.GetPlayerName());
     else
-        Chat(hAdmin.GetPlayerName() + "：找不到可用复活位置");
+        Chat("找不到可用复活位置");
 }
 
 // /asft on|off：控制普通玩家 /fh /tp 是否可用；管理员自己不受限
@@ -297,12 +308,14 @@ function DoASFT(hAdmin, arg)
     if (arg == "on" || arg == "1" || arg == "enable")
     {
         ::g_ASRD_PlayerCommandsEnabled = true;
-        Chat(hAdmin.GetPlayerName() + "：已启用普通玩家 /fh /tp");
+        try { StringToFile("asrd_fh_switch.txt", "1"); } catch(e) {}
+        Chat("开启 fh tp");
     }
     else if (arg == "off" || arg == "0" || arg == "disable")
     {
         ::g_ASRD_PlayerCommandsEnabled = false;
-        Chat(hAdmin.GetPlayerName() + "：已禁用普通玩家 /fh /tp（管理员仍可用 /fh /tp）");
+        try { StringToFile("asrd_fh_switch.txt", "0"); } catch(e) {}
+        Chat("关闭 fh tp");
     }
     else
     {
@@ -332,20 +345,22 @@ function DoAdminResurrectFHB(hAdmin, targetText)
     local name = hTarget.GetPlayerName();
     if (RespawnPlayer(hTarget))
     {
-        // 全服大号字幕（颜色固定，非红）
-        ShowMessage("复活吧我的爱人 " + name);
+        // 全服屏幕中央大字：管理员名：复活吧我的爱人 目标（红光由 ScreenFade 承担）
+        ClientPrint(null, 4, hAdmin.GetPlayerName() + "：复活吧我的爱人 " + name);
         // 对目标玩家屏幕红色闪烁
         try { ScreenFade(hTarget, 255, 0, 0, 180, 0.3, 0.6, 1); } catch(e) {}
-        // 音效（占位，填上 g_ASRD_FHB_Sound 后生效）
+        // 音效（占位，填上 g_ASRD_FHB_Sound 后生效）；对全体在线玩家各播一次 => 全服可闻
         if (::g_ASRD_FHB_Sound != "")
         {
             try {
                 if ("PrecacheScriptSound" in this.getroottable()) PrecacheScriptSound(::g_ASRD_FHB_Sound);
                 if ("PrecacheSound" in this.getroottable()) PrecacheSound("sound/" + ::g_ASRD_FHB_Sound);
-                if (hTarget.IsValid() && ("EmitSound" in hTarget)) hTarget.EmitSound(::g_ASRD_FHB_Sound);
+                ForEachPlayer(function(p) {
+                    if (p.IsValid() && ("EmitSound" in p)) p.EmitSound(::g_ASRD_FHB_Sound);
+                });
             } catch(e) {}
         }
-        Chat(hAdmin.GetPlayerName() + "：已恶搞复活 " + name);
+        Chat(hAdmin.GetPlayerName() + "：复活吧我的爱人 " + name);
     }
     else
     {
@@ -412,6 +427,21 @@ function OnGameEvent_player_say(params)
     {
         if (IsAdmin(hPlayer))
             ListPlayers(hPlayer);
+        else
+            Chat(hPlayer.GetPlayerName() + "：你没有管理员权限");
+    }
+    // 载具命令(仅管理员)：/jk 删除全部; /j /j2 各生成一辆吉普
+    else if (trimmed == "/jk" || trimmed == "!jk"
+        || trimmed == "/j" || trimmed == "!j"
+        || trimmed == "/j2" || trimmed == "!j2")
+    {
+        if (IsAdmin(hPlayer))
+        {
+            if (trimmed == "/jk" || trimmed == "!jk")
+                ASRD_DeleteJeeps();
+            else
+                ASRD_SpawnJeep(hPlayer);
+        }
         else
             Chat(hPlayer.GetPlayerName() + "：你没有管理员权限");
     }
