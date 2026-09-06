@@ -29,14 +29,18 @@
 ::g_ASRD_Nuke_Public       <- false;         // 允许普通玩家用 /nukepub (对应 sm_asrd_nuke_public)
 ::g_ASRD_Nuke_Debug        <- true;         // 调试日志 (对应 sm_asrd_nuke_debug)
 ::g_ASRD_Nuke_BatchWaves   <- 12;            // 冲击波总波次上限 (分批击杀)
-::g_ASRD_Nuke_WaveInterval <- 0.2;           // 冲击波每波间隔 (秒); 12 波约 2.2 秒内清完全图
+::g_ASRD_Nuke_WaveInterval <- 0.1;           // 冲击波每波间隔 (秒); 12 波约 2.2 秒内清完全图
 // ─── 光点放大特效 (TempEnts 客户端临时实体, 方案 B) ─────────────────────
 ::g_ASRD_Nuke_GlowEnabled    <- true;         // 光点放大开关 (关闭则纯光爆)
 ::g_ASRD_Nuke_GlowSprite     <- "sprites/light_glow03.vmt"; // 光点材质 (游戏自带光晕)
-::g_ASRD_Nuke_GlowStartScale <- 6.0;          // 初始光点大小 (约一名队员)
-::g_ASRD_Nuke_GlowMaxScale   <- 25.0;         // 放大上限 (GlowSprite 网络上限 25)
-::g_ASRD_Nuke_GlowFrames     <- 14;           // 放大动画帧数
-::g_ASRD_Nuke_GlowFrameInterval <- 0.06;      // 帧间隔 (秒); 14 帧约 0.84 秒扩散
+::g_ASRD_Nuke_GlowStartScale <- 0.5;          // 初始光点大小 (约一名队员)
+::g_ASRD_Nuke_GlowMaxScale   <- 25.0;         // 放大上限 (GlowSprite 网络上限 25, 再大无效)
+::g_ASRD_Nuke_GlowHold       <- 5.0;          // 中心光点停留秒数 (先静止不扩散, 再放大)
+::g_ASRD_Nuke_GlowLayers     <- 6;            // 光点叠加层数 (越大越亮越刺眼, additive 过曝)
+::g_ASRD_Nuke_GlowLift       <- 100.0;        // 光点中心向上抬升高度 (避免中心陷入地面看不清)
+::g_ASRD_Nuke_GlowFrames     <- 30;           // 放大动画帧数
+::g_ASRD_Nuke_GlowFrameInterval <- 0.06;      // 光点逐帧间隔 (秒); 停留与扩散阶段共用
+::g_ASRD_Nuke_GlowDamageAtSpread <- true;     // 伤害时刻: true=光点开始扩散时, false=倒计时结束立即
 
 // ─── 怪物实体类名清单（与 asrd_nuke.sp 完全一致）────────────────────────
 ::g_ASRD_Nuke_AlienClasses <- [
@@ -80,6 +84,12 @@
 ::g_ASRD_Nuke_GlowSpriteIndex <- -1;      // 光点材质 PrecacheModel 索引缓存 (-1=未缓存)
 ::g_ASRD_Nuke_GlowTEName  <- "GlowSprite"; // 临时实体名缓存 (Source 通用网络名)
 ::g_ASRD_Nuke_GlowTEProbed <- false;      // 是否已探测 TempEnts 名称列表
+::g_ASRD_Nuke_GlowTimer   <- null;        // 光点逐帧 logic_timer 句柄
+::g_ASRD_Nuke_GlowPhase   <- 0;           // 光点阶段: 0=停留 1=扩散 2=结束
+::g_ASRD_Nuke_GlowStep    <- 0;           // 当前阶段已推进步数
+::g_ASRD_Nuke_GlowCenter  <- Vector(0,0,0);// 光点中心 (已抬升)
+::g_ASRD_Nuke_GlowTE      <- "GlowSprite"; // 解析后的临时实体名
+::g_ASRD_Nuke_GlowIdx     <- -1;          // 光点材质模型索引
 
 // ─── 工具：红色聊天文本（TextColor 仅对 HUD_PRINTTALK 聊天框生效）────────
 ::NukeRed <- function(msg)
@@ -301,7 +311,10 @@
     return ::g_ASRD_Nuke_GlowTEName;
 }
 
-// ─── 光点放大特效: 队员大小的极亮光点快速扩散并淡化 (TempEnts GlowSprite) ──
+// ─── 光点放大特效: 状态机驱动 (logic_timer 逐帧创建, 避免 TE 超限丢弃) ────
+//  之前一次性排入 150+ 个 TempEnts 会超过引擎单次 TE 队列上限,
+//  后面的帧(含整个扩散阶段)被丢弃 → 只闪了一下就消失。
+//  现在每个 tick 只创建当前步的 1~3 个 TE, 时序由计时器精确控制。
 ::NukeLightGlow <- function(center)
 {
     if (!::g_ASRD_Nuke_GlowEnabled) return false;
@@ -309,36 +322,99 @@
 
     local teName = "GlowSprite";
     try { teName = ::NukeResolveTEName(); } catch(e) { teName = "GlowSprite"; }
-    local idx = ::g_ASRD_Nuke_GlowSpriteIndex;
-    local frames = ::g_ASRD_Nuke_GlowFrames;
-    if (frames < 1) frames = 1;
-    local interval = ::g_ASRD_Nuke_GlowFrameInterval;
-    local startScale = ::g_ASRD_Nuke_GlowStartScale;
-    local maxScale = ::g_ASRD_Nuke_GlowMaxScale;
-    if (maxScale < startScale) maxScale = startScale;
 
-    local ok = false;
-    try {
-        for (local i = 0; i < frames; i++)
+    ::g_ASRD_Nuke_GlowTE = teName;
+    ::g_ASRD_Nuke_GlowIdx = ::g_ASRD_Nuke_GlowSpriteIndex;
+    ::g_ASRD_Nuke_GlowCenter = Vector(center.x, center.y, center.z + ::g_ASRD_Nuke_GlowLift);
+    ::g_ASRD_Nuke_GlowPhase = 0;
+    ::g_ASRD_Nuke_GlowStep = 0;
+
+    local interval = ::g_ASRD_Nuke_GlowFrameInterval;
+    if (interval < 0.03) interval = 0.03;
+
+    ::NukeGlowTick();  // 立即出第一个光点
+
+    local t = ::NukeMakeTimer(interval, "NukeGlowTick");
+    if (t == null) return false;
+    ::g_ASRD_Nuke_GlowTimer = t;
+    return true;
+}
+
+// ─── 光点逐帧回调: 停留阶段 → 扩散阶段 ──────────────────────────────────
+::NukeGlowTick <- function()
+{
+    local interval = ::g_ASRD_Nuke_GlowFrameInterval;
+    if (interval < 0.03) interval = 0.03;
+
+    // 停留阶段: 固定大小极亮光点逐帧刷新, 持续 GlowHold 秒
+    if (::g_ASRD_Nuke_GlowPhase == 0)
+    {
+        local holdSteps = (::g_ASRD_Nuke_GlowHold / interval).tointeger();
+        if (holdSteps < 1) holdSteps = 1;
+        if (::g_ASRD_Nuke_GlowStep < holdSteps)
         {
-            local t = (frames <= 1) ? 0.0 : (i / (frames - 1.0));        // 0..1
-            local scale = startScale + (maxScale - startScale) * (t * t); // 先慢后快的爆闪放大
-            local life  = 0.10 + 0.30 * t;                               // 大光斑残留稍久
-            local bright = 255 - (170.0 * t).tointeger();                // 越后越淡
-            if (bright < 0) bright = 0;
-            TempEnts.Create(null, teName, i * interval, {
-                m_vecOrigin   = Vector(center.x, center.y, center.z),
-                m_nModelIndex = idx,
-                m_fScale      = scale,
-                m_fLife       = life,
-                m_nBrightness = bright
-            });
+            for (local lay = 0; lay < ::g_ASRD_Nuke_GlowLayers; lay++)
+            {
+                TempEnts.Create(null, ::g_ASRD_Nuke_GlowTE, 0.0, {
+                    m_vecOrigin   = ::g_ASRD_Nuke_GlowCenter,
+                    m_nModelIndex = ::g_ASRD_Nuke_GlowIdx,
+                    m_fScale      = ::g_ASRD_Nuke_GlowStartScale,
+                    m_fLife       = interval + 0.10,
+                    m_nBrightness = 255
+                });
+            }
+            ::g_ASRD_Nuke_GlowStep++;
+            return;
         }
-        ok = true;
-    } catch(e) {
-        if (::g_ASRD_Nuke_Debug) printl("[核弹] GlowSprite 创建失败: " + e);
+        // 停留结束 → 进入扩散; 伤害时刻配置为"扩散时"则此刻开始击杀
+        ::g_ASRD_Nuke_GlowPhase = 1;
+        ::g_ASRD_Nuke_GlowStep = 0;
+        if (::g_ASRD_Nuke_GlowDamageAtSpread)
+            ::NukeStartKills();
+        // 继续往下, 立即创建扩散第 0 帧
     }
-    return ok;
+
+    // 扩散阶段: 光点快速放大到 MaxScale 并逐帧淡出
+    if (::g_ASRD_Nuke_GlowPhase == 1)
+    {
+        local frames = ::g_ASRD_Nuke_GlowFrames;
+        if (frames < 1) frames = 1;
+        if (::g_ASRD_Nuke_GlowStep < frames)
+        {
+            local t = (frames <= 1) ? 0.0 : (::g_ASRD_Nuke_GlowStep / (frames - 1.0)); // 0..1
+            local scale = ::g_ASRD_Nuke_GlowStartScale + (::g_ASRD_Nuke_GlowMaxScale - ::g_ASRD_Nuke_GlowStartScale) * (2.0 * t - t * t); // 先快后慢
+            local life  = 0.15 + 0.35 * t;
+            local bright = 255 - (170.0 * t).tointeger();
+            if (bright < 0) bright = 0;
+            for (local lay = 0; lay < ::g_ASRD_Nuke_GlowLayers; lay++)
+            {
+                TempEnts.Create(null, ::g_ASRD_Nuke_GlowTE, 0.0, {
+                    m_vecOrigin   = ::g_ASRD_Nuke_GlowCenter,
+                    m_nModelIndex = ::g_ASRD_Nuke_GlowIdx,
+                    m_fScale      = scale,
+                    m_fLife       = life,
+                    m_nBrightness = bright
+                });
+            }
+            ::g_ASRD_Nuke_GlowStep++;
+            return;
+        }
+        // 扩散结束
+        ::g_ASRD_Nuke_GlowPhase = 2;
+        ::NukeStopGlowTimer();
+    }
+}
+
+// ─── 停止并销毁光点计时器 ────────────────────────────────────────────────
+::NukeStopGlowTimer <- function()
+{
+    if (::g_ASRD_Nuke_GlowTimer != null)
+    {
+        local t = ::g_ASRD_Nuke_GlowTimer;
+        ::g_ASRD_Nuke_GlowTimer = null;
+        if (t != null && t.IsValid())
+            try { DoEntFire("!self", "Kill", "", 0.0, null, t); } catch(e) {}
+    }
 }
 
 // ─── 音效：全图播放游戏自带油桶爆炸音（ASWBarrel.Explode, 已随游戏注册）──
@@ -365,18 +441,27 @@
     } catch(e) {}
 }
 
-// ─── 引爆：震屏+爆炸 → 冲击波分批击杀 → 击杀数广播 ──────────────────────
+// ─── 引爆: 震屏+爆炸+光点; 伤害在光点开始扩散时(或立即) ──────────────────
 ::NukeDetonate <- function()
 {
     ::g_ASRD_Nuke_Pending = false;
-    ::NukeCollectBugs(::g_ASRD_Nuke_Center);
-    local total = ::g_ASRD_Nuke_KillQueue.len();
 
     ::NukeScreenShake();
     ::NukeLightBurst(::g_ASRD_Nuke_Center);   // 中心火球光爆 (保留, 引擎原生稳定)
-    ::NukeLightGlow(::g_ASRD_Nuke_Center);    // 光点快速放大扩散 (TempEnts 方案, 内部容错)
     ::NukePlaySound();
 
+    local glowOK = ::NukeLightGlow(::g_ASRD_Nuke_Center);  // 光点停留→扩散 (逐帧状态机)
+
+    // 伤害时刻: 默认在光点开始扩散时; 光点失败或配置为立即时, 马上开始击杀
+    if (!glowOK || !::g_ASRD_Nuke_GlowDamageAtSpread)
+        ::NukeStartKills();
+}
+
+// ─── 开始分批击杀 (伤害时刻; 由 Detonate 或光点扩散阶段触发) ──────────────
+::NukeStartKills <- function()
+{
+    ::NukeCollectBugs(::g_ASRD_Nuke_Center);
+    local total = ::g_ASRD_Nuke_KillQueue.len();
     if (total <= 0)
     {
         ::NukeShowKillCount(0);
@@ -512,6 +597,7 @@
 {
     ::NukeStopCountdown();
     ::NukeStopWaveTimer();
+    ::NukeStopGlowTimer();
     ::g_ASRD_Nuke_Pending = false;
     ::g_ASRD_Nuke_Eta = 0;
     ::g_ASRD_Nuke_KillQueue = [];
