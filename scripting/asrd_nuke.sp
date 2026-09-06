@@ -69,9 +69,15 @@ char g_sAlienClasses[][] =
     "asw_grub",              // 幼虫
     "asw_grub_sac",          // 幼虫囊
     "asw_queen",             // 蜂后
-    "asw_mender",            // 医疗虫 (会治疗其它异形)
+    "asw_mender",            // 医疗虫 (旧名, 保留兼容)
+    "asw_shaman",            // 治疗虫 (RD 真实类名, 会治疗其它异形)
     "asw_xenomite",          // 自爆孢子虫 (收割者产出)
-    "asw_antlion_guard"      // 蚁狮守卫
+    "asw_antlion_guard",     // 蚁狮守卫 (旧名, 保留兼容)
+    // RD 蚁狮守卫/工蜂真实类名 (npc_ 前缀, 不是 asw_!)
+    "npc_antlionguard",
+    "npc_antlionguard_cavern",
+    "npc_antlionguard_normal",
+    "npc_antlion_worker"
 };
 
 // ─── ConVar 句柄 ─────────────────────────────────────────
