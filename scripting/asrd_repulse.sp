@@ -322,6 +322,15 @@ public void OnMapStart()
         g_bPushActive[i] = false;
     g_bAnyPushActive = false;
 
+    // 切图后 GetGameTime() 从 0 重置, 必须清掉上一张图的扫描时间戳,
+    // 否则 now - g_fLastArmorScan 为负数, RefreshArmor 永远跳过 → 护甲护盾失效
+    g_fLastArmorScan = 0.0;
+    for (int c = 1; c <= MaxClients; c++)
+    {
+        g_bPlayerHasArmor[c] = false;
+        g_bPrevArmor[c] = false;
+    }
+
     ParseCustomClasses();
     ParseProjClasses();
 }
