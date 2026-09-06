@@ -114,7 +114,28 @@ function DoFH(hPlayer)
         return;
     }
 
-    hPlayer.ResurrectMarine(pos + Vector(40, 40, 0), true);
+    local fpos = pos + Vector(40, 40, 0);
+    hPlayer.ResurrectMarine(fpos, true);
+
+    // ── 复活特效 ──
+    // 1) 火花：连闪三次
+    local spark = Entities.CreateByClassname("env_spark");
+    spark.SetOrigin(fpos + Vector(0, 0, 30));
+    spark.__KeyValueFromFloat("MaxDelay", 0.2);
+    spark.__KeyValueFromInt("Magnitude", 10);
+    spark.__KeyValueFromInt("TrailLength", 3);
+    DoEntFire("!self", "SparkOnce", "", 0.0, null, spark);
+    DoEntFire("!self", "SparkOnce", "", 0.3, null, spark);
+    DoEntFire("!self", "SparkOnce", "", 0.6, null, spark);
+    DoEntFire("!self", "Kill", "", 1.5, null, spark);
+
+    // 2) 无伤害爆炸：只留视觉光爆
+    local boom = Entities.CreateByClassname("env_explosion");
+    boom.SetOrigin(fpos);
+    boom.__KeyValueFromInt("iMagnitude", 0);        // 零伤害
+    boom.__KeyValueFromInt("spawnflags", 31);       // 无伤+可重复+无声+无火花+无焦痕
+    DoEntFire("!self", "Explode", "", 0.0, null, boom);
+    DoEntFire("!self", "Kill", "", 1.0, null, boom);
 
     ::g_ASRD_FH_Used[hPlayer] <- true;
     Chat(hPlayer.GetPlayerName() + "：已复活（本局复活机会已用完）");
