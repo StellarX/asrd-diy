@@ -19,7 +19,7 @@
 //       logic_timer + OnTimer 回调驱动
 //    3. 全图清虫改为按离爆心距离从近到远"分批击杀", 避免一次性大量死亡
 //       导致客户端状态不一致闪退（每批 ceil(虫数/BatchWaves), 总波次≤BatchWaves）
-//    4. 不播全屏白闪(ScreenFade); 引爆用 asw_env_explosion(火球+音效) + asw_env_shake(震屏)
+//    4. 引爆特效 = 光点放大(TempEnts GlowSprite) + 火球光爆(env_explosion) + 震屏(env_shake) + 音效(ASWBarrel.Explode)
 // ============================================================================
 
 // ─── 配置区（对应 SourceMod 版 ConVar, 改后换图即生效）──────────────────
@@ -27,9 +27,16 @@
 ::g_ASRD_Nuke_Damage       <- 999999.0;      // 对虫族单下伤害 (对应 sm_asrd_nuke_damage)
 ::g_ASRD_Nuke_Delay        <- 3;             // 倒计时秒数 ETA (对应 sm_asrd_nuke_delay)
 ::g_ASRD_Nuke_Public       <- false;         // 允许普通玩家用 /nukepub (对应 sm_asrd_nuke_public)
-::g_ASRD_Nuke_Debug        <- false;         // 调试日志 (对应 sm_asrd_nuke_debug)
+::g_ASRD_Nuke_Debug        <- true;         // 调试日志 (对应 sm_asrd_nuke_debug)
 ::g_ASRD_Nuke_BatchWaves   <- 12;            // 冲击波总波次上限 (分批击杀)
-::g_ASRD_Nuke_WaveInterval <- 0.3;           // 冲击波每波间隔 (秒)
+::g_ASRD_Nuke_WaveInterval <- 0.2;           // 冲击波每波间隔 (秒); 12 波约 2.2 秒内清完全图
+// ─── 光点放大特效 (TempEnts 客户端临时实体, 方案 B) ─────────────────────
+::g_ASRD_Nuke_GlowEnabled    <- true;         // 光点放大开关 (关闭则纯光爆)
+::g_ASRD_Nuke_GlowSprite     <- "sprites/light_glow03.vmt"; // 光点材质 (游戏自带光晕)
+::g_ASRD_Nuke_GlowStartScale <- 6.0;          // 初始光点大小 (约一名队员)
+::g_ASRD_Nuke_GlowMaxScale   <- 25.0;         // 放大上限 (GlowSprite 网络上限 25)
+::g_ASRD_Nuke_GlowFrames     <- 14;           // 放大动画帧数
+::g_ASRD_Nuke_GlowFrameInterval <- 0.06;      // 帧间隔 (秒); 14 帧约 0.84 秒扩散
 
 // ─── 怪物实体类名清单（与 asrd_nuke.sp 完全一致）────────────────────────
 ::g_ASRD_Nuke_AlienClasses <- [
@@ -70,6 +77,9 @@
 ::g_ASRD_Nuke_WaveIndex <- 0;            // 冲击波已推进到的队列下标
 ::g_ASRD_Nuke_BatchSize <- 1;            // 每波击杀数量
 ::g_ASRD_Nuke_Killed    <- 0;            // 累计击杀数
+::g_ASRD_Nuke_GlowSpriteIndex <- -1;      // 光点材质 PrecacheModel 索引缓存 (-1=未缓存)
+::g_ASRD_Nuke_GlowTEName  <- "GlowSprite"; // 临时实体名缓存 (Source 通用网络名)
+::g_ASRD_Nuke_GlowTEProbed <- false;      // 是否已探测 TempEnts 名称列表
 
 // ─── 工具：红色聊天文本（TextColor 仅对 HUD_PRINTTALK 聊天框生效）────────
 ::NukeRed <- function(msg)
@@ -202,50 +212,156 @@
     return ::g_ASRD_Nuke_WaveIndex < total;
 }
 
-// ─── 震屏（asw_env_shake; amplitude 上限 16, 配合 radius 全局）────────────
-::NukeScreenShake <- function()
+// ─── 遍历所有在线玩家（用于全图音效, 与 mapspawn ForEachPlayer 同思路）──────
+::g_ASRD_Nuke_SeenPlayer <- {};
+::NukeForeachPlayer <- function(cb)
 {
-    local shake = null;
-    try { shake = Entities.CreateByClassname("asw_env_shake"); } catch(e) { shake = null; }
-    if (shake == null)
+    ::g_ASRD_Nuke_SeenPlayer.clear();
+    foreach (cls in ["player", "asw_player"])
     {
-        try { shake = Entities.CreateByClassname("env_shake"); } catch(e) { shake = null; }
+        local h = null;
+        while ((h = Entities.FindByClassname(h, cls)) != null)
+        {
+            if (!h || !h.IsValid()) continue;
+            if (::g_ASRD_Nuke_SeenPlayer.rawin(h)) continue;
+            ::g_ASRD_Nuke_SeenPlayer[h] <- true;
+            cb(h);
+        }
     }
-    if (shake == null) return;
+    ::g_ASRD_Nuke_SeenPlayer.clear();
+}
+
+// ─── 光斑：无伤光爆（env_explosion, 与 /fh 重生特效同款, 引擎原生稳定）────
+::NukeLightBurst <- function(center)
+{
     try {
-        shake.__KeyValueFromFloat("amplitude", 12.0);
-        shake.__KeyValueFromFloat("frequency", 40.0);
-        shake.__KeyValueFromFloat("duration", 2.0);
-        shake.__KeyValueFromFloat("radius", 0.0);
-        shake.__KeyValueFromInt("spawnflags", 1);
-        DoEntFire("!self", "StartShake", "", 0.0, null, shake);
-        DoEntFire("!self", "Kill", "", 3.0, null, shake);
+        local boom = Entities.CreateByClassname("env_explosion");
+        boom.SetOrigin(center);
+        boom.__KeyValueFromInt("iMagnitude", 0);
+        boom.__KeyValueFromInt("spawnflags", 31);
+        DoEntFire("!self", "Explode", "", 0.0, null, boom);
+        DoEntFire("!self", "Kill", "", 1.0, null, boom);
     } catch(e) {}
 }
 
-// ─── 爆炸（asw_env_explosion 自带火球+音效; 失败回退 env_explosion 纯视觉）──
-::NukeExplosion <- function(center)
+// ─── 确保光点材质已 Precache, 返回模型索引 ────────────────────────────────
+::NukeEnsureGlow <- function()
 {
-    local boom = null;
-    try { boom = Entities.CreateByClassname("asw_env_explosion"); } catch(e) { boom = null; }
-    if (boom != null)
+    if (!::g_ASRD_Nuke_GlowEnabled) return false;
+    if (::g_ASRD_Nuke_GlowSpriteIndex >= 0) return true;
+    local host = null;
+    foreach (cls in ["player", "asw_player", "asw_marine"])
+    {
+        try { host = Entities.FindByClassname(null, cls); } catch(e) { host = null; }
+        if (host != null && host.IsValid()) break;
+    }
+    if (host == null || !host.IsValid()) return false;
+    try {
+        foreach (cand in [::g_ASRD_Nuke_GlowSprite, "materials/" + ::g_ASRD_Nuke_GlowSprite])
+        {
+            try {
+                local idx = host.PrecacheModel(cand);
+                if (idx >= 0) { ::g_ASRD_Nuke_GlowSpriteIndex = idx; return true; }
+            } catch(e) {}
+        }
+    } catch(e) {}
+    return false;
+}
+
+// ─── 探测 AS:RD 真实支持的临时实体名 (优先 GlowSprite) ───────────────────
+::NukeResolveTEName <- function()
+{
+    if (::g_ASRD_Nuke_GlowTEProbed)
+        return ::g_ASRD_Nuke_GlowTEName;
+    ::g_ASRD_Nuke_GlowTEProbed = true;
+
+    local names = [];
+    local got = false;
+    try { TempEnts.GetNames(names); got = true; }
+    catch(e) { try { TempEnts.GetNames("", names); got = true; } catch(e2) {} }
+
+    if (::g_ASRD_Nuke_Debug)
     {
         try {
-            boom.SetOrigin(center);
-            boom.__KeyValueFromInt("iDamage", 0);
-            boom.__KeyValueFromInt("iRadiusOverride", 512);
-            DoEntFire("!self", "Explode", "", 0.0, null, boom);
-            DoEntFire("!self", "Kill", "", 3.0, null, boom);
-            return;
+            local listStr = "";
+            foreach (n in names) { if (listStr != "") listStr += ", "; listStr = listStr + n; }
+            if (listStr == "") listStr = "(空)";
+            printl("[核弹] TempEnts 列表: " + (got ? listStr : "(GetNames 不可用)"));
         } catch(e) {}
     }
+
+    if (got && names.len() > 0)
+    {
+        try {
+            foreach (n in names) if (n == "GlowSprite") { ::g_ASRD_Nuke_GlowTEName = n; return n; }
+            foreach (n in names) { local l = "" + n; l = l.tolower(); if (l.find("glow") != null && l.find("sprite") != null) { ::g_ASRD_Nuke_GlowTEName = n; return n; } }
+            foreach (n in names) { local l = "" + n; l = l.tolower(); if (l.find("sprite") != null) { ::g_ASRD_Nuke_GlowTEName = n; return n; } }
+        } catch(e) {}
+    }
+    return ::g_ASRD_Nuke_GlowTEName;
+}
+
+// ─── 光点放大特效: 队员大小的极亮光点快速扩散并淡化 (TempEnts GlowSprite) ──
+::NukeLightGlow <- function(center)
+{
+    if (!::g_ASRD_Nuke_GlowEnabled) return false;
+    if (!::NukeEnsureGlow()) return false;
+
+    local teName = "GlowSprite";
+    try { teName = ::NukeResolveTEName(); } catch(e) { teName = "GlowSprite"; }
+    local idx = ::g_ASRD_Nuke_GlowSpriteIndex;
+    local frames = ::g_ASRD_Nuke_GlowFrames;
+    if (frames < 1) frames = 1;
+    local interval = ::g_ASRD_Nuke_GlowFrameInterval;
+    local startScale = ::g_ASRD_Nuke_GlowStartScale;
+    local maxScale = ::g_ASRD_Nuke_GlowMaxScale;
+    if (maxScale < startScale) maxScale = startScale;
+
+    local ok = false;
     try {
-        local b2 = Entities.CreateByClassname("env_explosion");
-        b2.SetOrigin(center);
-        b2.__KeyValueFromInt("iMagnitude", 0);
-        b2.__KeyValueFromInt("spawnflags", 31);
-        DoEntFire("!self", "Explode", "", 0.0, null, b2);
-        DoEntFire("!self", "Kill", "", 3.0, null, b2);
+        for (local i = 0; i < frames; i++)
+        {
+            local t = (frames <= 1) ? 0.0 : (i / (frames - 1.0));        // 0..1
+            local scale = startScale + (maxScale - startScale) * (t * t); // 先慢后快的爆闪放大
+            local life  = 0.10 + 0.30 * t;                               // 大光斑残留稍久
+            local bright = 255 - (170.0 * t).tointeger();                // 越后越淡
+            if (bright < 0) bright = 0;
+            TempEnts.Create(null, teName, i * interval, {
+                m_vecOrigin   = Vector(center.x, center.y, center.z),
+                m_nModelIndex = idx,
+                m_fScale      = scale,
+                m_fLife       = life,
+                m_nBrightness = bright
+            });
+        }
+        ok = true;
+    } catch(e) {
+        if (::g_ASRD_Nuke_Debug) printl("[核弹] GlowSprite 创建失败: " + e);
+    }
+    return ok;
+}
+
+// ─── 音效：全图播放游戏自带油桶爆炸音（ASWBarrel.Explode, 已随游戏注册）──
+::NukePlaySound <- function()
+{
+    ::NukeForeachPlayer(function(p) {
+        try { p.EmitSound("ASWBarrel.Explode"); } catch(e) {}
+    });
+}
+
+// ─── 震屏（env_shake, 对齐 SourceMod 版 amplitude=14, 全局）────────────────
+::NukeScreenShake <- function()
+{
+    local shake = null;
+    try { shake = Entities.CreateByClassname("env_shake"); } catch(e) { shake = null; }
+    if (shake == null) return;
+    try {
+        shake.__KeyValueFromFloat("amplitude", 14.0);
+        shake.__KeyValueFromFloat("frequency", 40.0);
+        shake.__KeyValueFromFloat("duration", 2.5);
+        shake.__KeyValueFromInt("spawnflags", 1);
+        DoEntFire("!self", "StartShake", "", 0.0, null, shake);
+        DoEntFire("!self", "Kill", "", 3.0, null, shake);
     } catch(e) {}
 }
 
@@ -257,7 +373,9 @@
     local total = ::g_ASRD_Nuke_KillQueue.len();
 
     ::NukeScreenShake();
-    ::NukeExplosion(::g_ASRD_Nuke_Center);
+    ::NukeLightBurst(::g_ASRD_Nuke_Center);   // 中心火球光爆 (保留, 引擎原生稳定)
+    ::NukeLightGlow(::g_ASRD_Nuke_Center);    // 光点快速放大扩散 (TempEnts 方案, 内部容错)
+    ::NukePlaySound();
 
     if (total <= 0)
     {
