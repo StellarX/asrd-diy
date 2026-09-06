@@ -8,6 +8,7 @@
 //    - /smfh <目标> 仅白名单管理员可用, 不限次数
 //    - /asft on|off 管理员开关普通玩家 /fh /tp（持久化到文件, 换图后保持, 管理员不受限）
 //    - /fhb <目标> 管理员恶搞复活: 全服大字+红光闪+音效(占位)
+//    - /nuke 管理员呼叫战术核弹; /nukepub 公众核弹(需在 nuke.nut 开启 Public)
 //  自检:
 //    - /test : 显示名单是否读取、你的昵称、你的 XUID(SteamID64)、是否为管理员
 //  管理员名单: 在服务器的 rd_admins.nut 里按 SteamID64 维护（GetClientXUID 精确识别）。
@@ -23,6 +24,9 @@ try { IncludeScript("rd_admins"); } catch(e) {}
 
 // 载具(jeep)独立模块：定义 ::ASRD_SpawnJeep / ::ASRD_DeleteJeeps（仅管理员可调用，见下方分发）。
 try { IncludeScript("jeep"); } catch(e) {}
+
+// 核弹(nuke)独立模块：定义 ::ASRD_NukeStart / ::ASRD_NukeStartPublic / ::ASRD_NukeReset（见下方分发）。
+try { IncludeScript("nuke"); } catch(e) {}
 
 // 名单是否成功加载（供 /test 自检用）
 ::g_ASRD_AdminsLoaded <- ("g_ASRD_AdminSteamIDs" in ::getroottable()) ? 1 : 0;
@@ -77,6 +81,8 @@ function OnGameEvent_asw_mission_restart(params)
 {
     ::g_ASRD_FH_Used.clear();
     ::g_ASRD_TP_Used.clear();
+    if ("ASRD_NukeReset" in ::getroottable())
+        ASRD_NukeReset();   // 清理核弹倒计时/冲击波计时器与状态
 }
 
 // 玩家是否存活（当前 marine 句柄仍有效）
@@ -544,6 +550,19 @@ function OnGameEvent_player_say(params)
             else
                 ASRD_SpawnJeep(hPlayer);
         }
+        else
+            ClientPrint(hPlayer, 3, hPlayer.GetPlayerName() + "：你没有管理员权限");
+    }
+    // 核弹命令：/nuke 管理员; /nukepub 公众模式(需管理员在 nuke.nut 开启 Public)
+    // 注意必须先匹配 /nukepub 再匹配 /nuke, 避免前缀吞掉
+    else if (trimmed.find("/nukepub") == 0 || trimmed.find("!nukepub") == 0)
+    {
+        ASRD_NukeStartPublic(hPlayer);
+    }
+    else if (trimmed.find("/nuke") == 0 || trimmed.find("!nuke") == 0)
+    {
+        if (IsAdmin(hPlayer))
+            ASRD_NukeStart(hPlayer);
         else
             ClientPrint(hPlayer, 3, hPlayer.GetPlayerName() + "：你没有管理员权限");
     }
