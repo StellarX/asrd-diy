@@ -155,70 +155,68 @@ public Plugin myinfo = {
 // ============================================================================
 public void OnPluginStart()
 {
-    PrintToServer("[叛变虫群] v%s 已加载 (改 m_nFaction 方案)", PLUGIN_VERSION);
-
     CreateConVar("sm_asrd_betray_version", PLUGIN_VERSION,
         "插件版本", FCVAR_NOTIFY | FCVAR_DONTRECORD);
 
     g_cvEnabled = CreateConVar(
         "sm_asrd_betray_enabled", "1",
         "启用/禁用叛变虫群 (0=关 1=开)",
-        FCVAR_NOTIFY, true, 0.0, true, 1.0);
+        0, true, 0.0, true, 1.0);
 
     g_cvType = CreateConVar(
         "sm_asrd_betray_type", "asw_drone",
         "默认生成的虫种类名 (见 sm_betray_list)",
-        FCVAR_NOTIFY);
+        0);
 
     g_cvCount = CreateConVar(
         "sm_asrd_betray_count", "10",
         "默认每批生成数量",
-        FCVAR_NOTIFY, true, 1.0, true, float(MAX_BATCH));
+        0, true, 1.0, true, float(MAX_BATCH));
 
     g_cvSpread = CreateConVar(
         "sm_asrd_betray_spread", "120.0",
         "生成时相对召唤者位置的散布半径(游戏单位)",
-        FCVAR_NOTIFY, true, 0.0, true, 500.0);
+        0, true, 0.0, true, 500.0);
 
     g_cvColor = CreateConVar(
         "sm_asrd_betray_color", "37 217 73",
         "叛变虫着色 RGB (如 180 0 255 紫色), 用空格分隔",
-        FCVAR_NOTIFY);
+        0);
 
     g_cvPublic = CreateConVar(
         "sm_asrd_betray_public", "0",
         "允许普通玩家使用 sm_betraypub (0=仅管理员 1=所有人)",
-        FCVAR_NOTIFY, true, 0.0, true, 1.0);
+        0, true, 0.0, true, 1.0);
 
     g_cvDebug = CreateConVar(
         "sm_asrd_betray_debug", "0",
-        "调试输出 (0=关 1=开)",
-        FCVAR_NOTIFY, true, 0.0, true, 1.0);
+        "调试日志开关 (0=关 1=开, 开启后打印生成/阵营/伤害等详细日志)",
+        0, true, 0.0, true, 1.0);
 
     g_cvDroneScale = CreateConVar(
         "sm_asrd_betray_drone_scale", "1.0",
         "叛变 drone 体型缩放倍率 (仅 asw_drone, 1.0=默认大小)",
-        FCVAR_NOTIFY, true, 0.1, true, 10.0);
+        0, true, 0.1, true, 10.0);
 
     g_cvDamageMult = CreateConVar(
         "sm_asrd_betray_damage_mult", "4.0",
         "叛变虫攻击力倍率 (仅叛变虫造成的伤害, 1.0=不增强)",
-        FCVAR_NOTIFY, true, 1.0, true, 100.0);
+        0, true, 1.0, true, 100.0);
 
     g_cvHealthMult = CreateConVar(
         "sm_asrd_betray_health_mult", "10.0",
         "叛变虫血量倍率 (仅叛变虫, 1.0=默认血量)",
-        FCVAR_NOTIFY, true, 1.0, true, 100.0);
+        0, true, 1.0, true, 100.0);
 
     g_cvSpeedMult = CreateConVar(
         "sm_asrd_betray_speed_mult", "2.0",
         "叛变虫移动速度倍率 (仅叛变虫, 1.0=默认速度)",
-        FCVAR_NOTIFY, true, 1.0, true, 10.0);
+        0, true, 1.0, true, 10.0);
 
     g_cvAnimMult = CreateConVar(
         "sm_asrd_betray_anim_mult", "2.0",
         "叛变虫动画速度倍率 (仅叛变虫, 1.0=默认动画速度)",
-        FCVAR_NOTIFY, true, 1.0, true, 10.0);
+        0, true, 1.0, true, 10.0);
 
     g_hBetrayAliens = new ArrayList();
 
@@ -239,22 +237,22 @@ public void OnPluginStart()
     g_cvHeal = CreateConVar(
         "sm_asrd_betray_heal", "1",
         "叛变治疗虫(asw_shaman)给附近受伤的人族玩家加血 (0=关 1=开)",
-        FCVAR_NOTIFY, true, 0.0, true, 1.0);
+        0, true, 0.0, true, 1.0);
 
     g_cvHealRadius = CreateConVar(
         "sm_asrd_betray_heal_radius", "400.0",
         "叛变治疗虫加血作用半径(游戏单位)",
-        FCVAR_NOTIFY, true, 50.0, true, 2000.0);
+        0, true, 50.0, true, 2000.0);
 
     g_cvHealPercent = CreateConVar(
         "sm_asrd_betray_heal_percent", "0.08",
         "叛变治疗虫每次判定恢复目标最大血量的比例 (0.08=8%)",
-        FCVAR_NOTIFY, true, 0.01, true, 1.0);
+        0, true, 0.01, true, 1.0);
 
     g_cvHealTick = CreateConVar(
         "sm_asrd_betray_heal_tick", "0.5",
         "叛变治疗虫加血判定周期(秒, >=0.1)",
-        FCVAR_NOTIFY, true, 0.1, true, 10.0);
+        0, true, 0.1, true, 10.0);
 
     float fTick = g_cvHealTick.FloatValue;
     if (fTick < 0.1) fTick = 0.1;
@@ -357,8 +355,9 @@ Action Timer_DiagAfterRestart(Handle hTimer)
             iTotal++;
     }
 
-    PrintToServer("[叛变虫群] 重启后 1s: 存活叛变虫 %d / 列表 %d, 场上虫族类实体 %d",
-        iBetrayAlive, g_hBetrayAliens != null ? g_hBetrayAliens.Length : 0, iTotal);
+    if (g_cvDebug.BoolValue)
+        PrintToServer("[叛变虫群] 重启后 1s: 存活叛变虫 %d / 列表 %d, 场上虫族类实体 %d",
+            iBetrayAlive, g_hBetrayAliens != null ? g_hBetrayAliens.Length : 0, iTotal);
     return Plugin_Stop;
 }
 
@@ -546,18 +545,17 @@ Action DoBetray(int client, int args, bool bAllowTarget)
     if (g_cvDebug.BoolValue)
         PrintToServer("[叛变虫群] type=%s count=%d 成功=%d", sType, iCount, iOk);
 
-    char sCaster[MAX_NAME_LENGTH], sTarget[MAX_NAME_LENGTH];
-    GetClientName(client, sCaster, sizeof(sCaster));
     if (iTargetClient != 0)
     {
+        char sTarget[MAX_NAME_LENGTH];
         GetClientName(iTargetClient, sTarget, sizeof(sTarget));
-        PrintToChatAll("\x04[叛变虫群]\x01 %s 在 \x05%s\x01 身旁召唤了 %d 只\x05叛变%s\x01!",
-            sCaster, sTarget, iOk, sType);
+        PrintToChat(client, "\x04[叛变虫群]\x01 你在 \x05%s\x01 身旁召唤了 %d 只\x05叛变%s\x01!",
+            sTarget, iOk, sType);
     }
     else
     {
-        PrintToChatAll("\x04[叛变虫群]\x01 %s 召唤了 %d 只\x05叛变%s\x01!",
-            sCaster, iOk, sType);
+        PrintToChat(client, "\x04[叛变虫群]\x01 你召唤了 %d 只\x05叛变%s\x01!",
+            iOk, sType);
     }
 
     // 生成成功后扫描一次, 给场上已有虫族挂伤害回调 (新刷虫族由 OnEntityCreated 自动挂)
@@ -736,7 +734,8 @@ bool SetToMarineFaction(int ent, int iMarineFaction, int iMarineTeam)
     int iAlienFaction = GetFaction(ent);
     if (iAlienFaction < 0)
     {
-        PrintToServer("[叛变虫群] #%d 未找到 faction 字段, 改阵营失败", ent);
+        if (g_cvDebug.BoolValue)
+            PrintToServer("[叛变虫群] #%d 未找到 faction 字段, 改阵营失败", ent);
         return false;
     }
 
@@ -751,18 +750,20 @@ bool SetToMarineFaction(int ent, int iMarineFaction, int iMarineTeam)
 
     if (!WriteFaction(ent, iMarineFaction))
     {
-        PrintToServer("[叛变虫群] #%d 写 faction 失败", ent);
+        if (g_cvDebug.BoolValue)
+            PrintToServer("[叛变虫群] #%d 写 faction 失败", ent);
         return false;
     }
     WriteTeam(ent, iMarineTeam);
 
     int iAfterFaction = GetFaction(ent);
     int iAfterTeam = GetTeam(ent);
-    PrintToServer("[叛变虫群] #%d 改阵营 faction alien=%d->marine=%d 写后=%d%s | team alien=%d->marine=%d 写后=%d%s",
-        ent, iAlienFaction, iMarineFaction, iAfterFaction,
-        (iAfterFaction == iMarineFaction) ? "(OK)" : "(失败)",
-        iAlienTeam, iMarineTeam, iAfterTeam,
-        (iAfterTeam == iMarineTeam) ? "(OK)" : "(失败)");
+    if (g_cvDebug.BoolValue)
+        PrintToServer("[叛变虫群] #%d 改阵营 faction alien=%d->marine=%d 写后=%d%s | team alien=%d->marine=%d 写后=%d%s",
+            ent, iAlienFaction, iMarineFaction, iAfterFaction,
+            (iAfterFaction == iMarineFaction) ? "(OK)" : "(失败)",
+            iAlienTeam, iMarineTeam, iAfterTeam,
+            (iAfterTeam == iMarineTeam) ? "(OK)" : "(失败)");
 
     return true;
 }
@@ -784,7 +785,8 @@ int ResolveMarineFaction(int iAlienFaction)
         if (iMFaction >= 0 && iMFaction != iAlienFaction)
         {
             g_iCachedMarineFaction = iMFaction;
-            PrintToServer("[叛变虫群] marine #%d faction=%d", iMarine, iMFaction);
+            if (g_cvDebug.BoolValue)
+                PrintToServer("[叛变虫群] marine #%d faction=%d", iMarine, iMFaction);
             return iMFaction;
         }
     }
@@ -809,7 +811,8 @@ int ResolveMarineTeam()
         if (iMTeam >= 0)
         {
             g_iCachedMarineTeam = iMTeam;
-            PrintToServer("[叛变虫群] marine #%d team=%d", iMarine, iMTeam);
+            if (g_cvDebug.BoolValue)
+                PrintToServer("[叛变虫群] marine #%d team=%d", iMarine, iMTeam);
             return iMTeam;
         }
     }
@@ -857,7 +860,7 @@ void KillAllBetrayAliens()
         }
     }
 
-    if (iCleaned > 0)
+    if (iCleaned > 0 && g_cvDebug.BoolValue)
         PrintToServer("[叛变虫群] 销毁 %d 只叛变虫(含尸体/残留)", iCleaned);
 }
 
