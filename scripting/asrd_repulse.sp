@@ -54,6 +54,7 @@
 
 #include <sourcemod>
 #include <sdktools>
+#include <sdktools_trace>
 
 #pragma semicolon 1
 #pragma newdecls required
@@ -613,6 +614,13 @@ int PushClassAliens(const char[] sClass, const float fCenter[3], float fRadius2,
                 fNew[0] = fCenter[0] + (dx / fLen) * fRadius;
                 fNew[1] = fCenter[1] + (dy / fLen) * fRadius;
 
+                // 碰撞感知: 钉回途中被墙挡则停到墙边, 不穿墙
+                float fFrom[3];
+                fFrom[0] = fPos[0];
+                fFrom[1] = fPos[1];
+                fFrom[2] = fPos[2];
+                TraceMoveBlocked(entity, fFrom, fNew);
+
                 float fZero[3];
                 fZero[0] = fZero[1] = fZero[2] = 0.0;
                 TeleportEntity(entity, fNew, NULL_VECTOR, fZero);
@@ -679,11 +687,30 @@ bool ProcessPushAnim(float dt)
 
         float s = k * k * (3.0 - 2.0 * k);   // smoothstep 缓入缓出
 
+        // 目标帧插值位置
         float fPos[3];
+        for (int a = 0; a < 3; a++)
+            fPos[a] = g_fPushSrc[i][a] + (g_fPushDst[i][a] - g_fPushSrc[i][a]) * s;
+
+        // 起点 = 上一帧已应用的位置
+        float fFrom[3];
+        fFrom[0] = g_fPushPrev[i][0];
+        fFrom[1] = g_fPushPrev[i][1];
+        fFrom[2] = g_fPushPrev[i][2];
+
+        // 碰撞感知: 途中被墙挡则停到碰撞点并结束动画, 不再继续往里穿透
+        if (TraceMoveBlocked(ent, fFrom, fPos))
+        {
+            float fZero[3];
+            fZero[0] = fZero[1] = fZero[2] = 0.0;
+            TeleportEntity(ent, fPos, NULL_VECTOR, fZero);
+            g_bPushActive[i] = false;
+            continue;
+        }
+
         float fVel[3];
         for (int a = 0; a < 3; a++)
         {
-            fPos[a] = g_fPushSrc[i][a] + (g_fPushDst[i][a] - g_fPushSrc[i][a]) * s;
             // 该帧速度 = (当前位置 - 上一帧位置) / 帧时长, 供客户端帧间插值
             fVel[a] = (fPos[a] - g_fPushPrev[i][a]) / dt;
             g_fPushPrev[i][a] = fPos[a];
@@ -784,6 +811,50 @@ void AddPush(int ent, const float fSrc[3], const float fDst[3])
     }
 
     TeleportEntity(ent, fDst, NULL_VECTOR, NULL_VECTOR);
+}
+
+// ============================================================================
+//  碰撞感知位移: 把实体从 fFrom 推向 fTarget。
+//  仅被环境几何(world/brush 墙等)阻挡; 虫与虫、虫与玩家之间不互相阻挡,
+//  避免多只虫一起被推开时相互误判堆叠。
+//  若路径被墙挡, 将 fTarget 截断到碰撞点并沿原方向回退一小段, 返回 true。
+// ============================================================================
+// filter 返回 true=允许该实体被命中, false=忽略该实体
+// world/brush 不受 filter 影响, 始终参与 trace → 只有墙能挡虫
+public bool TraceFilter_None(int entity, int contentsMask, any data)
+{
+    return false;
+}
+
+bool TraceMoveBlocked(int self, const float fFrom[3], float fTarget[3])
+{
+    TR_TraceRayFilter(fFrom, fTarget, MASK_SOLID_BRUSHONLY, RayType_EndPoint, TraceFilter_None, self);
+    if (!TR_DidHit())
+        return false;
+
+    float fHit[3];
+    TR_GetEndPosition(fHit);
+
+    // 碰撞点沿推进方向略回退, 避免半个身子陷进墙里
+    float fx = fTarget[0] - fFrom[0];
+    float fy = fTarget[1] - fFrom[1];
+    float fz = fTarget[2] - fFrom[2];
+    float fLen = fx*fx + fy*fy + fz*fz;
+    if (fLen > 1.0)
+    {
+        fLen = SquareRoot(fLen);
+        float fBack = 8.0;
+        fTarget[0] = fHit[0] - (fx / fLen) * fBack;
+        fTarget[1] = fHit[1] - (fy / fLen) * fBack;
+        fTarget[2] = fHit[2] - (fz / fLen) * fBack;
+    }
+    else
+    {
+        fTarget[0] = fHit[0];
+        fTarget[1] = fHit[1];
+        fTarget[2] = fHit[2];
+    }
+    return true;
 }
 
 // ============================================================================
