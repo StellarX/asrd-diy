@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 范围击退 (Repulse)
- *  版本 1.2.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.7.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  1. 手动击退: 按绑定键以自己为中心, 把周围虫族沿径向往外推开。
@@ -9,6 +9,13 @@
  *     推进速度可用时长控制, 不会"瞬移"也不会"一顿一顿"。
  *  2. 持续护盾: (可选) 开启后就像能量斥力场, 自动把靠近你的虫族
  *     缓慢持续往外推, 保持在护盾半径之外。同时也会弹开敌方投射物(炮弹)。
+ *     管理员可用 sm_repulseaura 给指定玩家永久开/关 (特权, 需 ConVar=1)。
+ *  3. X-33 威力增强器护盾: 仅 Wildcat/Wolfe (重武兵) 每使用一次 X-33
+ *     (asw_weapon_buff_grenade, 默认 5 充能, 存于 m_iClip1, 用完武器销毁)
+ *     就获得一次限时护盾; 叠加规则: 只叠加生效时间不叠加强度, 结束时间
+ *     以最后一次使用为基准刷新; 充能耗尽后无法再开启。
+ *     原版机制说明: X-33 信标基础时长对全角色固定 30 秒, 无角色差异;
+ *     差异在于只有重武兵能把信标捡起来带着走 (携带移动每秒扣 1.125 秒)。
  *
  *  ── 投射物(炮弹) ───────────────────────────────────────
  *   已内置 mortarbug(迫击炮虫)的炮弹 asw_mortarbug_shell。
@@ -26,7 +33,10 @@
  *  例如:        bind f "sm_repulse"
  *
  *  ── 命令 ────────────────────────────────────────────────
- *   sm_repulse      手动范围击退 (可绑定按键连按)
+ *   sm_repulse        手动范围击退 (可绑定按键连按)
+ *   sm_repulseaura    [管理员] 给指定玩家永久开/关护盾 (特权):
+ *                     sm_repulseaura [玩家] [on|off|1|0]
+ *                     (无玩家=自己, 无状态=切换; 需 sm_asrd_repulse_aura 1)
  *
  *  ── 常用 ConVar (自动生成 cfg/sourcemod/asrd_repulse.cfg) ──
  *   sm_asrd_repulse_enabled        总开关 (默认 1)
@@ -37,14 +47,16 @@
  *   sm_asrd_repulse_pull_time      单次击退推进时长/秒 (默认 0.35, 越大越慢越平滑)
  *   sm_asrd_repulse_cooldown       两次触发最小间隔秒 (默认 0=无冷却可连按)
  *
- *   sm_asrd_repulse_aura           持续护盾开关 (默认 0) — 配合 sm_repulseaura 指定玩家
+ *   sm_asrd_repulse_aura           管理员指定护盾总开关 (默认 0) — 配合 sm_repulseaura
  *   sm_asrd_repulse_aura_radius    护盾半径/游戏单位 (默认 260)
- *   sm_asrd_repulse_aura_mode      护盾模式 (默认 1: 1=直接阻挡钉在圈外; 0=斥力击退平滑弹开)
+ *   sm_asrd_repulse_aura_mode      护盾模式 (默认 0: 0=斥力击退平滑弹开; 1=直接阻挡钉在圈外)
  *   sm_asrd_repulse_aura_push_speed 护盾斥力弹开怪的速度/单位每秒 (默认 500; 持续速度外推, 顺滑不卡)
  *
- *   sm_asrd_repulse_armor          护甲护盾模式 (默认 0): 开启后, 佩戴 asw_weapon_normal_armor
- *                                  的玩家自动获得护盾且只针对该玩家; 不依赖 sm_asrd_repulse_aura,
- *                                  护盾方式(阻挡/斥力)仍由 sm_asrd_repulse_aura_mode 决定
+ *   sm_asrd_repulse_x33            X-33 威力增强器护盾 (默认 1): 仅 Wildcat/Wolfe (重武兵)
+ *                                  使用 X-33 时获得限时护盾; 不依赖 sm_asrd_repulse_aura,
+ *                                  护盾方式(斥力/阻挡)仍由 sm_asrd_repulse_aura_mode 决定
+ *   sm_asrd_repulse_x33_duration   每使用一次 X-33 的护盾秒数 (默认 30=原版信标时长;
+ *                                  大于 30 时还会同步延长原版增益信标的持续时间)
  *
  *   sm_asrd_repulse_classes        追加要击退的实体类名 (空格分隔, 空=不追加)
  *   sm_asrd_repulse_debug          调试输出 (默认 0; 1 会列出半径内所有 asw_ 与 npc_ 实体的真实类名)
@@ -61,7 +73,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] 范围击退"
-#define PLUGIN_VERSION "1.6.0"
+#define PLUGIN_VERSION "1.7.0"
 
 // ─── 平滑推进动画池 (手动击退用) ──
 #define MAX_PUSH 512
@@ -139,7 +151,8 @@ ConVar g_cvCooldown;
 ConVar g_cvAura;
 ConVar g_cvAuraRadius;
 ConVar g_cvAuraMode;
-ConVar g_cvArmor;
+ConVar g_cvX33;
+ConVar g_cvX33Duration;
 ConVar g_cvClasses;
 ConVar g_cvProjectiles;
 ConVar g_cvProjSpeed;
@@ -150,13 +163,25 @@ ConVar g_cvAuraPushSpeed;
 // ─── 按玩家激活的护盾 (由管理员命令 sm_repulseaura 指定, 默认全场无护盾) ──
 bool g_bAuraOn[MAXPLAYERS + 1];
 
-// ─── 护甲触发的护盾 ─────────────────────────────
-// 仅在 护甲模式(asw_weapon_normal_armor 归该玩家 marine)开启时, 该玩家才获得护盾。
-// g_bPlayerHasArmor 由 RefreshArmor() 每 0.2s 缓存一次, 避免每帧全遍历。
-static const char ARMOR_CLASS[] = "asw_weapon_normal_armor";
-bool   g_bPlayerHasArmor[MAXPLAYERS + 1];
-bool   g_bPrevArmor[MAXPLAYERS + 1];   // 上一轮扫描是否已穿戴(用于穿戴瞬间提示一次)
-float  g_fLastArmorScan;
+// ─── X-33 威力增强器触发的限时护盾 ─────────────────────
+// 仅 Wildcat/Wolfe (重武兵职业, 档案索引 1/5) 使用 X-33 (asw_weapon_buff_grenade)
+// 时触发: 每次使用把该玩家的护盾结束时间刷新为 now+时长 (以最后一次使用为基准,
+// 只叠加时间不叠加强度)。充能由游戏本身管理: 存于武器 m_iClip1 (默认 5 次,
+// 用完武器即销毁); 原版事件 damage_amplifier_placed 携带信标 entindex 与
+// marine 实体索引, 且先于充能扣减触发 (此时 m_iClip1 仍是使用前的值)。
+// 职业判定: 真实档案索引在 asw_marine_resource 的 m_MarineProfileIndex 上
+// (marine 自身的 m_nMarineProfile 是地图摆放 keyfield, 游戏生成时恒为 -1, 不可用)。
+static const char X33_WEAPON_CLASS[]  = "asw_weapon_buff_grenade";
+#define X33_NATIVE_DURATION  30.0      // 原版信标基础时长/秒 (全角色一致, 硬编码)
+#define PROFILE_WILDCAT      1         // ASW_MARINE_PROFILE_WILDCAT
+#define PROFILE_WOLFE        5         // ASW_MARINE_PROFILE_WOLFE
+#define X33_HUD_CHANNEL      3         // 倒计时 HUD 通道
+float  g_fX33End[MAXPLAYERS + 1];      // 护盾结束时间(游戏时间), 0=未激活
+bool   g_bX33Active[MAXPLAYERS + 1];   // 上一帧是否处于 X-33 护盾中(到期边缘检测)
+bool   g_bAnyX33Active;                // 是否有任一玩家处于 X-33 护盾中(帧回调开关)
+float  g_fLastX33Hud[MAXPLAYERS + 1];  // 倒计时 HUD 刷新节流
+int    g_iX33HudMode[MAXPLAYERS + 1];  // 倒计时显示方式: 0=未试 1=内置HudText 2=game_text 兜底
+int    g_iX33TextEnt[MAXPLAYERS + 1];  // game_text 兜底实体引用
 
 float g_fLastUse[MAXPLAYERS + 1];   // 手动击退冷却用
 
@@ -166,7 +191,7 @@ float g_fLastUse[MAXPLAYERS + 1];   // 手动击退冷却用
 public Plugin myinfo = {
     name        = PLUGIN_NAME,
     author      = "jack",
-    description = "范围击退(平滑推进) + 可选持续斥力护盾",
+    description = "范围击退(平滑推进) + 持续斥力护盾 + X-33 威力增强器护盾",
     version     = PLUGIN_VERSION,
     url         = ""
 };
@@ -192,15 +217,18 @@ public void OnPluginStart()
         "手动触发最小间隔秒 (0=无冷却可连按)", FCVAR_NOTIFY, true, 0.0, true, 60.0);
     g_cvAura = CreateConVar("sm_asrd_repulse_aura", "0",
         "持续斥力护盾 (1=开 0=关)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
-    g_cvArmor = CreateConVar("sm_asrd_repulse_armor", "0",
-        "护甲护盾模式 (1=开 0=关), 开启后佩戴 asw_weapon_normal_armor 的玩家自动获得护盾, 不依赖 sm_asrd_repulse_aura, 护盾方式由 sm_asrd_repulse_aura_mode 决定",
-        FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_cvAuraRadius = CreateConVar("sm_asrd_repulse_aura_radius", "260",
         "护盾半径 (游戏单位)", FCVAR_NOTIFY, true, 50.0, true, 3000.0);
-    g_cvAuraMode = CreateConVar("sm_asrd_repulse_aura_mode", "1",
-        "护盾模式 (1=直接阻挡 钉在圈外; 0=斥力击退 平滑弹开)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_cvAuraMode = CreateConVar("sm_asrd_repulse_aura_mode", "0",
+        "护盾模式 (0=斥力击退 平滑弹开; 1=直接阻挡 钉在圈外)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_cvAuraPushSpeed = CreateConVar("sm_asrd_repulse_aura_push_speed", "500",
         "护盾斥力弹开把怪推出界外的速度/单位每秒 (作用于 sm_asrd_repulse_aura_mode 0 的斥力模式), 持续速度外推比分段动画更顺滑", FCVAR_NOTIFY, true, 50.0, true, 2000.0);
+    g_cvX33 = CreateConVar("sm_asrd_repulse_x33", "1",
+        "X-33 威力增强器护盾 (1=开 0=关), 开启后仅 Wildcat/Wolfe (重武兵) 使用 X-33 (asw_weapon_buff_grenade) 时获得限时护盾, 不依赖 sm_asrd_repulse_aura, 护盾方式由 sm_asrd_repulse_aura_mode 决定",
+        FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_cvX33Duration = CreateConVar("sm_asrd_repulse_x33_duration", "30",
+        "每使用一次 X-33 的护盾秒数 (默认 30=原版信标时长; 叠加规则: 结束时间以最后一次使用为基准刷新, 只叠时间不叠强度; 大于 30 时还会同步延长原版增益信标的持续时间)",
+        FCVAR_NOTIFY, true, 1.0, true, 600.0);
     g_cvClasses = CreateConVar("sm_asrd_repulse_classes", "",
         "追加要击退的实体类名 (空格分隔, 空=不追加)", FCVAR_NOTIFY);
     g_cvProjectiles = CreateConVar("sm_asrd_repulse_projectiles", "1",
@@ -215,6 +243,10 @@ public void OnPluginStart()
     HookConVarChange(g_cvClasses, OnClassesChanged);
     HookConVarChange(g_cvProjClasses, OnProjClassesChanged);
 
+    // X-33 使用事件 (游戏原生): 武器源码在创建信标后、扣减 m_iClip1 前触发,
+    // 携带 entindex=信标实体 与 marine=marine 实体索引
+    HookEvent("damage_amplifier_placed", Event_X33Placed, EventHookMode_Post);
+
     AutoExecConfig(true, "asrd_repulse");
 
     RegConsoleCmd("sm_repulse", Command_Repulse, "范围击退 (可绑定按键连按)");
@@ -223,6 +255,193 @@ public void OnPluginStart()
 
     ParseCustomClasses();
     ParseProjClasses();
+}
+
+// ============================================================================
+//  X-33 使用事件: 仅 Wildcat/Wolfe (重武兵) 触发限时护盾
+//  叠加规则: 只叠时间不叠强度 — 每次使用把结束时间刷新为 now+时长,
+//  即"以最后一次使用的时间为基准", 与原版多次扔信标的行为一致。
+// ============================================================================
+public void Event_X33Placed(Event event, const char[] name, bool dontBroadcast)
+{
+    if (!g_cvEnabled.BoolValue || !g_cvX33.BoolValue)
+        return;
+
+    int marine = event.GetInt("marine");
+    if (marine <= 0 || !IsValidEntity(marine))
+        return;
+
+    // debug: 记录事件与职业判定, 便于排查"用了 X-33 但没护盾"的情况
+    if (g_cvDebug.BoolValue)
+    {
+        PrintToServer("[击退][x33] 事件触发: marine=%d 职业=%d (需1=Wildcat/5=Wolfe) 控制玩家=%d",
+            marine, GetMarineProfileIndex(marine), ClientOfMarine(marine));
+    }
+
+    if (!IsSpecialWeaponsProfile(marine))
+        return;
+
+    int client = ClientOfMarine(marine);
+    if (client <= 0 || IsFakeClient(client))
+        return;   // 无人控制的 marine(纯AI) 不给护盾
+
+    float now = GetGameTime();
+    float duration = g_cvX33Duration.FloatValue;
+
+    g_fX33End[client] = now + duration;
+    g_bAnyX33Active = true;
+
+    // 时长大于原版 30s 时, 同步延长刚部署的增益信标, 让原版增益与护盾同步结束
+    int beacon = event.GetInt("entindex");
+    if (duration > X33_NATIVE_DURATION
+        && IsValidEntity(beacon)
+        && HasEntProp(beacon, Prop_Send, "m_flTimeBurnOut"))
+    {
+        SetEntPropFloat(beacon, Prop_Send, "m_flTimeBurnOut", now + duration);
+    }
+
+    // 剩余次数: 事件先于 m_iClip1 扣减触发, 本次使用后剩余 = 当前充能 - 1
+    int remaining = X33RemainingCharges(marine);
+
+    char sName[64];
+    GetClientName(client, sName, sizeof(sName));
+    if (remaining >= 0)
+        PrintToChatAll("\x04%s\x01 使用x33威力增强器，\x05力场护盾激活\x01，剩余\x05%d\x01次", sName, remaining);
+    else
+        PrintToChatAll("\x04%s\x01 使用x33威力增强器，\x05力场护盾激活\x01", sName);
+}
+
+// 读取 marine 的职业档案索引 (0=Sarge 1=Wildcat 5=Wolfe, 找不到返回 -1)
+// 注意: 不能读 marine 自身的 m_nMarineProfile — 那只是地图摆放 keyfield,
+// 游戏过程中生成的 marine 该值恒为 -1; 真实索引存在 asw_marine_resource
+// 实体的 m_MarineProfileIndex 网络属性上, 用 m_MarineEntity 句柄反查
+int GetMarineProfileIndex(int marine)
+{
+    int ent = -1;
+    while ((ent = FindEntityByClassname(ent, "asw_marine_resource")) != -1)
+    {
+        if (!IsValidEntity(ent))
+            continue;
+        if (!HasEntProp(ent, Prop_Send, "m_MarineEntity"))
+            continue;
+        if (GetEntPropEnt(ent, Prop_Send, "m_MarineEntity") != marine)
+            continue;
+        if (!HasEntProp(ent, Prop_Send, "m_MarineProfileIndex"))
+            continue;
+        return GetEntProp(ent, Prop_Send, "m_MarineProfileIndex");
+    }
+    return -1;
+}
+
+// 仅重武兵 (MARINE_CLASS_SPECIAL_WEAPONS) 有护盾效果:
+// Wildcat(档案1) / Wolfe(档案5), 也是原版唯一能携带 X-33 信标走的职业
+bool IsSpecialWeaponsProfile(int marine)
+{
+    int profile = GetMarineProfileIndex(marine);
+    return profile == PROFILE_WILDCAT || profile == PROFILE_WOLFE;
+}
+
+// 找该 marine 携带的 X-33 武器, 返回本次使用后的剩余充能 (找不到返回 -1)
+// 充能存于武器 m_iClip1 (默认 5, 用完武器即被游戏销毁 → 永远开不了护盾)
+int X33RemainingCharges(int marine)
+{
+    int ent = -1;
+    while ((ent = FindEntityByClassname(ent, X33_WEAPON_CLASS)) != -1)
+    {
+        if (!IsValidEntity(ent))
+            continue;
+
+        int owner = 0;
+        if (HasEntProp(ent, Prop_Data, "m_hOwner"))
+            owner = GetEntPropEnt(ent, Prop_Data, "m_hOwner");
+        if (owner <= 0 && HasEntProp(ent, Prop_Send, "m_hOwnerEntity"))
+            owner = GetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity");
+        if (owner != marine)
+            continue;
+
+        if (!HasEntProp(ent, Prop_Send, "m_iClip1"))
+            continue;
+
+        return GetEntProp(ent, Prop_Send, "m_iClip1") - 1;
+    }
+    return -1;
+}
+
+// ============================================================================
+//  X-33 倒计时显示: 先试内置 ShowHudText (绿色, 屏幕右侧);
+//  AS:RD 下该 usermessage 对部分客户端无效 (返回 -1) → 自动降级为
+//  game_text 实体显示 (与核弹插件 asrd_nuke 的 ETA 倒计时同一套兜底方案)
+// ============================================================================
+void ShowX33Hud(int client, const char[] msg)
+{
+    if (g_iX33HudMode[client] == 2)
+    {
+        ShowX33ViaGameText(client, msg);
+        return;
+    }
+
+    // 绿色, 右侧偏上, 停留略超刷新间隔保证不闪烁
+    SetHudTextParams(0.80, 0.35, 0.30, 0, 255, 0, 255, 0, 0.0, 0.0, 0.0);
+    int ret = ShowHudText(client, X33_HUD_CHANNEL, msg);
+
+    if (ret == -1)
+    {
+        g_iX33HudMode[client] = 2;
+        ShowX33ViaGameText(client, msg);
+    }
+    else
+    {
+        g_iX33HudMode[client] = 1;
+    }
+}
+
+// 兜底显示: 为该玩家取得 (没有则创建) 绿色右侧 game_text 并显示
+void ShowX33ViaGameText(int client, const char[] msg)
+{
+    int ent = EntRefToEntIndex(g_iX33TextEnt[client]);
+    if (ent == INVALID_ENT_REFERENCE || !IsValidEntity(ent))
+    {
+        ent = CreateEntityByName("game_text");
+        if (ent == -1)
+            return;
+
+        char sName[48];
+        Format(sName, sizeof(sName), "asrd_x33_hud_%d", GetClientUserId(client));
+
+        DispatchKeyValue(ent, "targetname", sName);
+        DispatchKeyValue(ent, "spawnflags", "0");   // 只显示给 activator(该玩家)
+        DispatchKeyValue(ent, "channel",   "3");
+        DispatchKeyValue(ent, "x",         "0.80");
+        DispatchKeyValue(ent, "y",         "0.35");
+        DispatchKeyValue(ent, "effect",    "0");
+        DispatchKeyValue(ent, "color",     "0 255 0");
+        DispatchKeyValue(ent, "fadein",    "0.05");
+        DispatchKeyValue(ent, "fadeout",   "0.1");
+        DispatchKeyValue(ent, "holdtime",  "0.3");
+        DispatchSpawn(ent);
+
+        g_iX33TextEnt[client] = EntIndexToEntRef(ent);
+    }
+
+    DispatchKeyValue(ent, "message", msg);
+    AcceptEntityInput(ent, "Display", client);
+}
+
+// 清除倒计时显示 (护盾到期/失效时调用)
+void ClearX33Hud(int client)
+{
+    if (g_iX33HudMode[client] == 1)
+    {
+        SetHudTextParams(0.80, 0.35, 0.1, 0, 255, 0, 0, 0, 0.0, 0.1, 0.1);
+        ShowHudText(client, X33_HUD_CHANNEL, " ");
+    }
+    else if (g_iX33HudMode[client] == 2)
+    {
+        int ent = EntRefToEntIndex(g_iX33TextEnt[client]);
+        if (ent != INVALID_ENT_REFERENCE && IsValidEntity(ent))
+            AcceptEntityInput(ent, "Kill");
+        g_iX33TextEnt[client] = 0;
+    }
 }
 
 // ============================================================================
@@ -327,13 +546,15 @@ public void OnMapStart()
         g_bPushActive[i] = false;
     g_bAnyPushActive = false;
 
-    // 切图后 GetGameTime() 从 0 重置, 必须清掉上一张图的扫描时间戳,
-    // 否则 now - g_fLastArmorScan 为负数, RefreshArmor 永远跳过 → 护甲护盾失效
-    g_fLastArmorScan = 0.0;
+    // 切图后 GetGameTime() 从 0 重置, 必须清掉 X-33 护盾时间戳,
+    // 否则上一张图残留的大时间戳会让状态机误判为"永久生效中"
+    g_bAnyX33Active = false;
     for (int c = 1; c <= MaxClients; c++)
     {
-        g_bPlayerHasArmor[c] = false;
-        g_bPrevArmor[c] = false;
+        g_fX33End[c] = 0.0;
+        g_bX33Active[c] = false;
+        g_iX33HudMode[c] = 0;   // 重新探测 HUD 显示方式
+        g_iX33TextEnt[c] = 0;   // game_text 实体随切图销毁, 引用清零
     }
 
     ParseCustomClasses();
@@ -599,8 +820,8 @@ int PushClassAliens(const char[] sClass, const float fCenter[3], float fRadius2,
         else
         {
             // 护盾分两模式, 由 sm_asrd_repulse_aura_mode 决定:
-            //   1 (默认) = 直接阻挡: 每帧把范围内怪物钉回半径边界, 形成"墙"
-            //   0        = 斥力推: 每帧沿径向小步向外推
+            //   0 (默认) = 斥力推: 每帧沿径向小步向外推
+            //   1        = 直接阻挡: 每帧把范围内怪物钉回半径边界, 形成"墙"
             if ((dx*dx + dy*dy) > fRadius2)
                 continue;   // 护盾只看水平距离, 在界外无视
 
@@ -654,8 +875,9 @@ int PushClassAliens(const char[] sClass, const float fCenter[3], float fRadius2,
 public void OnGameFrame()
 {
     // 无动画且未开任何护盾模式时直接跳过, 避免空转
+    // (X-33 护盾激活期间 g_bAnyX33Active 保持 true, 状态机会一直跑到全部到期才停)
     bool bHasAura = g_cvEnabled.BoolValue
-        && (g_cvAura.BoolValue || g_cvArmor.BoolValue);
+        && (g_cvAura.BoolValue || g_bAnyX33Active);
     if (!bHasAura && !g_bAnyPushActive)
         return;
 
@@ -731,6 +953,7 @@ bool ProcessPushAnim(float dt)
 
 void ThinkAura()
 {
+    float now = GetGameTime();
     float fRadius  = g_cvAuraRadius.FloatValue;
     float fRadius2 = fRadius * fRadius;
     int   iPushed  = 0;
@@ -738,21 +961,61 @@ void ThinkAura()
     // 护盾模式下若开了 debug, 每隔 3 秒点名一次半径内所有实体类名,
     // 方便直接确认某只虫(如治疗虫)的真实类名, 不用改代码
     bool bDumpPending = g_cvDebug.BoolValue
-        && (GetGameTime() - g_fLastAuraDump >= 3.0);
+        && (now - g_fLastAuraDump >= 3.0);
     bool bDumped = false;
 
-    // 若启用了护甲模式, 先刷新"谁正佩戴护甲"的缓存
-    if (g_cvArmor.BoolValue)
-        RefreshArmor();
+    // X-33 状态机汇总: 本帧是否仍有人处于 X-33 护盾中
+    g_bAnyX33Active = false;
 
     for (int client = 1; client <= MaxClients; client++)
     {
         if (!IsClientInGame(client) || IsFakeClient(client))
             continue;
 
-        // 该玩家是否有效盾: 手动指定 或 佩戴护甲且护甲模式开启
-        bool bActive = (g_cvAura.BoolValue  && g_bAuraOn[client])
-                    || (g_cvArmor.BoolValue && g_bPlayerHasArmor[client]);
+        // ── X-33 限时护盾状态机: 到期/阵亡检测 + 右侧倒计时 HUD ──
+        bool bX33 = false;
+        if (g_fX33End[client] > 0.0)
+        {
+            // marine 必须存活且仍被该玩家控制, 阵亡即护盾失效
+            int marine = GetPlayerMarine(client);
+            bool bAlive = marine > 0
+                && HasEntProp(marine, Prop_Send, "m_iHealth")
+                && GetEntProp(marine, Prop_Send, "m_iHealth") > 0;
+
+            bX33 = g_cvX33.BoolValue && bAlive && (g_fX33End[client] > now);
+
+            if (bX33)
+            {
+                g_bAnyX33Active = true;
+                g_bX33Active[client] = true;
+
+                // 右侧绿色倒计时 (0.2s 刷新一次, hold 0.3s 防闪烁)
+                if (now - g_fLastX33Hud[client] >= 0.2)
+                {
+                    g_fLastX33Hud[client] = now;
+                    int secs = RoundToCeil(g_fX33End[client] - now);
+                    if (secs < 1)
+                        secs = 1;
+                    char sMsg[64];
+                    Format(sMsg, sizeof(sMsg), "X-33 力场护盾 %d 秒", secs);
+                    ShowX33Hud(client, sMsg);
+                }
+            }
+            else
+            {
+                // 到期 / 被关闭 / marine 阵亡 → 清除状态与倒计时, 提示一次
+                g_fX33End[client] = 0.0;
+                if (g_bX33Active[client])
+                {
+                    g_bX33Active[client] = false;
+                    ClearX33Hud(client);
+                    PrintToChat(client, "\x04[击退]\x01 X-33 力场护盾已失效");
+                }
+            }
+        }
+
+        // 该玩家是否有有效盾: 管理员手动指定 或 X-33 护盾生效中
+        bool bActive = (g_cvAura.BoolValue && g_bAuraOn[client]) || bX33;
         if (!bActive)
             continue;
 
@@ -763,7 +1026,7 @@ void ThinkAura()
         if (bDumpPending && !bDumped)
         {
             bDumped = true;
-            g_fLastAuraDump = GetGameTime();
+            g_fLastAuraDump = now;
             DebugListNearby(fCenter, fRadius2);
         }
 
@@ -778,10 +1041,10 @@ void ThinkAura()
     }
 
     if (g_cvDebug.BoolValue && iPushed > 0
-        && GetGameTime() - g_fLastAuraLog >= 1.0)
+        && now - g_fLastAuraLog >= 1.0)
     {
         PrintToServer("[击退][aura] 本秒推开 %d 只", iPushed);
-        g_fLastAuraLog = GetGameTime();
+        g_fLastAuraLog = now;
     }
 }
 
@@ -942,60 +1205,7 @@ int GetPlayerMarine(int client)
     return 0;
 }
 
-// ============================================================================
-//  刷新"哪名玩家正在佩戴护甲"缓存 (上限 0.2s 一次, 避免每帧全遍历)
-//  识别方式: 遍历 asw_weapon_normal_armor 实体, 取其归属者(marine),
-//  再找到控制该 marine 的玩家 → 视为佩戴护甲。
-// ============================================================================
-void RefreshArmor()
-{
-    float now = GetGameTime();
-    if (now - g_fLastArmorScan < 0.2)
-        return;
-    g_fLastArmorScan = now;
-
-    for (int c = 1; c <= MaxClients; c++)
-        g_bPlayerHasArmor[c] = false;
-
-    int ent = -1;
-    while ((ent = FindEntityByClassname(ent, ARMOR_CLASS)) != -1)
-    {
-        if (!IsValidEdict(ent))
-            continue;
-
-        // 取护甲归属者: 优先 Prop_Data m_hOwner, 兜底 Prop_Send m_hOwnerEntity
-        int owner = 0;
-        if (HasEntProp(ent, Prop_Data, "m_hOwner"))
-            owner = GetEntPropEnt(ent, Prop_Data, "m_hOwner");
-        if (owner <= 0 && HasEntProp(ent, Prop_Send, "m_hOwnerEntity"))
-            owner = GetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity");
-        if (owner <= 0 || !IsValidEdict(owner))
-            continue;
-
-        int c = ClientOfMarine(owner);
-        if (c > 0)
-            g_bPlayerHasArmor[c] = true;
-    }
-
-    // 穿戴瞬间公开提示一次 (边缘触发: 上一轮未穿戴 → 本轮穿戴)
-    for (int c = 1; c <= MaxClients; c++)
-    {
-        if (!g_bPlayerHasArmor[c])
-        {
-            g_bPrevArmor[c] = false;
-            continue;
-        }
-        if (!g_bPrevArmor[c])
-        {
-            char sName[64];
-            GetClientName(c, sName, sizeof(sName));
-            PrintToChatAll("\x04%s\x01 已穿戴 \x05IAF 力场护盾", sName);
-        }
-        g_bPrevArmor[c] = true;
-    }
-}
-
-// 找控制某 marine 实体的玩家 (找不到返回 0)
+// 找控制某 marine 实体的人类玩家 (找不到返回 0)
 int ClientOfMarine(int iMarine)
 {
     for (int c = 1; c <= MaxClients; c++)
@@ -1008,10 +1218,16 @@ int ClientOfMarine(int iMarine)
     return 0;
 }
 
-// 玩家离开时清掉护甲缓存与非空标志, 避免残留
+// 玩家离开时清掉管理员护盾与 X-33 护盾状态, 回收 game_text 兜底实体
 public void OnClientDisconnect(int client)
 {
-    g_bPlayerHasArmor[client] = false;
-    g_bPrevArmor[client] = false;
     g_bAuraOn[client] = false;
+    g_fX33End[client] = 0.0;
+    g_bX33Active[client] = false;
+
+    int ent = EntRefToEntIndex(g_iX33TextEnt[client]);
+    if (ent != INVALID_ENT_REFERENCE && IsValidEntity(ent))
+        AcceptEntityInput(ent, "Kill");
+    g_iX33TextEnt[client] = 0;
+    g_iX33HudMode[client] = 0;
 }
