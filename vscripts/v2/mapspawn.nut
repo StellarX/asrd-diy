@@ -168,23 +168,24 @@ function RespawnPlayer(hPlayer)
     return true;
 }
 
-// /fh：阵亡后复活（每局一次）
+// /fh：阵亡后复活。普通玩家每局一次；管理员无限次。
 function DoFH(hPlayer)
 {
     if (IsAlive(hPlayer))
     {
-        Chat(hPlayer.GetPlayerName() + "：你仍存活，无需复活");
+        Chat(hPlayer.GetPlayerName() + "：仍处于存活状态，无需复活");
         return;
     }
-    if (hPlayer in ::g_ASRD_FH_Used)
+    local isAdmin = IsAdmin(hPlayer);
+    if (!isAdmin && (hPlayer in ::g_ASRD_FH_Used))
     {
-        Chat(hPlayer.GetPlayerName() + "：你本局已复活过，机会已用完");
+        Chat(hPlayer.GetPlayerName() + "：本局复活机会已用完");
         return;
     }
     if (RespawnPlayer(hPlayer))
     {
-        ::g_ASRD_FH_Used[hPlayer] <- true;
-        Chat(hPlayer.GetPlayerName() + "：已复活（本局复活机会已用完）");
+        if (!isAdmin) ::g_ASRD_FH_Used[hPlayer] <- true;
+        Chat(hPlayer.GetPlayerName() + "：已复活");
     }
     else
     {
@@ -192,17 +193,18 @@ function DoFH(hPlayer)
     }
 }
 
-// /tp：传送到最近的存活队友旁（每局一次）
+// /tp：传送到最近的存活队友旁。普通玩家每局一次；管理员无限次。
 function DoTP(hPlayer)
 {
     if (!IsAlive(hPlayer))
     {
-        Chat(hPlayer.GetPlayerName() + "：你已阵亡，请先输入 /fh 复活");
+        Chat(hPlayer.GetPlayerName() + "：当前状态不可传送，请先输入 /fh 复活");
         return;
     }
-    if (hPlayer in ::g_ASRD_TP_Used)
+    local isAdmin = IsAdmin(hPlayer);
+    if (!isAdmin && (hPlayer in ::g_ASRD_TP_Used))
     {
-        Chat(hPlayer.GetPlayerName() + "：你本局已传送过，机会已用完");
+        Chat(hPlayer.GetPlayerName() + "：本局传送机会已用完");
         return;
     }
     local target = FindNearestAlly(hPlayer);
@@ -215,8 +217,8 @@ function DoTP(hPlayer)
     local tpPos = target.GetOrigin() + Vector(40, 40, 0);
     my.SetOrigin(tpPos);
     ApplyRespawnEffect(tpPos);   // 与 /fh 相同的复活特效风格
-    ::g_ASRD_TP_Used[hPlayer] <- true;
-    Chat(hPlayer.GetPlayerName() + "：已传送到最近队友旁（本局传送机会已用完）");
+    if (!isAdmin) ::g_ASRD_TP_Used[hPlayer] <- true;
+    Chat(hPlayer.GetPlayerName() + "：已传送到最近队友旁");
 }
 
 // 遍历所有玩家实体, 由回调处理; classname 兼容 "player"/"asw_player", 集合去重
@@ -339,10 +341,9 @@ function GetMarineOf(hPlayer)
 }
 
 // 管理员传送：
-//   dir==1: /smtp <目标>  把目标拉到自己身边
-//   dir==2: /smtp2 <目标> 传送到目标位置
-//   dir==3: /smtp         传送到最近玩家旁（管理员版 /tp）
-// 回显仅管理员可见
+//   dir==1: /tp1 <目标>  把目标拉到自己身边
+//   dir==2: /tp2 <目标> 传送到目标位置
+// 回显仅本人可见
 function DoSMTP(dir, hAdmin, targetText)
 {
     local hAdmMarine = GetMarineOf(hAdmin);
@@ -352,25 +353,9 @@ function DoSMTP(dir, hAdmin, targetText)
         return;
     }
 
-    // dir3: 传送到最近队友旁
-    if (dir == 3)
-    {
-        local ally = FindNearestAlly(hAdmin);
-        if (ally == null)
-        {
-            ClientPrint(hAdmin, 3, hAdmin.GetPlayerName() + "：没有找到其他队友");
-            return;
-        }
-        local pos = ally.GetOrigin() + Vector(40, 40, 0);
-        hAdmMarine.SetOrigin(pos);
-        ApplyRespawnEffect(pos);
-        ClientPrint(hAdmin, 3, hAdmin.GetPlayerName() + "：已传送到最近队友旁");
-        return;
-    }
-
     if (targetText == null || targetText == "")
     {
-        ClientPrint(hAdmin, 3, (dir == 1 ? "用法 /smtp1 <目标>：把目标拉到你身边" : "用法 /smtp2 <目标>：传送到目标位置"));
+        ClientPrint(hAdmin, 3, (dir == 1 ? "用法 /tp1 <目标>：把目标拉到自己身边" : "用法 /tp2 <目标>：传送到目标位置"));
         return;
     }
     local hTarget = FindTargetPlayer(targetText);
@@ -488,49 +473,42 @@ function OnGameEvent_player_say(params)
         if (IsAdmin(hPlayer))
             DoAdminResurrect(hPlayer, TrimSpace(trimmed.slice("/smfh".len())));
         else
-            ClientPrint(hPlayer, 3, hPlayer.GetPlayerName() + "：你没有管理员权限");
+            ClientPrint(hPlayer, 3, hPlayer.GetPlayerName() + "：你没有权限执行该指令");
     }
     else if (trimmed.find("/asft") == 0 || trimmed.find("!asft") == 0)
     {
         if (IsAdmin(hPlayer))
             DoASFT(hPlayer, TrimSpace(trimmed.slice("/asft".len())));
         else
-            ClientPrint(hPlayer, 3, hPlayer.GetPlayerName() + "：你没有管理员权限");
+            ClientPrint(hPlayer, 3, hPlayer.GetPlayerName() + "：你没有权限执行该指令");
     }
     else if (trimmed.find("/fhb") == 0 || trimmed.find("!fhb") == 0)
     {
         if (IsAdmin(hPlayer))
             DoAdminResurrectFHB(hPlayer, TrimSpace(trimmed.slice("/fhb".len())));
         else
-            ClientPrint(hPlayer, 3, hPlayer.GetPlayerName() + "：你没有管理员权限");
+            ClientPrint(hPlayer, 3, hPlayer.GetPlayerName() + "：你没有权限执行该指令");
     }
     else if (trimmed.find("!players") == 0 || trimmed.find("/players") == 0)
     {
         if (IsAdmin(hPlayer))
             ListPlayers(hPlayer);
         else
-            ClientPrint(hPlayer, 3, hPlayer.GetPlayerName() + "：你没有管理员权限");
+            ClientPrint(hPlayer, 3, hPlayer.GetPlayerName() + "：你没有权限执行该指令");
     }
-    else if (trimmed.find("/smtp1") == 0 || trimmed.find("!smtp1") == 0)
+    else if (trimmed.find("/tp1") == 0 || trimmed.find("!tp1") == 0)
     {
         if (IsAdmin(hPlayer))
-            DoSMTP(1, hPlayer, TrimSpace(trimmed.slice("/smtp1".len())));
+            DoSMTP(1, hPlayer, TrimSpace(trimmed.slice("/tp1".len())));
         else
-            ClientPrint(hPlayer, 3, hPlayer.GetPlayerName() + "：你没有管理员权限");
+            ClientPrint(hPlayer, 3, hPlayer.GetPlayerName() + "：你没有权限执行该指令");
     }
-    else if (trimmed.find("/smtp2") == 0 || trimmed.find("!smtp2") == 0)
+    else if (trimmed.find("/tp2") == 0 || trimmed.find("!tp2") == 0)
     {
         if (IsAdmin(hPlayer))
-            DoSMTP(2, hPlayer, TrimSpace(trimmed.slice("/smtp2".len())));
+            DoSMTP(2, hPlayer, TrimSpace(trimmed.slice("/tp2".len())));
         else
-            ClientPrint(hPlayer, 3, hPlayer.GetPlayerName() + "：你没有管理员权限");
-    }
-    else if (trimmed.find("/smtp") == 0 || trimmed.find("!smtp") == 0)
-    {
-        if (IsAdmin(hPlayer))
-            DoSMTP(3, hPlayer, null);
-        else
-            ClientPrint(hPlayer, 3, hPlayer.GetPlayerName() + "：你没有管理员权限");
+            ClientPrint(hPlayer, 3, hPlayer.GetPlayerName() + "：你没有权限执行该指令");
     }
     // 载具命令(仅管理员)：/jk 删除全部; /j /j2 各生成一辆吉普
     else if (trimmed == "/jk" || trimmed == "!jk"
@@ -545,20 +523,20 @@ function OnGameEvent_player_say(params)
                 ASRD_SpawnJeep(hPlayer);
         }
         else
-            ClientPrint(hPlayer, 3, hPlayer.GetPlayerName() + "：你没有管理员权限");
+            ClientPrint(hPlayer, 3, hPlayer.GetPlayerName() + "：你没有权限执行该指令");
     }
-    // 玩家命令
+    // 玩家命令（管理员也用它，且无限次）
     else if (trimmed.find("/fh") == 0 || trimmed.find("!fh") == 0)
     {
         if (!IsAdmin(hPlayer) && !::g_ASRD_PlayerCommandsEnabled)
-            Chat(hPlayer.GetPlayerName() + "：普通玩家 /fh 已被管理员关闭");
+            Chat(hPlayer.GetPlayerName() + "：当前 /fh 已被关闭");
         else
             DoFH(hPlayer);
     }
     else if (trimmed.find("/tp") == 0 || trimmed.find("!tp") == 0)
     {
         if (!IsAdmin(hPlayer) && !::g_ASRD_PlayerCommandsEnabled)
-            Chat(hPlayer.GetPlayerName() + "：普通玩家 /tp 已被管理员关闭");
+            Chat(hPlayer.GetPlayerName() + "：当前 /tp 已被关闭");
         else
             DoTP(hPlayer);
     }
