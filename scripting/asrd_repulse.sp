@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 范围击退 (Repulse)
- *  版本 1.7.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.7.3  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  1. 手动击退: 按绑定键以自己为中心, 把周围虫族沿径向往外推开。
@@ -16,6 +16,9 @@
  *     以最后一次使用为基准刷新; 充能耗尽后无法再开启。
  *     原版机制说明: X-33 信标基础时长对全角色固定 30 秒, 无角色差异;
  *     差异在于只有重武兵能把信标捡起来带着走 (携带移动每秒扣 1.125 秒)。
+ *     特效同步: 护盾期间每帧把信标的燃烧截止时间回填为护盾结束时间 —
+ *     抵消携带消耗, 保证增益特效与屏幕倒计时同时开始/结束;
+ *     护盾自然到期时信标同步燃尽 (marine 阵亡则保留信标原版自然燃烧)。
  *
  *  ── 投射物(炮弹) ───────────────────────────────────────
  *   已内置 mortarbug(迫击炮虫)的炮弹 asw_mortarbug_shell。
@@ -56,7 +59,12 @@
  *                                  使用 X-33 时获得限时护盾; 不依赖 sm_asrd_repulse_aura,
  *                                  护盾方式(斥力/阻挡)仍由 sm_asrd_repulse_aura_mode 决定
  *   sm_asrd_repulse_x33_duration   每使用一次 X-33 的护盾秒数 (默认 30=原版信标时长;
- *                                  大于 30 时还会同步延长原版增益信标的持续时间)
+ *                                  信标特效燃烧截止时间每帧同步为护盾结束时间,
+ *                                  抵消携带消耗; >30 时等效延长原版增益信标)
+ *   sm_asrd_repulse_x33_hud_channel 倒计时 HUD 通道 (默认 4; 需避开核弹插件的 5)
+ *   sm_asrd_repulse_x33_hud_x      倒计时横向位置 (默认 -1=居中, 与核弹同款已验证位置;
+ *                                  注意: 该游戏右侧 x=0.75 的 HudText 实测不渲染)
+ *   sm_asrd_repulse_x33_hud_y      倒计时纵向位置 (默认 0.30; 与核弹同时显示时建议错开)
  *
  *   sm_asrd_repulse_classes        追加要击退的实体类名 (空格分隔, 空=不追加)
  *   sm_asrd_repulse_debug          调试输出 (默认 0; 1 会列出半径内所有 asw_ 与 npc_ 实体的真实类名)
@@ -73,7 +81,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] 范围击退"
-#define PLUGIN_VERSION "1.7.0"
+#define PLUGIN_VERSION "1.7.3"
 
 // ─── 平滑推进动画池 (手动击退用) ──
 #define MAX_PUSH 512
@@ -159,6 +167,9 @@ ConVar g_cvProjSpeed;
 ConVar g_cvProjClasses;
 ConVar g_cvDebug;
 ConVar g_cvAuraPushSpeed;
+ConVar g_cvX33HudChannel;
+ConVar g_cvX33HudX;
+ConVar g_cvX33HudY;
 
 // ─── 按玩家激活的护盾 (由管理员命令 sm_repulseaura 指定, 默认全场无护盾) ──
 bool g_bAuraOn[MAXPLAYERS + 1];
@@ -172,16 +183,15 @@ bool g_bAuraOn[MAXPLAYERS + 1];
 // 职业判定: 真实档案索引在 asw_marine_resource 的 m_MarineProfileIndex 上
 // (marine 自身的 m_nMarineProfile 是地图摆放 keyfield, 游戏生成时恒为 -1, 不可用)。
 static const char X33_WEAPON_CLASS[]  = "asw_weapon_buff_grenade";
-#define X33_NATIVE_DURATION  30.0      // 原版信标基础时长/秒 (全角色一致, 硬编码)
+#define X33_BEACON_CLASS      "asw_buffgrenade_projectile"
 #define PROFILE_WILDCAT      1         // ASW_MARINE_PROFILE_WILDCAT
 #define PROFILE_WOLFE        5         // ASW_MARINE_PROFILE_WOLFE
-#define X33_HUD_CHANNEL      3         // 倒计时 HUD 通道
+#define X33_HUD_HOLD         1.1       // 停留秒数, 大于 0.5s 定时器刷新间隔 (与核弹插件一致)
 float  g_fX33End[MAXPLAYERS + 1];      // 护盾结束时间(游戏时间), 0=未激活
 bool   g_bX33Active[MAXPLAYERS + 1];   // 上一帧是否处于 X-33 护盾中(到期边缘检测)
 bool   g_bAnyX33Active;                // 是否有任一玩家处于 X-33 护盾中(帧回调开关)
-float  g_fLastX33Hud[MAXPLAYERS + 1];  // 倒计时 HUD 刷新节流
-int    g_iX33HudMode[MAXPLAYERS + 1];  // 倒计时显示方式: 0=未试 1=内置HudText 2=game_text 兜底
-int    g_iX33TextEnt[MAXPLAYERS + 1];  // game_text 兜底实体引用
+int    g_iX33HudMode[MAXPLAYERS + 1];  // 倒计时显示模式: 0=未检测 1=内置HudText 2=game_text兜底
+int    g_iX33TextEnt[MAXPLAYERS + 1];  // game_text 兜底实体引用 (模式2)
 
 float g_fLastUse[MAXPLAYERS + 1];   // 手动击退冷却用
 
@@ -227,8 +237,17 @@ public void OnPluginStart()
         "X-33 威力增强器护盾 (1=开 0=关), 开启后仅 Wildcat/Wolfe (重武兵) 使用 X-33 (asw_weapon_buff_grenade) 时获得限时护盾, 不依赖 sm_asrd_repulse_aura, 护盾方式由 sm_asrd_repulse_aura_mode 决定",
         FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_cvX33Duration = CreateConVar("sm_asrd_repulse_x33_duration", "30",
-        "每使用一次 X-33 的护盾秒数 (默认 30=原版信标时长; 叠加规则: 结束时间以最后一次使用为基准刷新, 只叠时间不叠强度; 大于 30 时还会同步延长原版增益信标的持续时间)",
+        "每使用一次 X-33 的护盾秒数 (默认 30=原版信标时长; 叠加规则: 结束时间以最后一次使用为基准刷新, 只叠时间不叠强度; 增益信标特效的燃烧截止时间每帧同步为护盾结束时间 — 顺带抵消携带信标移动的额外消耗, 并在时长>30 时等效延长信标)",
         FCVAR_NOTIFY, true, 1.0, true, 600.0);
+    g_cvX33HudChannel = CreateConVar("sm_asrd_repulse_x33_hud_channel", "4",
+        "X-33 护盾倒计时 HUD 通道 (需避开核弹插件的 5; 若倒计时不显示可换 2/6/7 等通道试验, 无需重编译)",
+        FCVAR_NOTIFY, true, 0.0, true, 15.0);
+    g_cvX33HudX = CreateConVar("sm_asrd_repulse_x33_hud_x", "-1.0",
+        "X-33 倒计时横向位置 (-1=居中 0=最左 0.9=近最右, 文字从该点向右绘制; 默认 -1 与核弹插件同位置 — 经测试该游戏 x=0.75 右侧位置的 HudText 不渲染, 居中可正常显示; 改完无需重编译)",
+        FCVAR_NOTIFY, true, -1.0, true, 0.95);
+    g_cvX33HudY = CreateConVar("sm_asrd_repulse_x33_hud_y", "0.30",
+        "X-33 倒计时纵向位置 (0=最上 1=最下; 与核弹插件同默认值, 避免重叠可改 0.22 等)",
+        FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_cvClasses = CreateConVar("sm_asrd_repulse_classes", "",
         "追加要击退的实体类名 (空格分隔, 空=不追加)", FCVAR_NOTIFY);
     g_cvProjectiles = CreateConVar("sm_asrd_repulse_projectiles", "1",
@@ -246,6 +265,10 @@ public void OnPluginStart()
     // X-33 使用事件 (游戏原生): 武器源码在创建信标后、扣减 m_iClip1 前触发,
     // 携带 entindex=信标实体 与 marine=marine 实体索引
     HookEvent("damage_amplifier_placed", Event_X33Placed, EventHookMode_Post);
+
+    // X-33 倒计时 HUD 定时器 — 与核弹插件一致的"定时器驱动"显示方式。
+    // (之前从 OnGameFrame 里直接发 HudText 在部分客户端不渲染, 核弹的定时器发送是已验证可用的)
+    CreateTimer(0.5, Timer_X33Hud, _, TIMER_REPEAT);
 
     AutoExecConfig(true, "asrd_repulse");
 
@@ -291,14 +314,8 @@ public void Event_X33Placed(Event event, const char[] name, bool dontBroadcast)
     g_fX33End[client] = now + duration;
     g_bAnyX33Active = true;
 
-    // 时长大于原版 30s 时, 同步延长刚部署的增益信标, 让原版增益与护盾同步结束
-    int beacon = event.GetInt("entindex");
-    if (duration > X33_NATIVE_DURATION
-        && IsValidEntity(beacon)
-        && HasEntProp(beacon, Prop_Send, "m_flTimeBurnOut"))
-    {
-        SetEntPropFloat(beacon, Prop_Send, "m_flTimeBurnOut", now + duration);
-    }
+    // 信标特效的截止时间不在这里改 — 由 ThinkAura 每帧同步为护盾结束时间,
+    // 顺带抵消原版"携带信标移动每秒额外烧 1.125s"的消耗 (见 LoseTimeForMoving)
 
     // 剩余次数: 事件先于 m_iClip1 扣减触发, 本次使用后剩余 = 当前充能 - 1
     int remaining = X33RemainingCharges(marine);
@@ -367,80 +384,29 @@ int X33RemainingCharges(int marine)
     return -1;
 }
 
-// ============================================================================
-//  X-33 倒计时显示: 先试内置 ShowHudText (绿色, 屏幕右侧);
-//  AS:RD 下该 usermessage 对部分客户端无效 (返回 -1) → 自动降级为
-//  game_text 实体显示 (与核弹插件 asrd_nuke 的 ETA 倒计时同一套兜底方案)
-// ============================================================================
-void ShowX33Hud(int client, const char[] msg)
+// 把该 marine 扔出的所有增益信标 (asw_buffgrenade_projectile) 的燃烧截止时间
+// 统一设为 fEnd — 护盾期间每帧调用 fEnd=护盾结束时间, 抵消原版携带移动的额外
+// 消耗 (LoseTimeForMoving: 每秒烧 1.125s, 只有重武兵能携带, 故 Wildcat/Wolfe
+// 的特效会早于倒计时熄灭); 到期时调用 fEnd=now 即同步燃尽。
+// 信标被捡起携带仍是同一实体 (AttachToMarine 只是 SetParent), 所以按 owner
+// 匹配即可覆盖"扔在地上"与"被带着走"两种状态。
+void SyncX33Beacons(int marine, float fEnd)
 {
-    if (g_iX33HudMode[client] == 2)
-    {
-        ShowX33ViaGameText(client, msg);
+    if (marine <= 0)
         return;
-    }
 
-    // 绿色, 右侧偏上, 停留略超刷新间隔保证不闪烁
-    SetHudTextParams(0.80, 0.35, 0.30, 0, 255, 0, 255, 0, 0.0, 0.0, 0.0);
-    int ret = ShowHudText(client, X33_HUD_CHANNEL, msg);
-
-    if (ret == -1)
+    int ent = -1;
+    while ((ent = FindEntityByClassname(ent, X33_BEACON_CLASS)) != -1)
     {
-        g_iX33HudMode[client] = 2;
-        ShowX33ViaGameText(client, msg);
-    }
-    else
-    {
-        g_iX33HudMode[client] = 1;
-    }
-}
+        if (!IsValidEntity(ent))
+            continue;
+        if (!HasEntProp(ent, Prop_Send, "m_hOwnerEntity")
+            || GetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity") != marine)
+            continue;
+        if (!HasEntProp(ent, Prop_Send, "m_flTimeBurnOut"))
+            continue;
 
-// 兜底显示: 为该玩家取得 (没有则创建) 绿色右侧 game_text 并显示
-void ShowX33ViaGameText(int client, const char[] msg)
-{
-    int ent = EntRefToEntIndex(g_iX33TextEnt[client]);
-    if (ent == INVALID_ENT_REFERENCE || !IsValidEntity(ent))
-    {
-        ent = CreateEntityByName("game_text");
-        if (ent == -1)
-            return;
-
-        char sName[48];
-        Format(sName, sizeof(sName), "asrd_x33_hud_%d", GetClientUserId(client));
-
-        DispatchKeyValue(ent, "targetname", sName);
-        DispatchKeyValue(ent, "spawnflags", "0");   // 只显示给 activator(该玩家)
-        DispatchKeyValue(ent, "channel",   "3");
-        DispatchKeyValue(ent, "x",         "0.80");
-        DispatchKeyValue(ent, "y",         "0.35");
-        DispatchKeyValue(ent, "effect",    "0");
-        DispatchKeyValue(ent, "color",     "0 255 0");
-        DispatchKeyValue(ent, "fadein",    "0.05");
-        DispatchKeyValue(ent, "fadeout",   "0.1");
-        DispatchKeyValue(ent, "holdtime",  "0.3");
-        DispatchSpawn(ent);
-
-        g_iX33TextEnt[client] = EntIndexToEntRef(ent);
-    }
-
-    DispatchKeyValue(ent, "message", msg);
-    AcceptEntityInput(ent, "Display", client);
-}
-
-// 清除倒计时显示 (护盾到期/失效时调用)
-void ClearX33Hud(int client)
-{
-    if (g_iX33HudMode[client] == 1)
-    {
-        SetHudTextParams(0.80, 0.35, 0.1, 0, 255, 0, 0, 0, 0.0, 0.1, 0.1);
-        ShowHudText(client, X33_HUD_CHANNEL, " ");
-    }
-    else if (g_iX33HudMode[client] == 2)
-    {
-        int ent = EntRefToEntIndex(g_iX33TextEnt[client]);
-        if (ent != INVALID_ENT_REFERENCE && IsValidEntity(ent))
-            AcceptEntityInput(ent, "Kill");
-        g_iX33TextEnt[client] = 0;
+        SetEntPropFloat(ent, Prop_Send, "m_flTimeBurnOut", fEnd);
     }
 }
 
@@ -553,8 +519,8 @@ public void OnMapStart()
     {
         g_fX33End[c] = 0.0;
         g_bX33Active[c] = false;
-        g_iX33HudMode[c] = 0;   // 重新探测 HUD 显示方式
-        g_iX33TextEnt[c] = 0;   // game_text 实体随切图销毁, 引用清零
+        g_iX33HudMode[c] = 0;    // game_text 实体随切图销毁, 重新做模式检测
+        g_iX33TextEnt[c] = 0;
     }
 
     ParseCustomClasses();
@@ -989,26 +955,27 @@ void ThinkAura()
                 g_bAnyX33Active = true;
                 g_bX33Active[client] = true;
 
-                // 右侧绿色倒计时 (0.2s 刷新一次, hold 0.3s 防闪烁)
-                if (now - g_fLastX33Hud[client] >= 0.2)
-                {
-                    g_fLastX33Hud[client] = now;
-                    int secs = RoundToCeil(g_fX33End[client] - now);
-                    if (secs < 1)
-                        secs = 1;
-                    char sMsg[64];
-                    Format(sMsg, sizeof(sMsg), "X-33 力场护盾 %d 秒", secs);
-                    ShowX33Hud(client, sMsg);
-                }
+                // 信标特效同步: 每帧把该 marine 名下增益信标的燃烧截止时间回填为
+                // 护盾结束时间 — 抵消原版"携带信标移动每秒额外烧 1.125s"的消耗,
+                // 保证特效与倒计时同时结束 (Wildcat/Wolfe 才能携带信标, 故尤其明显)
+                SyncX33Beacons(marine, g_fX33End[client]);
+
+                // 倒计时显示由 Timer_X33Hud 定时器负责 (与核弹插件一致的发送方式)
             }
             else
             {
-                // 到期 / 被关闭 / marine 阵亡 → 清除状态与倒计时, 提示一次
+                // 到期 / 被关闭 / marine 阵亡 → 清除倒计时与状态, 提示一次
                 g_fX33End[client] = 0.0;
                 if (g_bX33Active[client])
                 {
                     g_bX33Active[client] = false;
                     ClearX33Hud(client);
+
+                    // 自然到期(非阵亡) → 信标特效同步燃尽, 与倒计时同时结束;
+                    // 阵亡则不烧 — 保留原版行为: 掉落的信标继续给队友提供增益
+                    if (bAlive)
+                        SyncX33Beacons(marine, now - 0.1);
+
                     PrintToChat(client, "\x04[击退]\x01 X-33 力场护盾已失效");
                 }
             }
@@ -1046,6 +1013,135 @@ void ThinkAura()
         PrintToServer("[击退][aura] 本秒推开 %d 只", iPushed);
         g_fLastAuraLog = now;
     }
+}
+
+// ============================================================================
+//  X-33 倒计时显示 (与核弹插件同款双模式):
+//  先试内置 HudText 用户消息, 客户端不支持(返回-1)则降级为 game_text 实体兜底
+//  参数形态与核弹插件完全一致 (hold 1.1 / fadeIn 0.05 / fadeOut 0.15),
+//  仅位置/颜色/文本不同 — 核弹的这组参数是已验证可显示的
+// ============================================================================
+void ShowX33Hud(int client, const char[] text)
+{
+    if (g_iX33HudMode[client] == 2)
+    {
+        ShowX33ViaGameText(client, text);
+        return;
+    }
+
+    SetHudTextParams(g_cvX33HudX.FloatValue, g_cvX33HudY.FloatValue, X33_HUD_HOLD, 0, 255, 0, 255, 0, 0.0, 0.05, 0.15);
+    int ret = ShowHudText(client, g_cvX33HudChannel.IntValue, text);
+
+    if (ret == -1)
+    {
+        g_iX33HudMode[client] = 2;
+        if (g_cvDebug.BoolValue)
+            PrintToServer("[击退][x33] 内置HudText不可用(返回-1), 改用 game_text 兜底: client=%d", client);
+        ShowX33ViaGameText(client, text);
+    }
+    else if (g_iX33HudMode[client] != 1)
+    {
+        g_iX33HudMode[client] = 1;
+        if (g_cvDebug.BoolValue)
+            PrintToServer("[击退][x33] 内置HudText可用(返回通道=%d): client=%d", ret, client);
+    }
+}
+
+// X-33 倒计时刷新定时器 (0.5s): 只负责显示, 到期检测仍在 ThinkAura 每帧进行。
+// 护盾状态由 ThinkAura 维护 (g_bX33Active=当前帧处于护盾中), 这里仅读取。
+public Action Timer_X33Hud(Handle timer)
+{
+    if (!g_cvEnabled.BoolValue || !g_cvX33.BoolValue || !g_bAnyX33Active)
+        return Plugin_Continue;
+
+    float now = GetGameTime();
+    for (int c = 1; c <= MaxClients; c++)
+    {
+        if (!g_bX33Active[c] || g_fX33End[c] <= now)
+            continue;
+        if (!IsClientInGame(c) || IsFakeClient(c))
+            continue;
+
+        int secs = RoundToCeil(g_fX33End[c] - now);
+        if (secs < 1)
+            secs = 1;
+        char sBuf[64];
+        Format(sBuf, sizeof(sBuf), "护盾 %d 秒", secs);
+        ShowX33Hud(c, sBuf);
+
+        if (g_cvDebug.BoolValue)
+            PrintToServer("[击退][x33] HUD刷新: client=%d 剩余=%ds 模式=%d 通道=%d 位置=(%.2f, %.2f)",
+                c, secs, g_iX33HudMode[c], g_cvX33HudChannel.IntValue, g_cvX33HudX.FloatValue, g_cvX33HudY.FloatValue);
+    }
+    return Plugin_Continue;
+}
+
+// 护盾到期时清除倒计时字样
+void ClearX33Hud(int client)
+{
+    if (g_iX33HudMode[client] == 1)
+    {
+        SetHudTextParams(g_cvX33HudX.FloatValue, g_cvX33HudY.FloatValue, 0.1, 0, 255, 0, 0, 0, 0.0, 0.1, 0.1);
+        ShowHudText(client, g_cvX33HudChannel.IntValue, " ");
+    }
+    else if (g_iX33HudMode[client] == 2)
+    {
+        int ent = EntRefToEntIndex(g_iX33TextEnt[client]);
+        // ent > 0: 引用为 0 时解析成 worldspawn, 误 Kill 会崩服
+        if (ent != INVALID_ENT_REFERENCE && ent > 0 && IsValidEntity(ent))
+            AcceptEntityInput(ent, "Kill");
+        g_iX33TextEnt[client] = 0;
+    }
+}
+
+// 兜底显示: 为某玩家取得 (没有则创建) 一个 game_text 实体并显示
+int GetX33GameText(int client)
+{
+    int ent = EntRefToEntIndex(g_iX33TextEnt[client]);
+    // ent > 0: 引用为 0 时解析成 worldspawn, 不能当 game_text 用
+    if (ent != INVALID_ENT_REFERENCE && ent > 0 && IsValidEntity(ent))
+        return ent;
+
+    ent = CreateEntityByName("game_text");
+    if (ent == -1)
+        return -1;
+
+    char sName[48];
+    Format(sName, sizeof(sName), "asrd_x33_hud_%d", GetClientUserId(client));
+
+    char sCh[8], sX[16], sY[16];
+    IntToString(g_cvX33HudChannel.IntValue, sCh, sizeof(sCh));
+    Format(sX, sizeof(sX), "%.4f", g_cvX33HudX.FloatValue);
+    Format(sY, sizeof(sY), "%.4f", g_cvX33HudY.FloatValue);
+
+    DispatchKeyValue(ent, "targetname", sName);
+    DispatchKeyValue(ent, "spawnflags", "0");
+    DispatchKeyValue(ent, "channel",   sCh);
+    DispatchKeyValue(ent, "x",         sX);
+    DispatchKeyValue(ent, "y",         sY);
+    DispatchKeyValue(ent, "effect",    "0");
+    DispatchKeyValue(ent, "color",     "0 255 0");
+    DispatchKeyValue(ent, "fadein",    "0.05");
+    DispatchKeyValue(ent, "fadeout",   "0.1");
+    DispatchKeyValue(ent, "holdtime",  "1.0");
+    DispatchSpawn(ent);
+
+    if (g_cvDebug.BoolValue)
+        PrintToServer("[击退][x33] 创建 game_text 兜底实体 #%d (client=%d 通道=%d)",
+            ent, client, g_cvX33HudChannel.IntValue);
+
+    g_iX33TextEnt[client] = EntIndexToEntRef(ent);
+    return ent;
+}
+
+void ShowX33ViaGameText(int client, const char[] msg)
+{
+    int ent = GetX33GameText(client);
+    if (ent == -1)
+        return;
+
+    DispatchKeyValue(ent, "message", msg);
+    AcceptEntityInput(ent, "Display", client);
 }
 
 // ============================================================================
@@ -1218,16 +1314,22 @@ int ClientOfMarine(int iMarine)
     return 0;
 }
 
-// 玩家离开时清掉管理员护盾与 X-33 护盾状态, 回收 game_text 兜底实体
+// 玩家离开时清掉管理员护盾与 X-33 护盾状态, 避免残留
 public void OnClientDisconnect(int client)
 {
     g_bAuraOn[client] = false;
     g_fX33End[client] = 0.0;
     g_bX33Active[client] = false;
 
-    int ent = EntRefToEntIndex(g_iX33TextEnt[client]);
-    if (ent != INVALID_ENT_REFERENCE && IsValidEntity(ent))
-        AcceptEntityInput(ent, "Kill");
-    g_iX33TextEnt[client] = 0;
+    // 清理 game_text 兜底实体: 只有确实创建过(模式2)才清理。
+    // 警告: EntRefToEntIndex(0) 返回 0 = worldspawn(世界实体) 且 IsValidEntity(0)
+    // 为 true, 引用为 0 时对它 Kill 会直接崩服, 必须用 ent > 0 挡住!
+    if (g_iX33HudMode[client] == 2)
+    {
+        int ent = EntRefToEntIndex(g_iX33TextEnt[client]);
+        if (ent != INVALID_ENT_REFERENCE && ent > 0 && IsValidEntity(ent))
+            AcceptEntityInput(ent, "Kill");
+    }
     g_iX33HudMode[client] = 0;
+    g_iX33TextEnt[client] = 0;
 }

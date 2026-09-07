@@ -169,8 +169,10 @@ public void OnClientDisconnected(int client)
 {
     g_iHudMode[client] = 0;
 
+    // 警告: EntRefToEntIndex(0) 返回 0 = worldspawn(世界实体) 且 IsValidEntity(0)
+    // 为 true, 引用为 0 时对它 Kill 会直接崩服, 必须用 ent > 0 挡住!
     int ent = EntRefToEntIndex(g_iEtaTextEnt[client]);
-    if (ent != INVALID_ENT_REFERENCE && IsValidEntity(ent))
+    if (ent != INVALID_ENT_REFERENCE && ent > 0 && IsValidEntity(ent))
         AcceptEntityInput(ent, "Kill");
     g_iEtaTextEnt[client] = 0;
 }
@@ -342,7 +344,8 @@ void ClearEta()
         else if (g_iHudMode[i] == 2)
         {
             int ent = EntRefToEntIndex(g_iEtaTextEnt[i]);
-            if (ent != INVALID_ENT_REFERENCE && IsValidEntity(ent))
+            // ent > 0: 引用为 0 时解析成 worldspawn, 误 Kill 会崩服
+            if (ent != INVALID_ENT_REFERENCE && ent > 0 && IsValidEntity(ent))
                 AcceptEntityInput(ent, "Kill");
             g_iEtaTextEnt[i] = 0;
         }
@@ -357,6 +360,8 @@ void ShowCenterText(int client, const char[] text)
     if (g_iHudMode[client] == 2)
     {
         ShowViaGameText(client, text);
+        if (g_cvDebug.BoolValue)
+            PrintToServer("[核弹][debug] HUD刷新(game_text兜底): client=%d", client);
         return;
     }
 
@@ -367,11 +372,20 @@ void ShowCenterText(int client, const char[] text)
     if (ret == -1)
     {
         g_iHudMode[client] = 2;
+        if (g_cvDebug.BoolValue)
+            PrintToServer("[核弹][debug] 内置HudText不可用(返回-1), 改用 game_text 兜底: client=%d", client);
         ShowViaGameText(client, text);
     }
     else
     {
-        g_iHudMode[client] = 1;
+        if (g_iHudMode[client] != 1)
+        {
+            g_iHudMode[client] = 1;
+            if (g_cvDebug.BoolValue)
+                PrintToServer("[核弹][debug] 内置HudText可用(返回通道=%d): client=%d", ret, client);
+        }
+        if (g_cvDebug.BoolValue)
+            PrintToServer("[核弹][debug] HUD刷新(内置HudText): client=%d", client);
     }
 }
 
@@ -381,7 +395,9 @@ void ShowCenterText(int client, const char[] text)
 int GetEtaGameText(int client)
 {
     int ent = EntRefToEntIndex(g_iEtaTextEnt[client]);
-    if (ent != INVALID_ENT_REFERENCE && IsValidEntity(ent))
+    // ent > 0: 引用为 0 时解析成 worldspawn(世界实体), 不能当 game_text 用,
+    // 否则兜底永远拿到世界实体而不创建, 倒计时根本不显示
+    if (ent != INVALID_ENT_REFERENCE && ent > 0 && IsValidEntity(ent))
         return ent;
 
     ent = CreateEntityByName("game_text");
