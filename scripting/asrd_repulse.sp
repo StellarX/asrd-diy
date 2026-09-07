@@ -40,6 +40,7 @@
  *   sm_asrd_repulse_aura           持续护盾开关 (默认 0) — 配合 sm_repulseaura 指定玩家
  *   sm_asrd_repulse_aura_radius    护盾半径/游戏单位 (默认 260)
  *   sm_asrd_repulse_aura_mode      护盾模式 (默认 1: 1=直接阻挡钉在圈外; 0=斥力击退平滑弹开)
+ *   sm_asrd_repulse_aura_push_speed 护盾斥力弹开怪的速度/单位每秒 (默认 500; 持续速度外推, 顺滑不卡)
  *
  *   sm_asrd_repulse_armor          护甲护盾模式 (默认 0): 开启后, 佩戴 asw_weapon_normal_armor
  *                                  的玩家自动获得护盾且只针对该玩家; 不依赖 sm_asrd_repulse_aura,
@@ -144,6 +145,7 @@ ConVar g_cvProjectiles;
 ConVar g_cvProjSpeed;
 ConVar g_cvProjClasses;
 ConVar g_cvDebug;
+ConVar g_cvAuraPushSpeed;
 
 // ─── 按玩家激活的护盾 (由管理员命令 sm_repulseaura 指定, 默认全场无护盾) ──
 bool g_bAuraOn[MAXPLAYERS + 1];
@@ -197,6 +199,8 @@ public void OnPluginStart()
         "护盾半径 (游戏单位)", FCVAR_NOTIFY, true, 50.0, true, 3000.0);
     g_cvAuraMode = CreateConVar("sm_asrd_repulse_aura_mode", "1",
         "护盾模式 (1=直接阻挡 钉在圈外; 0=斥力击退 平滑弹开)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_cvAuraPushSpeed = CreateConVar("sm_asrd_repulse_aura_push_speed", "500",
+        "护盾斥力弹开把怪推出界外的速度/单位每秒 (作用于 sm_asrd_repulse_aura_mode 0 的斥力模式), 持续速度外推比分段动画更顺滑", FCVAR_NOTIFY, true, 50.0, true, 2000.0);
     g_cvClasses = CreateConVar("sm_asrd_repulse_classes", "",
         "追加要击退的实体类名 (空格分隔, 空=不追加)", FCVAR_NOTIFY);
     g_cvProjectiles = CreateConVar("sm_asrd_repulse_projectiles", "1",
@@ -627,13 +631,14 @@ int PushClassAliens(const char[] sClass, const float fCenter[3], float fRadius2,
             }
             else
             {
-                // ── 斥力 = 持续击退弹开: 对进入范围的怪施放一次平滑推进动画(力度/挑飞同手动)
-                // 同一只怪在动画未结束时不再重复施放(AddPush 内已防重), 既有击退弹开感又不抖动
-                float fDst[3];
-                fDst[0] = fPos[0] + (dx / fLen) * g_cvForce.FloatValue;
-                fDst[1] = fPos[1] + (dy / fLen) * g_cvForce.FloatValue;
-                fDst[2] = fPos[2] + g_cvLift.FloatValue;
-                AddPush(entity, fPos, fDst);
+                // ── 斥力弹开: 给一个持续的朝外速度, 交给引擎物理连续移动, 触发时才平滑流畅。
+                // 不再用分段平滑动画——分段动画首尾速度都会归零, 连续推时一卡一卡(视觉卡顿)。
+                // 撞墙由引擎物理自动停下, 不会穿墙。
+                float fVel[3];
+                fVel[0] = (dx / fLen) * g_cvAuraPushSpeed.FloatValue;
+                fVel[1] = (dy / fLen) * g_cvAuraPushSpeed.FloatValue;
+                fVel[2] = 90.0;   // 小幅上抬, 避免贴地拖着走的生硬感
+                TeleportEntity(entity, NULL_VECTOR, NULL_VECTOR, fVel);
                 iCount++;
             }
         }
