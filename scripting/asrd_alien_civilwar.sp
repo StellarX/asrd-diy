@@ -74,7 +74,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] 叛变虫群"
-#define PLUGIN_VERSION "4.6.0"
+#define PLUGIN_VERSION "4.7.0"
 
 // 叛变虫的统一 targetname, 供清除命令匹配
 #define INFECTED_NAME  "asrd_betray_swarm"
@@ -93,7 +93,15 @@ char g_sTypes[][3][] = {
     { "asw_shieldbug",        "盾甲虫",     "shield"   },
     { "asw_mortarbug",        "迫击炮虫",   "mortar"   },
     { "asw_harvester",        "收割者",     "harvester"},
-    { "asw_grub",             "幼虫",       "grub"     }
+    { "asw_grub",             "幼虫",       "grub"     },
+    // ── 蚁狮 (RD 用 npc_ 前缀; asw_drone_antlion 已确认存在) ──
+    { "asw_drone_antlion",     "蚁狮工蜂",   "antonlion" },
+    { "npc_antlion_worker",    "蚁狮工蜂(npc)", "anlionwork" },
+    { "npc_antlionguard",      "蚁狮守卫",   "antlionguard" },
+    { "npc_antlionguard_cavern","蚁狮守卫(洞窟)","antlioncave" },
+    { "npc_antlionguard_normal","蚁狮守卫(标准)","antlionnorm" },
+    // ── 治疗虫 (RD 真实类名) ──
+    { "asw_shaman",            "治疗虫",     "shaman"   }
 };
 
 // ─── ConVar 句柄 ─────────────────────────────────────────
@@ -109,6 +117,13 @@ ConVar g_cvDamageMult;
 ConVar g_cvHealthMult;
 ConVar g_cvSpeedMult;
 ConVar g_cvAnimMult;
+ConVar g_cvHeal;
+ConVar g_cvHealRadius;
+ConVar g_cvHealPercent;
+ConVar g_cvHealTick;
+
+// 叛变治疗虫给附近人族玩家加血的周期定时器
+Handle g_hHealTimer;
 
 // 缓存本批生成时从 marine 读到的真实 faction 值 (避免每只虫都扫一次 marine)
 int g_iCachedMarineFaction = -1;
@@ -219,6 +234,98 @@ public void OnPluginStart()
     // 实证"游戏重启是否真的删掉了叛变虫"(源码 CASW_Map_Reset_Filter 分析
     // 的结论), 并为崩溃日志提供时间锚点。
     HookEventEx("asw_mission_restart", Event_DiagRestart, EventHookMode_Post);
+
+    // ── 叛变治疗虫(asw_shaman)给附近人族玩家加血 ──
+    g_cvHeal = CreateConVar(
+        "sm_asrd_betray_heal", "1",
+        "叛变治疗虫(asw_shaman)给附近受伤的人族玩家加血 (0=关 1=开)",
+        FCVAR_NOTIFY, true, 0.0, true, 1.0);
+
+    g_cvHealRadius = CreateConVar(
+        "sm_asrd_betray_heal_radius", "400.0",
+        "叛变治疗虫加血作用半径(游戏单位)",
+        FCVAR_NOTIFY, true, 50.0, true, 2000.0);
+
+    g_cvHealPercent = CreateConVar(
+        "sm_asrd_betray_heal_percent", "0.08",
+        "叛变治疗虫每次判定恢复目标最大血量的比例 (0.08=8%)",
+        FCVAR_NOTIFY, true, 0.01, true, 1.0);
+
+    g_cvHealTick = CreateConVar(
+        "sm_asrd_betray_heal_tick", "0.5",
+        "叛变治疗虫加血判定周期(秒, >=0.1)",
+        FCVAR_NOTIFY, true, 0.1, true, 10.0);
+
+    float fTick = g_cvHealTick.FloatValue;
+    if (fTick < 0.1) fTick = 0.1;
+    g_hHealTimer = CreateTimer(fTick, Timer_AuraHeal, _, TIMER_REPEAT);
+}
+
+// ============================================================================
+//  叛变治疗虫给附近人族玩家加血 (独立于 AI, 不依赖原生 shaman AI 是否生效)
+//
+//  背景 (经 reactivedrop_public_src 源码核实): asw_shaman 的治疗行为
+//  (CAI_ASW_HealOtherBehavior::GatherCommonConditions) 按 faction 的
+//  D_LIKE 关系选治疗目标, 排除列表里没有 asw_marine, 本身具备治疗海洋的
+//  条件。但插件改 faction 是直接写 m_nFaction 绕过 ChangeFaction, 实体可能
+//  不在 GetEntitiesInFaction() 的正确列表里, 原生 AI 治疗不一定触发。因此
+//  这里由插件周期扫描叛变治疗虫, 给其范围内的受伤海洋补血, 保证生效。
+// ============================================================================
+Action Timer_AuraHeal(Handle hTimer)
+{
+    if (!g_cvHeal.BoolValue)
+        return Plugin_Continue;
+
+    float fRadius = g_cvHealRadius.FloatValue;
+    float fR2     = fRadius * fRadius;
+    float fHeal   = g_cvHealPercent.FloatValue;
+
+    int n = g_hBetrayAliens.Length;
+    for (int i = 0; i < n; i++)
+    {
+        int shaman = EntRefToEntIndex(g_hBetrayAliens.Get(i));
+        if (shaman == INVALID_ENT_REFERENCE || !IsValidEntity(shaman))
+            continue;
+
+        char sCls[64];
+        GetEntityClassname(shaman, sCls, sizeof(sCls));
+        if (!StrEqual(sCls, "asw_shaman", false))
+            continue;
+
+        float fSh[3];
+        if (!GetEntPropVector(shaman, Prop_Send, "m_vecOrigin", fSh))
+            continue;
+
+        int marine = -1;
+        while ((marine = FindEntityByClassname(marine, "asw_marine")) != -1)
+        {
+            if (!IsValidEntity(marine))
+                continue;
+
+            int iMax = GetEntProp(marine, Prop_Send, "m_iMaxHealth");
+            if (iMax <= 0)
+                iMax = GetEntProp(marine, Prop_Data, "m_iMaxHealth");
+            int iCur = GetEntProp(marine, Prop_Send, "m_iHealth");
+            if (iCur < 0)
+                iCur = GetEntProp(marine, Prop_Data, "m_iHealth");
+            if (iCur < 0 || iCur >= iMax)
+                continue;
+
+            float fMar[3];
+            if (!GetEntPropVector(marine, Prop_Send, "m_vecOrigin", fMar))
+                continue;
+            if (GetVectorDistance(fSh, fMar, true) > fR2)
+                continue;
+
+            int iAdd = RoundToCeil(float(iMax) * fHeal);
+            int iNew = iCur + iAdd;
+            if (iNew > iMax) iNew = iMax;
+            SetEntProp(marine, Prop_Send, "m_iHealth", iNew);
+            if (!HasEntProp(marine, Prop_Send, "m_iHealth"))
+                SetEntProp(marine, Prop_Data, "m_iHealth", iNew);
+        }
+    }
+    return Plugin_Continue;
 }
 
 // 重启事件: 调度 1s 后的实体清点 (此时实体删除早已完成)
@@ -320,6 +427,11 @@ public void OnEntityDestroyed(int entity)
 // ============================================================================
 public void OnPluginEnd()
 {
+    if (g_hHealTimer != null)
+    {
+        KillTimer(g_hHealTimer);
+        g_hHealTimer = null;
+    }
     KillAllBetrayAliens();
 }
 
