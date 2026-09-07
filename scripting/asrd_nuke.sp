@@ -46,7 +46,7 @@
 
 // 倒计时红字的位置与颜色 (内置 HUD 坐标: -1=居中; game_text: 0=居中)
 #define ETA_HUD_X       -1.0
-#define ETA_HUD_Y       0.30
+#define ETA_HUD_Y       0.10
 #define ETA_CHANNEL     5        // 通道号, 避免与其它 HUD 冲突
 
 // ─── 怪物实体类名清单 (取自 RD 官方实体列表 / 源码) ──────
@@ -411,7 +411,7 @@ int GetEtaGameText(int client)
     DispatchKeyValue(ent, "spawnflags", "0");
     DispatchKeyValue(ent, "channel",   "5");
     DispatchKeyValue(ent, "x",         "0.0");
-    DispatchKeyValue(ent, "y",         "0.30");
+    DispatchKeyValue(ent, "y",         "0.10");
     DispatchKeyValue(ent, "effect",    "0");
     DispatchKeyValue(ent, "color",     "255 0 0");
     DispatchKeyValue(ent, "fadein",    "0.05");

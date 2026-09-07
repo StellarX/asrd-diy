@@ -53,7 +53,7 @@
  *   sm_asrd_repulse_aura           管理员指定护盾总开关 (默认 0) — 配合 sm_repulseaura
  *   sm_asrd_repulse_aura_radius    护盾半径/游戏单位 (默认 260)
  *   sm_asrd_repulse_aura_mode      护盾模式 (默认 0: 0=斥力击退平滑弹开; 1=直接阻挡钉在圈外)
- *   sm_asrd_repulse_aura_push_speed 护盾斥力弹开怪的速度/单位每秒 (默认 500; 持续速度外推, 顺滑不卡)
+ *   sm_asrd_repulse_aura_push_speed 护盾斥力弹开怪的速度/单位每秒 (默认 900; 持续速度外推, 顺滑不卡)
  *
  *   sm_asrd_repulse_x33            X-33 威力增强器护盾 (默认 1): 仅 Wildcat/Wolfe (重武兵)
  *                                  使用 X-33 时获得限时护盾; 不依赖 sm_asrd_repulse_aura,
@@ -231,7 +231,7 @@ public void OnPluginStart()
         "护盾半径 (游戏单位)", FCVAR_NOTIFY, true, 50.0, true, 3000.0);
     g_cvAuraMode = CreateConVar("sm_asrd_repulse_aura_mode", "0",
         "护盾模式 (0=斥力击退 平滑弹开; 1=直接阻挡 钉在圈外)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
-    g_cvAuraPushSpeed = CreateConVar("sm_asrd_repulse_aura_push_speed", "500",
+    g_cvAuraPushSpeed = CreateConVar("sm_asrd_repulse_aura_push_speed", "900",
         "护盾斥力弹开把怪推出界外的速度/单位每秒 (作用于 sm_asrd_repulse_aura_mode 0 的斥力模式), 持续速度外推比分段动画更顺滑", FCVAR_NOTIFY, true, 50.0, true, 2000.0);
     g_cvX33 = CreateConVar("sm_asrd_repulse_x33", "1",
         "X-33 威力增强器护盾 (1=开 0=关), 开启后仅 Wildcat/Wolfe (重武兵) 使用 X-33 (asw_weapon_buff_grenade) 时获得限时护盾, 不依赖 sm_asrd_repulse_aura, 护盾方式由 sm_asrd_repulse_aura_mode 决定",
