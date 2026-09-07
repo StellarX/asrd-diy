@@ -28,6 +28,9 @@ try { IncludeScript("jeep"); } catch(e) {}
 // 核弹(nuke)独立模块：定义 ::ASRD_NukeStart / ::ASRD_NukeStartPublic / ::ASRD_NukeReset（见下方分发）。
 try { IncludeScript("nuke"); } catch(e) {}
 
+// 特效测试(effects)独立模块：定义 ::ASRD_FX_Dispatch（/fx 命令, 见 player_say 分发）。
+try { IncludeScript("effects"); } catch(e) {}
+
 // 名单是否成功加载（供 /test 自检用）
 ::g_ASRD_AdminsLoaded <- ("g_ASRD_AdminSteamIDs" in ::getroottable()) ? 1 : 0;
 
@@ -580,6 +583,14 @@ function OnGameEvent_player_say(params)
             Chat(hPlayer.GetPlayerName() + "：普通玩家 /tp 已被管理员关闭");
         else
             DoTP(hPlayer);
+    }
+    // 特效测试(所有玩家可用): /fx list | /fx stop | /fx <特效名> [玩家名]
+    else if (trimmed.find("/fx") == 0 || trimmed.find("!fx") == 0)
+    {
+        if ("ASRD_FX_Dispatch" in ::getroottable())
+            ASRD_FX_Dispatch(hPlayer, trimmed.slice("/fx".len()));
+        else
+            ClientPrint(hPlayer, 3, hPlayer.GetPlayerName() + "：特效模块未加载(effects.nut 缺失)");
     }
     else if (trimmed.find("/test") == 0 || trimmed.find("!test") == 0)
         DoTest(hPlayer);
