@@ -76,7 +76,7 @@
 #include <sdktools>
 #include <sdkhooks>
 
-#define PLUGIN_VERSION  "1.3.3"
+#define PLUGIN_VERSION  "1.3.2"
 #define SCANNER_CLASS   "npc_cscanner"
 #define SCANNER_NAME    "asrd_scanner"   // targetname 统一标记, 供识别/清除
 #define MAX_SUMMON      10              // 单次召唤数量上限
@@ -217,7 +217,7 @@ public void OnPluginStart()
         "只跟随玩家不自己乱窜 (m_bOnlyInspectPlayers)", 0, true, 0.0, true, 1.0);
     g_cvSeek       = CreateConVar("sm_asrd_scanner_seek", "0",
         "生成后锁定最近虫族 (1=开启, 可能导致高速俯冲自撞)", 0, true, 0.0, true, 1.0);
-    g_cvTurret     = CreateConVar("sm_asrd_scanner_turret", "1",
+    g_cvTurret     = CreateConVar("sm_asrd_scanner_turret", "0",
         "挂载哨戒机枪/加农炮塔 (1=开启, 复刻 asrd_drone.sp 的火力。扫描机本体只会俯冲自爆, 真正打虫族的是炮塔)",
         0, true, 0.0, true, 1.0);
     g_cvFX         = CreateConVar("sm_asrd_scanner_fx", "1",
