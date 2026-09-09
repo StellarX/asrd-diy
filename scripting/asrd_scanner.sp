@@ -23,8 +23,8 @@
 //     就算扫描机模型因 late-precache 在客户端不渲染, 也能看到发光飞行体。
 //     —— 注意: drone 的"能生成"很可能就是特效可见, 模型本体是否渲染
 //     从未被单独验证过。
-//  7. 生成后立刻 + 2 秒 + 8 秒三次状态回报 (实体编号/位置/血量/模型索引/
-//     EF_NODRAW/碰撞组), 始终发聊天 + 控制台。
+//  7. 召唤时只打印一条汇总提示（（玩家）已召唤 N 台战斗扫描机支援），
+//     不再逐台回报状态，避免聊天刷屏。
 //
 //  ── v1.3.2 ("生成后慢慢往上飘走") ────────────────────────────
 //  全部结论取自引擎源码, 不是猜的:
@@ -79,6 +79,7 @@
 #define PLUGIN_VERSION  "1.3.2"
 #define SCANNER_CLASS   "npc_cscanner"
 #define SCANNER_NAME    "asrd_scanner"   // targetname 统一标记, 供识别/清除
+#define SCANNER_MG_NAME "asrd_scanner_mg" // 本插件机枪专属标记, 供 per-entity 伤害缩放
 #define MAX_SUMMON      10              // 单次召唤数量上限
 
 // ─── 引擎阵营真值兜底 (源码证实) ──────────────────────────
@@ -126,7 +127,8 @@ ConVar g_cvPhysDamage;   // physdamagescale: 物理撞击伤害倍率 (0=免疫,
 ConVar g_cvNeutral;      // 中立模式 (引擎 DAMAGE_NO, 彻底无敌但不主动攻击)
 ConVar g_cvFollow;       // 只跟随玩家 (m_bOnlyInspectPlayers)
 ConVar g_cvSeek;         // 生成后主动锁定最近虫族
-ConVar g_cvTurret;       // 挂载哨戒炮塔 (复刻 asrd_drone.sp 的火力思路)
+ConVar g_cvTurret;       // 挂载哨戒机枪 (复刻 asrd_drone.sp 的火力思路; 已移除加农炮)
+ConVar g_cvMGDamage;     // 挂载机枪每发伤害 (per-entity, 不影响其它哨戒)
 ConVar g_cvFX;           // 挂粒子特效+聚光灯 (drone 原版, 保证肉眼可见)
 ConVar g_cvFaction;      // 写入 marine 阵营 (0=完全走 drone 原版, 不改阵营)
 ConVar g_cvFollowMode;   // 引擎原生跟随 (m_nFlyMode=FOLLOW + m_vInspectPos 刷新)
@@ -217,9 +219,12 @@ public void OnPluginStart()
         "只跟随玩家不自己乱窜 (m_bOnlyInspectPlayers)", 0, true, 0.0, true, 1.0);
     g_cvSeek       = CreateConVar("sm_asrd_scanner_seek", "0",
         "生成后锁定最近虫族 (1=开启, 可能导致高速俯冲自撞)", 0, true, 0.0, true, 1.0);
-    g_cvTurret     = CreateConVar("sm_asrd_scanner_turret", "0",
-        "挂载哨戒机枪/加农炮塔 (1=开启, 复刻 asrd_drone.sp 的火力。扫描机本体只会俯冲自爆, 真正打虫族的是炮塔)",
+    g_cvTurret     = CreateConVar("sm_asrd_scanner_turret", "1",
+        "挂载哨戒机枪 (默认1=开启, 复刻 asrd_drone.sp 的火力。已移除加农炮。扫描机本体只会俯冲自爆, 真正打虫族的是机枪)",
         0, true, 0.0, true, 1.0);
+    g_cvMGDamage   = CreateConVar("sm_asrd_scanner_mg_damage", "100",
+        "挂载机枪每发伤害 (默认100, per-entity 缩放, 不影响地图上其它哨戒炮塔; 设0=原生10/发)",
+        0, true, 0.0);
     g_cvFX         = CreateConVar("sm_asrd_scanner_fx", "1",
         "挂粒子特效+动态聚光灯 (1=开启, drone 原版配置, 保证肉眼可见)", 0, true, 0.0, true, 1.0);
     g_cvFaction    = CreateConVar("sm_asrd_scanner_marinefaction", "1",
@@ -227,8 +232,8 @@ public void OnPluginStart()
     g_cvFollowMode = CreateConVar("sm_asrd_scanner_followmode", "1",
         "引擎原生跟随 (1=开: m_nFlyMode=FOLLOW + 每秒刷新 m_vInspectPos, 不会上飘)",
         0, true, 0.0, true, 1.0);
-    g_cvHeight     = CreateConVar("sm_asrd_scanner_height", "100",
-        "跟随时的悬停高度 (相对队员原点的游戏单位)", 0, true, 0.0);
+    g_cvHeight     = CreateConVar("sm_asrd_scanner_height", "60",
+        "跟随时的悬停高度 (相对队员原点的游戏单位)。默认60: 机枪(本体下-15)离地约45, 与地面虫族垂直差<50, 绕过引擎 CanSee 的俯仰角限制(asw_sentry_top.cpp:446); 调高会导致近处矮虫族打不到", 0, true, 0.0);
 
     RegAdminCmd("sm_scanner", Command_Scanner, ADMFLAG_GENERIC,
         "召唤战斗扫描机 [数量] [目标玩家]");
@@ -603,9 +608,6 @@ void DoSummon(int client, int target, int count)
     }
 
     PrintToChatAll("\x04[扫描机]\x01 （%N）已召唤 %d 台战斗扫描机支援", target, iSpawned);
-
-    if (g_iAirNodes <= 0)
-        NotifyFmt(client, "注意: 本图无 info_node_air, 扫描机可能不会移动/索敌");
 }
 
 // ============================================================================
@@ -736,35 +738,18 @@ bool SpawnScanner(const float fOrigin[3], const float fAng[3], int ownerClient,
             SetEntPropEnt(ent, Prop_Data, "m_hEnemy", iEnemy);
     }
 
-    // ── 自有增强 #3: 挂炮塔 (默认关, drone 的火力思路) ───────────
+    // ── 自有增强 #3: 挂机枪 (默认关, drone 的火力思路; 已移除加农炮) ──
     if (g_cvTurret.BoolValue)
     {
         float fwd[3];
         GetAngleVectors(fAng, fwd, NULL_VECTOR, NULL_VECTOR);
         SpawnTurret("asw_sentry_top_machinegun", ent, fPos, fwd, -15.0);
-        SpawnTurret("asw_sentry_top_cannon", ent, fPos, fwd, -10.0);
     }
 
     // ── drone 原版: 粒子特效 + 动态聚光灯 (默认开, 保证肉眼可见) ──
     // 就算扫描机模型因 late-precache 在客户端不渲染, 也能看到发光飞行体。
     if (g_cvFX.BoolValue)
         AttachFX(ent, fPos, fAng);
-
-    // ── 黑匣子: 立刻回报一次真实状态 (聊天+控制台, 不看 debug 开关) ──
-    DumpScannerState(ent, ownerClient, "生成即时");
-
-    // ── 黑匣子: 2 秒 / 8 秒各复查一次 ───────────────────────────
-    DataPack dp = new DataPack();
-    dp.WriteCell(EntIndexToEntRef(ent));
-    dp.WriteCell(ownerClient);
-    dp.WriteCell(2);
-    CreateTimer(2.0, Timer_VerifySpawn, dp, TIMER_FLAG_NO_MAPCHANGE);
-
-    DataPack dp2 = new DataPack();
-    dp2.WriteCell(EntIndexToEntRef(ent));
-    dp2.WriteCell(ownerClient);
-    dp2.WriteCell(8);
-    CreateTimer(8.0, Timer_VerifySpawn, dp2, TIMER_FLAG_NO_MAPCHANGE);
 
     return true;
 }
@@ -899,6 +884,10 @@ void SpawnTurret(const char[] classname, int drone, const float dronePos[3],
         return;
 
     DispatchKeyValueFloat(turret, "modelscale", 0.01);
+    // 机枪打专属标记, 供 OnAlienTakeDamage 识别并做 per-entity 伤害缩放
+    // (不影响地图上其它哨戒炮塔)
+    if (StrEqual(classname, "asw_sentry_top_machinegun", false))
+        DispatchKeyValue(turret, "targetname", SCANNER_MG_NAME);
     DispatchSpawn(turret);
     ActivateEntity(turret);
 
@@ -913,38 +902,6 @@ void SpawnTurret(const char[] classname, int drone, const float dronePos[3],
 
     SetVariantString("!activator");
     AcceptEntityInput(turret, "SetParent", drone, drone);
-}
-
-// ============================================================================
-//  黑匣子: 把扫描机的真实状态发聊天 + 控制台
-//  (模型索引/EF_NODRAW/碰撞组/movetype/血量/位置/faction —— 一眼看出
-//  是"没了"还是"在但隐形"还是"在但飞走了")
-// ============================================================================
-void DumpScannerState(int ent, int client, const char[] tag)
-{
-    float fPos[3];
-    // VPHYSICS 实体的 Prop_Data m_vecOrigin 读出来是 NaN (日志里表现为 x=N),
-    // 一律用 drone 原版的 Prop_Send 读, 读不到再退回 Data 侧。
-    GetEntPropVector(ent, Prop_Send, "m_vecOrigin", fPos);
-    if (!IsValidWorldOrigin(fPos))
-        GetEntPropVector(ent, Prop_Data, "m_vecOrigin", fPos);
-
-    int iFlyMode = FindDataMapInfo(ent, "m_nFlyMode") > 0
-        ? GetEntProp(ent, Prop_Data, "m_nFlyMode") : -1;
-
-    int iHp       = HasEntProp(ent, Prop_Data, "m_iHealth")   ? GetEntProp(ent, Prop_Data, "m_iHealth")   : -1;
-    int iModelIdx = HasEntProp(ent, Prop_Send, "m_nModelIndex") ? GetEntProp(ent, Prop_Send, "m_nModelIndex") : -1;
-    int iEffects  = HasEntProp(ent, Prop_Send, "m_fEffects")  ? GetEntProp(ent, Prop_Send, "m_fEffects")  : -1;
-    int iColGroup = HasEntProp(ent, Prop_Data, "m_CollisionGroup") ? GetEntProp(ent, Prop_Data, "m_CollisionGroup") : -1;
-    int iMoveType = HasEntProp(ent, Prop_Data, "m_MoveType")  ? GetEntProp(ent, Prop_Data, "m_MoveType")  : -1;
-    int iFac      = GetFaction(ent);
-
-    // EF_NODRAW = 0x020
-    NotifyFmt(client, "%s: #%d 血量%d 模型%d %s 飞行模式%d 碰%d 移%d fac%d 位置 x=%.1f y=%.1f z=%.1f",
-        tag, ent, iHp, iModelIdx,
-        (iEffects & 0x020) ? "隐形!" : "可见",
-        iFlyMode, iColGroup, iMoveType, iFac,
-        fPos[0], fPos[1], fPos[2]);
 }
 
 // ============================================================================
@@ -981,30 +938,6 @@ public Action Timer_ReTeleport(Handle timer, DataPack dp)
     return Plugin_Stop;
 }
 
-// ============================================================================
-//  生成后复查 (2 秒 / 8 秒)
-// ============================================================================
-public Action Timer_VerifySpawn(Handle timer, DataPack dp)
-{
-    dp.Reset();
-    int ref     = dp.ReadCell();
-    int client  = dp.ReadCell();
-    int iSecond = dp.ReadCell();
-    delete dp;
-
-    char sTag[24];
-    Format(sTag, sizeof(sTag), "%d秒复查", iSecond);
-
-    int ent = EntRefToEntIndex(ref);
-    if (ent == INVALID_ENT_REFERENCE || !IsValidEntity(ent))
-    {
-        NotifyFmt(client, "%s: 扫描机已消失 (被引擎移除/死亡/掉出世界)", sTag);
-        return Plugin_Stop;
-    }
-
-    DumpScannerState(ent, client, sTag);
-    return Plugin_Stop;
-}
 
 // ============================================================================
 //  伤害回调: 扫描机被打 (victim=scanner)
@@ -1035,6 +968,23 @@ public Action OnAlienTakeDamage(int victim, int &attacker, int &inflictor,
 {
     if (attacker <= 0 || attacker == victim)
         return Plugin_Continue;
+
+    // 本插件挂载的机枪: per-entity 缩放, 不影响地图上其它哨戒炮塔
+    if (IsOurMachinegun(attacker))
+    {
+        float fMG = g_cvMGDamage.FloatValue;
+        if (fMG <= 0.0)
+            return Plugin_Continue;           // 0 = 用原生 10/发
+        float fScale = fMG / 10.0;
+        if (fScale == 1.0)
+            return Plugin_Continue;
+        damage *= fScale;
+        if (g_cvDebug.BoolValue)
+            PrintToServer("[扫描机][debug] 机枪 #%d 伤害 %.1f x%.1f = %.1f (victim #%d)",
+                attacker, damage / fScale, fScale, damage, victim);
+        return Plugin_Changed;
+    }
+
     if (!IsOurScanner(attacker))
         return Plugin_Continue;
 
@@ -1091,6 +1041,16 @@ bool IsOurScanner(int ent)
     char sName[32];
     GetEntPropString(ent, Prop_Data, "m_iName", sName, sizeof(sName));
     return StrEqual(sName, SCANNER_NAME);
+}
+
+// 是否本插件挂载的机枪 (专属 targetname 标记, per-entity 伤害缩放用)
+bool IsOurMachinegun(int ent)
+{
+    if (ent <= 0 || !IsValidEntity(ent) || !IsValidEdict(ent))
+        return false;
+    char sName[32];
+    GetEntPropString(ent, Prop_Data, "m_iName", sName, sizeof(sName));
+    return StrEqual(sName, SCANNER_MG_NAME);
 }
 
 int CountOurScanners()
