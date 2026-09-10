@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 积分机制 (Points)
- *  版本 1.7.3  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.8.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  引入一套全队共享的积分经济:
@@ -42,9 +42,11 @@
  *    - 友军虫 (targetname=asrd_betray_swarm, 含玩家附身虫) 不计分, 防刷分
  *
  *  ── 命令 ────────────────────────────────────────────────
- *   sm_buy              玩家: 在聊天中显示快捷购买指令 (聊天框 /buy)
+ *   sm_buy              玩家: 参数式购买 (聊天框 /buy)
+ *                        /buy 1=核弹  /buy 2 [1-6]=叛变虫群  /buy 3=强化+1
+ *                        /buy 2 无选项=drone×10; 无参数=显示命令格式
  *   sm_points           玩家: 查看当前总积分与功能价格
- *   sm_1 / sm_2 / sm_3  玩家: 快捷购买 核弹 / 叛变虫群 / 强化等级
+ *   sm_1 / sm_2 / sm_3  玩家: 快捷购买 核弹 / 叛变虫群(默认drone) / 强化等级
  *   sm_points_add <n>   管理员: 给积分池加 n
  *   sm_points_set <n>   管理员: 把积分池设为 n
  *   sm_points_reset     管理员: 积分池清零
@@ -54,9 +56,9 @@
  *   sm_asrd_points_enabled    总开关 (0=关 1=开, 默认 1)
  *   sm_asrd_points_start      每局初始积分 (默认 1000; 开局/换图时重置)
  *   sm_asrd_points_hp_scale   击杀积分 = 虫族最大血量 x 倍率 (默认 0.05, 最少 1 分)
- *   sm_asrd_points_nuke_cost  核弹价格 (默认 200, 0=不设门槛)
+ *   sm_asrd_points_nuke_cost  核弹价格 (默认 100, 0=不设门槛)
  *   sm_asrd_points_betray_cost 叛变虫群价格 (默认 100, 0=不设门槛)
- *   sm_asrd_points_power_cost 强化等级价格 (默认 100, 0=不设门槛)
+ *   sm_asrd_points_power_cost 强化等级价格 (默认 200, 0=不设门槛)
  *   sm_asrd_points_hud        积分显示开关 (0=关 1=开, 默认 1)
  *   sm_asrd_points_hud_channel HUD 通道 (默认 6, 避开 4=哨戒塔/X-33, 5=核弹)
  *   sm_asrd_points_hud_x      横向位置 (默认 0.01 左上角; -1=居中)
@@ -79,14 +81,19 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Points"
-#define PLUGIN_VERSION "1.7.3"
+#define PLUGIN_VERSION "1.8.0"
 
 // ─── HUD 显示 (左上角, 与 4=哨戒塔/X-33、5=核弹 错开) ─────
 #define HUD_CHANNEL     6
 #define HUD_X           0.01
 #define HUD_Y           0.02
-#define HUD_HOLD        1.2      // 停留秒数, 必须大于刷新周期 0.5s; 常驻显示不闪烁
+#define HUD_HOLD        1.2
 #define HUD_REFRESH     0.5
+
+// ─── /buy 2 叛变虫群可选虫种 (别名 + 数量, 对应 asrd_alien_civilwar 的 sm_betraypub) ─
+#define BUY_BETRAY_VARIANTS  6
+char g_sBetrayAlias[BUY_BETRAY_VARIANTS + 1][16] = { "", "drone", "buzzer", "ranger", "shield", "mortar", "shaman" };
+int  g_iBetrayCount[BUY_BETRAY_VARIANTS + 1] = { 0, 10, 20, 10, 5, 10, 5 };
 
 // 友军虫统一 targetname (镜像 asrd_alien_civilwar 的 INFECTED_NAME)
 #define BETRAY_NAME     "asrd_betray_swarm"
@@ -201,7 +208,7 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 0.001, true, 100.0
     );
     g_cvNukeCost = CreateConVar(
-        "sm_asrd_points_nuke_cost", "200",
+        "sm_asrd_points_nuke_cost", "100",
         "核弹(sm_nukepub)积分价格 (0=不设积分门槛)",
         FCVAR_NOTIFY, true, 0.0
     );
@@ -211,7 +218,7 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 0.0
     );
     g_cvPowerCost = CreateConVar(
-        "sm_asrd_points_power_cost", "100",
+        "sm_asrd_points_power_cost", "200",
         "强化等级(sm_power_up/sm_power_down)积分价格 (0=不设积分门槛; sm_power_reset 免费)",
         FCVAR_NOTIFY, true, 0.0
     );
@@ -261,7 +268,7 @@ public void OnPluginStart()
 
     // 玩家命令
     RegConsoleCmd("sm_points", Cmd_Points, "查看当前总积分与功能价格");
-    RegConsoleCmd("sm_buy",    Cmd_BuyMenu, "打开购买菜单");
+    RegConsoleCmd("sm_buy",    Cmd_Buy, "购买: /buy 1核弹 /buy 2 [虫种]虫群 /buy 3强化; 无参数显示格式");
 
     // 快捷购买命令: 聊天框 /1 /2 /3 (或控制台 sm_1) 直接触发对应购买,
     // 实际转发给原功能命令, 由下面的命令监听统一扣分/放行
@@ -305,7 +312,7 @@ public void OnPluginStart()
 // ============================================================================
 public void OnClientPutInServer(int client)
 {
-    PrintToChat(client, "\x04[积分]\x01 输入 \x05/buy\x01 查看快捷购买指令 (总积分: \x05%d\x01)", g_iPoints);
+    PrintToChat(client, "\x04[积分]\x01 输入 \x05/buy\x01 查看快捷购买格式 (总积分: \x05%d\x01)", g_iPoints);
 }
 
 // 地图加载/开局: 每局重置为初始积分 (一局一结算)
@@ -682,8 +689,8 @@ public Action Cmd_Points(int client, int args)
 {
     char sMsg[256];
     Format(sMsg, sizeof(sMsg),
-        "\x04[积分]\x01 总积分: \x05%d\x01 | 输入 \x05/buy\x01 查看快捷购买指令\n" ...
-        "快捷: \x05/1\x01核弹(%d)  \x05/2\x01虫群(%d)  \x05/3\x01强化(%d)",
+        "\x04[积分]\x01 总积分: \x05%d\x01 | 输入 \x05/buy\x01 查看命令格式\n" ...
+        "快捷: \x05/buy 1\x01核弹(%d)  \x05/buy 2\x01虫群(%d)  \x05/buy 3\x01强化(%d)",
         g_iPoints, g_cvNukeCost.IntValue, g_cvBetrayCost.IntValue, g_cvPowerCost.IntValue);
 
     if (client > 0)
@@ -695,10 +702,15 @@ public Action Cmd_Points(int client, int args)
 }
 
 // ============================================================================
-//  玩家命令: sm_buy 在聊天中显示快捷购买指令
-//  (快捷指令 /1 /2 /3 直接转发给原功能命令, 由命令监听统一扣分/放行)
+//  玩家命令: sm_buy 参数式购买
+//   /buy           → 显示命令格式
+//   /buy 1         → 战术核弹
+//   /buy 2 [1-6]   → 叛变虫群 (1=drone×10 2=buzzer×20 3=ranger×10
+//                     4=shieldbug×5 5=mortarbug×10 6=shaman×5; 缺省=1 drone×10)
+//   /buy 3         → 强化等级 +1
+//  实际转发给原功能命令, 由命令监听统一扣分/放行 (含满级保护/积分校验)
 // ============================================================================
-public Action Cmd_BuyMenu(int client, int args)
+public Action Cmd_Buy(int client, int args)
 {
     if (client <= 0)
         return Plugin_Handled;
@@ -710,18 +722,61 @@ public Action Cmd_BuyMenu(int client, int args)
         return Plugin_Handled;
     }
 
-    PrintToChat(client, "\x04[积分]\x01 总积分: \x05%d\x01 | 快捷购买指令 (聊天框输入):", g_iPoints);
-    PrintToChat(client, "  \x05/1\x01 战术核弹 (%d 分)", g_cvNukeCost.IntValue);
-    PrintToChat(client, "  \x05/2\x01 叛变虫群 (%d 分)", g_cvBetrayCost.IntValue);
-    PrintToChat(client, "  \x05/3\x01 强化等级 +1 (%d 分)", g_cvPowerCost.IntValue);
-    PrintToChat(client, "控制台也可输入 sm_1 / sm_2 / sm_3; 输入 \x05/sm_points\x01 查看总积分");
+    if (args < 1)
+    {
+        PrintToChat(client, "\x04[积分]\x01 命令格式: \x05/buy <编号> [选项]\x01  (总积分: \x05%d\x01)", g_iPoints);
+        PrintToChat(client, "  \x05/buy 1\x01  战术核弹 (%d 分)", g_cvNukeCost.IntValue);
+        PrintToChat(client, "  \x05/buy 2 [1-6]\x01  叛变虫群 (%d 分): 1=工蜂×10 2=蜂群×20 3=游侠×10 4=盾甲虫×5 5=迫击炮虫×10 6=治疗虫×5", g_cvBetrayCost.IntValue);
+        PrintToChat(client, "  \x05/buy 3\x01  强化等级 +1 (%d 分)", g_cvPowerCost.IntValue);
+        PrintToChat(client, "控制台也可输入 sm_buy; 输入 \x05/sm_points\x01 查看总积分");
+        return Plugin_Handled;
+    }
+
+    char sArg[8];
+    GetCmdArg(1, sArg, sizeof(sArg));
+    int iItem = StringToInt(sArg);
+
+    switch (iItem)
+    {
+        case 1:
+        {
+            FakeClientCommand(client, "sm_nukepub");
+        }
+        case 2:
+        {
+            int iVar = 1;   // 缺省 = drone × 10
+            if (args >= 2)
+            {
+                GetCmdArg(2, sArg, sizeof(sArg));
+                int n = StringToInt(sArg);
+                if (n >= 1 && n <= BUY_BETRAY_VARIANTS)
+                    iVar = n;
+                else
+                {
+                    ReplyToCommand(client, "\x04[积分]\x01 /buy 2 选项: 1=工蜂 2=蜂群 3=游侠 4=盾甲虫 5=迫击炮虫 6=治疗虫");
+                    return Plugin_Handled;
+                }
+            }
+            FakeClientCommand(client, "sm_betraypub %s %d",
+                g_sBetrayAlias[iVar], g_iBetrayCount[iVar]);
+        }
+        case 3:
+        {
+            FakeClientCommand(client, "sm_power_up");
+        }
+        default:
+        {
+            ReplyToCommand(client, "\x04[积分]\x01 /buy 编号无效, 输入 \x05/buy\x01 查看格式");
+            return Plugin_Handled;
+        }
+    }
     return Plugin_Handled;
 }
 
 // ============================================================================
 //  快捷购买: sm_1 / sm_2 / sm_3
 //  直接在聊天框输入 /1 /2 /3 (控制台输入 sm_1 等), 转发给原功能命令,
-//  由下方命令监听统一扣分/放行。sm_2 用原插件默认虫种/数量(默认10只drone)。
+//  由下方命令监听统一扣分/放行。sm_2 等价 /buy 2 1 = 10 只 drone。
 // ============================================================================
 public Action Cmd_BuyNukeShortcut(int client, int args)
 {
@@ -735,7 +790,7 @@ public Action Cmd_BuyBetrayShortcut(int client, int args)
 {
     if (client <= 0)
         return Plugin_Handled;
-    FakeClientCommand(client, "sm_betraypub");
+    FakeClientCommand(client, "sm_betraypub %s %d", g_sBetrayAlias[1], g_iBetrayCount[1]);
     return Plugin_Handled;
 }
 
@@ -844,7 +899,7 @@ public void OnGameFrame()
 // ============================================================================
 void AdvertiseUsage()
 {
-    PrintToChatAll("\x04[积分]\x01 输入 \x05/buy\x01 查看快捷购买指令: /1核弹(%d) /2虫群(%d) /3强化(%d) | 击杀虫族获取积分",
+    PrintToChatAll("\x04[积分]\x01 快捷购买: \x05/buy 1\x01核弹(%d)  \x05/buy 2\x01虫群(%d)  \x05/buy 3\x01强化(%d) | 击杀虫族获取积分, 输入 \x05/buy\x01 查看格式",
         g_cvNukeCost.IntValue, g_cvBetrayCost.IntValue, g_cvPowerCost.IntValue);
 }
 

@@ -58,7 +58,7 @@
  *   sm_asrd_repulse_x33            X-33 威力增强器护盾 (默认 1): 仅 Wildcat/Wolfe (重武兵)
  *                                  使用 X-33 时获得限时护盾; 不依赖 sm_asrd_repulse_aura,
  *                                  护盾方式(斥力/阻挡)仍由 sm_asrd_repulse_aura_mode 决定
- *   sm_asrd_repulse_x33_duration   每使用一次 X-33 的护盾秒数 (默认 30=原版信标时长;
+ *   sm_asrd_repulse_x33_duration   每使用一次 X-33 的护盾秒数 (默认 15; 只叠时间不叠强度;
  *                                  信标特效燃烧截止时间每帧同步为护盾结束时间,
  *                                  抵消携带消耗; >30 时等效延长原版增益信标)
  *   sm_asrd_repulse_x33_hud_channel 倒计时 HUD 通道 (默认 4; 需避开核弹插件的 5)
@@ -236,8 +236,8 @@ public void OnPluginStart()
     g_cvX33 = CreateConVar("sm_asrd_repulse_x33", "1",
         "X-33 威力增强器护盾 (1=开 0=关), 开启后仅 Wildcat/Wolfe (重武兵) 使用 X-33 (asw_weapon_buff_grenade) 时获得限时护盾, 不依赖 sm_asrd_repulse_aura, 护盾方式由 sm_asrd_repulse_aura_mode 决定",
         FCVAR_NOTIFY, true, 0.0, true, 1.0);
-    g_cvX33Duration = CreateConVar("sm_asrd_repulse_x33_duration", "30",
-        "每使用一次 X-33 的护盾秒数 (默认 30=原版信标时长; 叠加规则: 结束时间以最后一次使用为基准刷新, 只叠时间不叠强度; 增益信标特效的燃烧截止时间每帧同步为护盾结束时间 — 顺带抵消携带信标移动的额外消耗, 并在时长>30 时等效延长信标)",
+    g_cvX33Duration = CreateConVar("sm_asrd_repulse_x33_duration", "15",
+        "每使用一次 X-33 的护盾秒数 (默认 15; 叠加规则: 结束时间以最后一次使用为基准刷新, 只叠时间不叠强度; 增益信标特效的燃烧截止时间每帧同步为护盾结束时间 — 顺带抵消携带信标移动的额外消耗, 并在时长>30 时等效延长信标)",
         FCVAR_NOTIFY, true, 1.0, true, 600.0);
     g_cvX33HudChannel = CreateConVar("sm_asrd_repulse_x33_hud_channel", "4",
         "X-33 护盾倒计时 HUD 通道 (需避开核弹插件的 5; 若倒计时不显示可换 2/6/7 等通道试验, 无需重编译)",

@@ -184,7 +184,7 @@ public void OnPluginStart()
         0);
 
     g_cvPublic = CreateConVar(
-        "sm_asrd_betray_public", "0",
+        "sm_asrd_betray_public", "1",
         "允许普通玩家使用 sm_betraypub (0=仅管理员 1=所有人)",
         0, true, 0.0, true, 1.0);
 
