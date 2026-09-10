@@ -26,44 +26,20 @@
 //  7. 召唤时只打印一条汇总提示（（玩家）已召唤 N 台战斗扫描机支援），
 //     不再逐台回报状态，避免聊天刷屏。
 //
-//  ── v1.4.1 (巡航导致"不跟随玩家"修复) ─────────────────────────
-//  根因: v1.4.0 巡航目标点 1 秒才刷新一次 (点每秒跳变 200+ 单位),
-//  且半径 200/角速度 72°/秒 的切向速度≈251 已超过扫描机硬编码最大
-//  速度 250 (npc_basescanner.h:56) —— 玩家只要一移动, 扫描机必然追
-//  不上, 表现为"没有跟随玩家"。
-//  修复:
-//   1) 跟随目标点刷新频率 1s → 0.25s (点平滑移动, 扫描机持续追点,
-//      不再"悬停-冲刺"顿挫);
-//   2) 默认巡航半径 200→120、角速度 72→40°/秒 (切向≈84 单位/秒,
-//      加上玩家步行速度仍在 250 内);
-//   3) 玩家移动时自动退化为贴身跟随 (目标点=正上方, v1.3.2 行为,
-//      保证跟得上), 玩家静止时才做圆周巡航 —— 既满足"巡航"又满足
-//      "跟随玩家"。
-//
-//  ── v1.4.0 (对玩家免伤修复 + 绕玩家巡航) ──────────────────────
-//  1) 对玩家免伤 —— 修复旧版"有钩子但从未生效"的 bug:
-//     旧 OnEntityCreated 把 marine 挂钩代码放在虫族早退之后, 而 AS:RD 的
-//     marine 是在地图开始后才由任务流程生成的 → 每个 marine 都漏挂
-//     OnPlayerTakeDamage → 玩家一直实打实受伤。伤害路径 (引擎源码证实):
-//       - 俯冲撞击: npc_basescanner.cpp:675 CTakeDamageInfo(this,this,
-//         sk_scanner_dmg_dive, DMG_CLUB) 直接打被撞实体 (marine 在列);
-//       - 挂载机枪流弹: asw_sentry_top_machinegun.cpp:81-90, FireBullets
-//         只忽略底座 (m_pAdditionalIgnoreEnt), 弹道穿过 marine 就会命中;
-//       - 死亡爆炸: npc_basescanner.cpp:558 ExplosionCreate(owner=this),
-//         半径64 伤害64, attacker=扫描机 (explode.cpp:395-433 env_explosion
-//         SetOwnerEntity(pOwner))。
-//     以上三条 attacker 都是本插件实体, OnPlayerTakeDamage 已能拦截,
-//     修复后钩子真正挂上即全部免疫。另防御性补挂 player 实体本体。
-//  2) 无敌人时绕玩家圆周巡航 (原来 FOLLOW 悬停正上方 → "没敌人就不动"):
-//     引擎 FOLLOW 模式每帧 OverrideMove → MoveToSpotlight →
-//     IdealGoalForMovement(InspectTargetPosition()) → MoveToTarget
-//     (npc_scanner.cpp:2395-2398, 2515-2545), 扫描机主动飞向 m_vInspectPos,
-//     追到 SCANNER_FOLLOW_DIST=128 内才停。插件每秒把 m_vInspectPos 放到
-//     绕玩家的圆周上并推进相位角 → 扫描机持续追点 = 环绕巡航;
-//     巡航点被墙挡时缩半半径, 再不行退化为正上方悬停。
-//     新增 ConVar: sm_asrd_scanner_cruise(1) / _cruise_radius(200) /
-//     _cruise_speed(72 度/秒, 扫描机最大速度硬编码250 单位/秒,
-//     npc_basescanner.h:56)。
+//  ── v1.3.3 (对玩家免伤修复) ──────────────────────────────────
+//  修复旧版"有钩子但从未生效"的 bug: 旧 OnEntityCreated 把 marine 挂钩
+//  代码放在虫族早退之后, 而 AS:RD 的 marine 是在地图开始后才由任务流程
+//  生成的 → 每个 marine 都漏挂 OnPlayerTakeDamage → 玩家一直实打实受伤。
+//  伤害路径 (引擎源码证实):
+//    - 俯冲撞击: npc_basescanner.cpp:675 CTakeDamageInfo(this,this,
+//      sk_scanner_dmg_dive, DMG_CLUB) 直接打被撞实体 (marine 在列);
+//    - 挂载机枪流弹: asw_sentry_top_machinegun.cpp:81-90, FireBullets
+//      只忽略底座 (m_pAdditionalIgnoreEnt), 弹道穿过 marine 就会命中;
+//    - 死亡爆炸: npc_basescanner.cpp:558 ExplosionCreate(owner=this),
+//      半径64 伤害64, attacker=扫描机 (explode.cpp:395-433 env_explosion
+//      SetOwnerEntity(pOwner))。
+//  以上三条 attacker 都是本插件实体, OnPlayerTakeDamage 已能拦截,
+//  修复后钩子真正挂上即全部免疫。另防御性补挂 player 实体本体。
 //
 //  ── v1.3.2 ("生成后慢慢往上飘走") ────────────────────────────
 //  全部结论取自引擎源码, 不是猜的:
@@ -115,13 +91,11 @@
 #include <sdktools>
 #include <sdkhooks>
 
-#define PLUGIN_VERSION  "1.4.1"
+#define PLUGIN_VERSION  "1.3.3"
 #define SCANNER_CLASS   "npc_cscanner"
 #define SCANNER_NAME    "asrd_scanner"   // targetname 统一标记, 供识别/清除
 #define SCANNER_MG_NAME "asrd_scanner_mg" // 本插件机枪专属标记, 供 per-entity 伤害缩放
 #define MAX_SUMMON      10              // 单次召唤数量上限
-#define CRUISE_REFRESH  0.25            // 跟随目标点刷新间隔(秒): 点平滑移动,
-                                        // 扫描机持续追点; 1s 会顿挫+追不上
 
 // ─── 引擎阵营真值兜底 (源码证实) ──────────────────────────
 // src/game/shared/shareddefs.h:      FACTION_NONE = 0; LAST_SHARED_FACTION = FACTION_NONE
@@ -175,19 +149,10 @@ ConVar g_cvFX;           // 挂粒子特效+聚光灯 (drone 原版, 保证肉�
 ConVar g_cvFaction;      // 写入 marine 阵营 (0=完全走 drone 原版, 不改阵营)
 ConVar g_cvFollowMode;   // 引擎原生跟随 (m_nFlyMode=FOLLOW + m_vInspectPos 刷新)
 ConVar g_cvHeight;       // 悬停高度 (相对队员原点)
-ConVar g_cvCruise;       // 巡航模式: 无敌人时绕玩家圆周巡航, 而非静止悬停
-ConVar g_cvCruiseRadius; // 巡航环绕半径 (游戏单位)
-ConVar g_cvCruiseSpeed;  // 巡航角速度 (度/秒)
 
 // 扫描机归属: 实体索引 → 召唤者 client / 横向槽位 (用于多台错开)
 int g_iScannerOwner[2048];
 int g_iScannerSlot[2048];
-
-// 巡航环绕相位角 (度), 每台独立, 多机错开不叠在一起
-float g_fScannerCruiseAngle[2048];
-
-// 上次跟随刷新时的队员位置 → 判断玩家是否在移动 (移动=贴身跟随, 静止=巡航)
-float g_fScannerLastPlayerPos[2048][3];
 
 // marine 阵营真值缓存 (跨图失效, OnMapEnd 清零后重新解析)
 int g_iMarineFaction = -1;
@@ -287,12 +252,6 @@ public void OnPluginStart()
         0, true, 0.0, true, 1.0);
     g_cvHeight     = CreateConVar("sm_asrd_scanner_height", "60",
         "跟随时的悬停高度 (相对队员原点的游戏单位)。默认60: 机枪(本体下-15)离地约45, 与地面虫族垂直差<50, 绕过引擎 CanSee 的俯仰角限制(asw_sentry_top.cpp:446); 调高会导致近处矮虫族打不到", 0, true, 0.0);
-    g_cvCruise     = CreateConVar("sm_asrd_scanner_cruise", "1",
-        "巡航模式 (1=开启: 玩家静止且无敌人时, 扫描机绕玩家做圆周巡航; 玩家移动时自动切贴身跟随, 保证跟得上。依赖 followmode=1)", 0, true, 0.0, true, 1.0);
-    g_cvCruiseRadius = CreateConVar("sm_asrd_scanner_cruise_radius", "120",
-        "巡航环绕半径 (游戏单位)。引擎 FOLLOW 模式追击目标点时会停在 SCANNER_FOLLOW_DIST=128 内 (npc_scanner.cpp:66), 实际环绕半径约 ±128; 半径 0=退化为正上方悬停", 0, true, 0.0);
-    g_cvCruiseSpeed  = CreateConVar("sm_asrd_scanner_cruise_speed", "40",
-        "巡航角速度 (度/秒, 360=1圈/秒)。扫描机最大速度硬编码 250 单位/秒 (npc_basescanner.h:56), 半径120时 40°/秒 切向速度≈84, 加上玩家步行速度仍有余量; 再快移动时会掉队", 0, true, 0.0);
 
     RegAdminCmd("sm_scanner", Command_Scanner, ADMFLAG_GENERIC,
         "召唤战斗扫描机 [数量] [目标玩家]");
@@ -307,9 +266,8 @@ public void OnPluginStart()
 
     LoadTranslations("common.phrases");
 
-    // 每 0.25 秒刷新跟随目标点 (v1.4.1: 1s 会让巡航点每秒跳变,
-    // 扫描机追不上移动中的玩家 → 表现为"不跟随"; 0.25s 平滑追点)
-    CreateTimer(CRUISE_REFRESH, Timer_UpdateFollow, _, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
+    // 每秒刷新跟随目标点 (引擎原生跟随, v1.3.2)
+    CreateTimer(1.0, Timer_UpdateFollow, _, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
 
     // 每秒轮询: 为每台扫描机寻找其主人附近的最近虫族并设为敌人 (自动攻击)
     CreateTimer(1.0, Timer_AutoAttack, _, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
@@ -357,10 +315,6 @@ public void OnMapEnd()
     {
         g_iScannerOwner[i] = 0;
         g_iScannerSlot[i]  = 0;
-        g_fScannerCruiseAngle[i] = 0.0;
-        g_fScannerLastPlayerPos[i][0] = 0.0;
-        g_fScannerLastPlayerPos[i][1] = 0.0;
-        g_fScannerLastPlayerPos[i][2] = 0.0;
     }
 }
 
@@ -754,19 +708,12 @@ bool SpawnScanner(const float fOrigin[3], const float fAng[3], int ownerClient,
 
     // ── 保险: 0.1 秒 / 1 秒各补一次定位 ─────────────────────────
     // VPHYSICS 飞行体的初始化可能在一两帧内把位置冲掉 (叛变虫群插件同款兜底)。
-    // 若发现实体跑离目标点超过阈值就再拉回来, 并打印前后坐标。
-    // 0.1s 那次始终用严格值 200 兜住初始化冲位; 1s 那次在巡航开启时放宽到
-    // 800 (扫描机在绕圈, 离出生点远是正常飞行, 只有"真跑飞"才拉回)。
+    // 若发现实体跑离目标点超过 200 单位就再拉回来, 并打印前后坐标。
     for (int k = 0; k < 2; k++)
     {
-        float fLimit = 200.0;
-        if (k == 1 && g_cvCruise.BoolValue)
-            fLimit = 800.0;
-
         DataPack dpr = new DataPack();
         dpr.WriteCell(EntIndexToEntRef(ent));
         dpr.WriteCell(ownerClient);
-        dpr.WriteFloat(fLimit);
         dpr.WriteFloat(fPos[0]);
         dpr.WriteFloat(fPos[1]);
         dpr.WriteFloat(fPos[2]);
@@ -799,18 +746,14 @@ bool SpawnScanner(const float fOrigin[3], const float fAng[3], int ownerClient,
     SDKHookEx(ent, SDKHook_OnTakeDamage, OnScannerTakeDamage);
 
     // ── v1.3.2 核心: 引擎原生跟随 ───────────────────────────────
-    // 记录在归属表里 (0.25s 刷新目标点用); 巡航相位角按槽位错开,
-    // 多台同时召唤时绕在不同相位, 不会叠在同一个点上。
-    // 上次队员位置初始化为出生点 → 首次刷新能正确判断"是否在移动"。
+    // 记录在归属表里 (每秒刷新目标点用)
     if (ent >= 0 && ent < 2048)
     {
         g_iScannerOwner[ent] = ownerClient;
         g_iScannerSlot[ent]  = index;
-        g_fScannerCruiseAngle[ent] = index * 60.0;
-        g_fScannerLastPlayerPos[ent] = fOrigin;
     }
     if (g_cvFollowMode.BoolValue)
-        SetFollowTarget(ent, fOrigin, true, false);
+        SetFollowTarget(ent, ownerClient, true);
 
     // ── 自有增强 #2: 索敌 (默认关) ──────────────────────────────
     if (g_cvSeek.BoolValue && HasEntProp(ent, Prop_Data, "m_hEnemy"))
@@ -848,11 +791,9 @@ bool SpawnScanner(const float fOrigin[3], const float fAng[3], int ownerClient,
 //        → HaveInspectTarget() 只判断它 != 0 (npc_scanner.cpp:853)
 //        → InspectTargetPosition() 直接返回它 (npc_scanner.cpp:868)
 //    且 FOLLOW 模式豁免 inspect 超时清理 (npc_scanner.cpp:1135)。
-//  只在当前模式是 PATROL(1)/FAST(2)/CHASE(3) 时才改模式, 避免打断攻击。
-//  fOrigin 由调用方传入 (Timer_UpdateFollow 已取过, 顺带做移动检测);
-//  bTight = 玩家在移动 → 目标点放正上方贴身跟随, 不做巡航。
+//  只在当前模式是 PATROL(1) 时才改模式, 避免打断攻击/拍照等正常行为。
 // ============================================================================
-void SetFollowTarget(int ent, const float fOrigin[3], bool bAllowSetMode, bool bTight)
+void SetFollowTarget(int ent, int client, bool bAllowSetMode)
 {
     if (ent <= 0 || !IsValidEntity(ent))
         return;
@@ -870,8 +811,15 @@ void SetFollowTarget(int ent, const float fOrigin[3], bool bAllowSetMode, bool b
             SetEntData(ent, offFly, SCANNER_FLY_FOLLOW, 4, true);
     }
 
+    int marine = (client > 0) ? GetMarineOfClient(client) : -1;
+    float fOrigin[3];
+    if (!GetMarineOrigin(client, marine, fOrigin))
+        return;
+
     float fHover[3];
-    ComputeCruisePos(ent, fOrigin, fHover, bTight);
+    fHover[0] = fOrigin[0];
+    fHover[1] = fOrigin[1];
+    fHover[2] = fOrigin[2] + g_cvHeight.FloatValue;
 
     SetEntPropVector(ent, Prop_Data, "m_vInspectPos", fHover);
 
@@ -881,85 +829,7 @@ void SetFollowTarget(int ent, const float fOrigin[3], bool bAllowSetMode, bool b
 }
 
 // ============================================================================
-//  计算跟随目标点 (v1.4.0 巡航 / v1.4.1 移动自适应)
-//  巡航原理 (引擎源码证实): FOLLOW 模式每帧走 OverrideMove → MoveToSpotlight
-//  (npc_scanner.cpp:2395-2398) → IdealGoalForMovement(InspectTargetPosition())
-//  → MoveToTarget (npc_scanner.cpp:2515-2545), 即扫描机每帧主动飞向
-//  m_vInspectPos, 且追到 SCANNER_FOLLOW_DIST=128 内才停 (npc_scanner.cpp:66)。
-//  因此只要把目标点绕玩家匀速转圈, 扫描机就会一直追点 → 圆周巡航;
-//  目标点停止移动时 (半径0) 退化为正上方悬停 (v1.3.2 原行为)。
-//  v1.4.1: 玩家移动 (bTight) 时直接正上方贴身跟随, 保证跟得上移动中的
-//  玩家 (扫描机最大速度 250, 高速巡航+跟人会超出); 静止时才绕圈。
-//  墙内回退: 巡航点被世界挡住的半半径再试, 仍不行就贴身悬停。
-// ============================================================================
-void ComputeCruisePos(int ent, const float fOrigin[3], float fOut[3], bool bTight)
-{
-    float fHeight = g_cvHeight.FloatValue;
-
-    if (!bTight && g_cvCruise.BoolValue)
-    {
-        float fAngle = 0.0;
-        if (ent >= 0 && ent < 2048)
-            fAngle = g_fScannerCruiseAngle[ent];
-
-        float fRad = g_cvCruiseRadius.FloatValue;
-        if (fRad > 0.0)
-        {
-            float fPos[3];
-            fPos[0] = fOrigin[0] + Cosine(fAngle) * fRad;
-            fPos[1] = fOrigin[1] + Sine(fAngle) * fRad;
-            fPos[2] = fOrigin[2] + fHeight;
-
-            int iOwner = (ent >= 0 && ent < 2048) ? g_iScannerOwner[ent] : 0;
-            int iIgnore = (iOwner > 0 && IsClientInGame(iOwner)) ? GetMarineOfClient(iOwner) : -1;
-
-            if (IsPointReachableFrom(fOrigin, fPos, iIgnore))
-            {
-                fOut = fPos;
-                return;
-            }
-
-            // 被墙挡: 缩到半半径再试
-            fRad *= 0.5;
-            fPos[0] = fOrigin[0] + Cosine(fAngle) * fRad;
-            fPos[1] = fOrigin[1] + Sine(fAngle) * fRad;
-            if (IsPointReachableFrom(fOrigin, fPos, iIgnore))
-            {
-                fOut = fPos;
-                return;
-            }
-        }
-    }
-
-    // 默认/兜底: 正上方悬停 (v1.3.2 行为)
-    fOut[0] = fOrigin[0];
-    fOut[1] = fOrigin[1];
-    fOut[2] = fOrigin[2] + fHeight;
-}
-
-// 从 fStart 看向 fEnd 是否基本通畅 (忽略队员与本插件扫描机/机枪, 不被自己挡)
-bool IsPointReachableFrom(const float fStart[3], const float fEnd[3], int iIgnore)
-{
-    TR_TraceRayFilter(fStart, fEnd, MASK_SOLID, RayType_EndPoint, TraceFilter_Cruise, iIgnore);
-    return (TR_GetFraction() >= 0.9);
-}
-
-public bool TraceFilter_Cruise(int entity, int contentsMask, int iIgnore)
-{
-    if (entity <= 0 || !IsValidEntity(entity))
-        return false;
-    if (entity == iIgnore)
-        return true;
-    if (IsOurScanner(entity) || IsOurMachinegun(entity))
-        return true;
-    return false;
-}
-
-// ============================================================================
-//  每 0.25 秒刷新跟随目标点 (v1.3.2 引擎跟随 / v1.4.1 移动自适应)
-//  移动检测: 队员当前位置与上次刷新点位移 > 15 单位 → 玩家在移动,
-//  切贴身跟随 (bTight, 目标点=正上方, 保证跟得上); 静止 → 圆周巡航,
-//  相位角按真实间隔 (CRUISE_REFRESH 秒) 推进, 角速度含义恒定(度/秒)。
+//  每秒刷新跟随目标点
 // ============================================================================
 public Action Timer_UpdateFollow(Handle timer)
 {
@@ -976,28 +846,7 @@ public Action Timer_UpdateFollow(Handle timer)
         if (iOwner <= 0 || !IsClientInGame(iOwner))
             continue;
 
-        int marine = GetMarineOfClient(iOwner);
-        float fOrigin[3];
-        if (!GetMarineOrigin(iOwner, marine, fOrigin))
-            continue;
-
-        bool bTight = false;
-        if (ent >= 0 && ent < 2048)
-        {
-            float fDist = GetVectorDistance(fOrigin, g_fScannerLastPlayerPos[ent]);
-            g_fScannerLastPlayerPos[ent] = fOrigin;
-            bTight = (fDist > 15.0);
-
-            // 巡航: 按真实间隔推进环绕相位角 → 目标点绕玩家平滑转圈
-            if (g_cvCruise.BoolValue)
-            {
-                g_fScannerCruiseAngle[ent] += g_cvCruiseSpeed.FloatValue * CRUISE_REFRESH;
-                if (g_fScannerCruiseAngle[ent] >= 360.0)
-                    g_fScannerCruiseAngle[ent] -= 360.0;
-            }
-        }
-
-        SetFollowTarget(ent, fOrigin, true, bTight);
+        SetFollowTarget(ent, iOwner, true);
     }
     return Plugin_Continue;
 }
@@ -1148,7 +997,6 @@ public Action Timer_ReTeleport(Handle timer, DataPack dp)
     dp.Reset();
     int ref    = dp.ReadCell();
     int client = dp.ReadCell();
-    float fLimit = dp.ReadFloat();
     float fPos[3], fAng[3];
     fPos[0] = dp.ReadFloat();
     fPos[1] = dp.ReadFloat();
@@ -1166,7 +1014,7 @@ public Action Timer_ReTeleport(Handle timer, DataPack dp)
     GetEntPropVector(ent, Prop_Data, "m_vecOrigin", fCur);
 
     float fDist = GetVectorDistance(fCur, fPos);
-    if (fDist > fLimit)
+    if (fDist > 200.0)
     {
         TeleportEntity(ent, fPos, fAng, NULL_VECTOR);
         NotifyFmt(client, "补定位: #%d 偏离 %.0f 单位 (%.0f,%.0f,%.0f), 已拉回目标点",
@@ -1242,7 +1090,7 @@ public Action OnAlienTakeDamage(int victim, int &attacker, int &inflictor,
 public void OnEntityCreated(int entity, const char[] classname)
 {
     // 玩家实体 (asw_marine 是 AS:RD 的实际承伤体): 必须先挂免伤钩子。
-    // v1.4.0 修复: 旧版把这段写在虫族早退之后, 导致图中新生成的 marine
+    // v1.3.3 修复: 旧版把这段写在虫族早退之后, 导致图中新生成的 marine
     // 永远挂不上钩子 —— 扫描机俯冲撞击 (npc_basescanner.cpp:675 用
     // CTakeDamageInfo(this,this,DMG_CLUB) 直接打目标)、挂载机枪流弹
     // (asw_sentry_top_machinegun.cpp:81-90, 只忽略底座不忽略 marine)、

@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 积分机制 (Points)
- *  版本 1.6.2  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.7.3  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  引入一套全队共享的积分经济:
@@ -42,7 +42,9 @@
  *    - 友军虫 (targetname=asrd_betray_swarm, 含玩家附身虫) 不计分, 防刷分
  *
  *  ── 命令 ────────────────────────────────────────────────
+ *   sm_buy              玩家: 在聊天中显示快捷购买指令 (聊天框 /buy)
  *   sm_points           玩家: 查看当前总积分与功能价格
+ *   sm_1 / sm_2 / sm_3  玩家: 快捷购买 核弹 / 叛变虫群 / 强化等级
  *   sm_points_add <n>   管理员: 给积分池加 n
  *   sm_points_set <n>   管理员: 把积分池设为 n
  *   sm_points_reset     管理员: 积分池清零
@@ -54,14 +56,15 @@
  *   sm_asrd_points_hp_scale   击杀积分 = 虫族最大血量 x 倍率 (默认 0.05, 最少 1 分)
  *   sm_asrd_points_nuke_cost  核弹价格 (默认 200, 0=不设门槛)
  *   sm_asrd_points_betray_cost 叛变虫群价格 (默认 100, 0=不设门槛)
- *   sm_asrd_points_power_cost 强化等级价格 (默认 30, 0=不设门槛)
+ *   sm_asrd_points_power_cost 强化等级价格 (默认 100, 0=不设门槛)
  *   sm_asrd_points_hud        积分显示开关 (0=关 1=开, 默认 1)
  *   sm_asrd_points_hud_channel HUD 通道 (默认 6, 避开 4=哨戒塔/X-33, 5=核弹)
  *   sm_asrd_points_hud_x      横向位置 (默认 0.01 左上角; -1=居中)
  *   sm_asrd_points_hud_y      纵向位置 (默认 0.02)
  *   sm_asrd_points_hud_alpha  文字透明度 (默认 170 半透明; 0=全透明 255=不透明)
- *   sm_asrd_points_hud_help   显示快捷购买帮助 (0=关 1=开, 默认 1)
  *   sm_asrd_points_debug      调试输出 (默认 0)
+ *   sm_asrd_points_advert     聊天公告使用说明开关 (默认 1)
+ *   sm_asrd_points_advert_interval 公告间隔秒数 (默认 30)
  *
  *  依赖: SourceMod 1.11+ (核心 + sdktools + sdkhooks)
  * ============================================================================
@@ -70,19 +73,18 @@
 #include <sourcemod>
 #include <sdktools>
 #include <sdkhooks>
+#include <events>
 
 #pragma semicolon 1
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Points"
-#define PLUGIN_VERSION "1.6.2"
+#define PLUGIN_VERSION "1.7.3"
 
 // ─── HUD 显示 (左上角, 与 4=哨戒塔/X-33、5=核弹 错开) ─────
 #define HUD_CHANNEL     6
-#define HUD_HELP_CHANNEL 7
 #define HUD_X           0.01
 #define HUD_Y           0.02
-#define HUD_HELP_Y_OFF  0.035    // 帮助行相对积分行的纵向偏移
 #define HUD_HOLD        1.2      // 停留秒数, 必须大于刷新周期 0.5s; 常驻显示不闪烁
 #define HUD_REFRESH     0.5
 
@@ -154,12 +156,15 @@ ConVar g_cvHudChannel;
 ConVar g_cvHudX;
 ConVar g_cvHudY;
 ConVar g_cvHudAlpha;
-ConVar g_cvHudHelp;
 ConVar g_cvDebug;
+ConVar g_cvAdvert;
+ConVar g_cvAdvertInterval;
 
 // ─── 积分池与 HUD 状态 ──────────────────────────────────
 int    g_iPoints;
 float  g_fLastHudCheck;         // HUD 帧回调节流时间 (秒)
+float  g_fLastAdvert;           // 使用说明公告帧回调节流时间 (秒)
+int    g_iPlayerLevel[MAXPLAYERS + 1];   // 强化等级镜像, 与 asrd_marine_power 同步, 用于满/低级别拦截扣分
 
 // ============================================================================
 //  插件信息
@@ -206,7 +211,7 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 0.0
     );
     g_cvPowerCost = CreateConVar(
-        "sm_asrd_points_power_cost", "30",
+        "sm_asrd_points_power_cost", "100",
         "强化等级(sm_power_up/sm_power_down)积分价格 (0=不设积分门槛; sm_power_reset 免费)",
         FCVAR_NOTIFY, true, 0.0
     );
@@ -235,15 +240,20 @@ public void OnPluginStart()
         "积分 HUD 文字透明度 (0=完全透明 255=不透明, 170≈半透明)",
         FCVAR_NOTIFY, true, 0.0, true, 255.0
     );
-    g_cvHudHelp = CreateConVar(
-        "sm_asrd_points_hud_help", "1",
-        "在总积分下方常驻显示快捷购买帮助 (0=关 1=开)",
-        FCVAR_NOTIFY, true, 0.0, true, 1.0
-    );
     g_cvDebug = CreateConVar(
         "sm_asrd_points_debug", "0",
         "调试输出到服务器控制台 (0=关 1=开)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
+    );
+    g_cvAdvert = CreateConVar(
+        "sm_asrd_points_advert", "1",
+        "每隔一段时间在聊天中公告基本使用说明 (0=关 1=开)",
+        FCVAR_NOTIFY, true, 0.0, true, 1.0
+    );
+    g_cvAdvertInterval = CreateConVar(
+        "sm_asrd_points_advert_interval", "30",
+        "使用说明公告间隔秒数",
+        FCVAR_NOTIFY, true, 5.0
     );
 
     // 自动保存/读取配置到 cfg/sourcemod/asrd_points.cfg
@@ -251,6 +261,7 @@ public void OnPluginStart()
 
     // 玩家命令
     RegConsoleCmd("sm_points", Cmd_Points, "查看当前总积分与功能价格");
+    RegConsoleCmd("sm_buy",    Cmd_BuyMenu, "打开购买菜单");
 
     // 快捷购买命令: 聊天框 /1 /2 /3 (或控制台 sm_1) 直接触发对应购买,
     // 实际转发给原功能命令, 由下面的命令监听统一扣分/放行
@@ -269,7 +280,8 @@ public void OnPluginStart()
     AddCommandListener(Listener_BetrayPub, "sm_betraypub");
     AddCommandListener(Listener_PowerUp,   "sm_power_up");
     AddCommandListener(Listener_PowerDown, "sm_power_down");
-    // sm_power_reset 不拦截 (免费)
+    // sm_power_reset 免费, 但需同步强化等级镜像 (镜像置 0), 不扣分
+    AddCommandListener(Listener_PowerReset, "sm_power_reset");
 
     // 屏幕积分显示由帧回调 + 0.5 秒节流刷新 (见下方 OnGameFrame)。
     // v1.6.2: 原 CreateTimer 在本环境下定时器不触发, 与核弹 v1.7.7 同源修复。
@@ -278,10 +290,22 @@ public void OnPluginStart()
     AddCommandListener(Listener_Restart, "mp_restartgame");
     AddCommandListener(Listener_Restart, "restart");
 
+    // AS:RD 任务即时重启 (重新开始游戏, 不换图): 与 asrd_marine_power 用同一事件,
+    // 重置积分并把强化等级镜像清 0, 避免满级判断漂移
+    HookEventEx("asw_mission_restart", Event_MissionRestart, EventHookMode_Post);
+
     // 热加载 (插件中途载入 / map 已在进行) 时补挂虫族伤害钩子
     char sMap[PLATFORM_MAX_PATH];
     if (GetCurrentMap(sMap, sizeof(sMap)) > 0)
         HookExistingAliens();
+}
+
+// ============================================================================
+//  玩家加入: 引导查看快捷购买指令 (屏幕 HUD 只留总积分, 帮助按需查看)
+// ============================================================================
+public void OnClientPutInServer(int client)
+{
+    PrintToChat(client, "\x04[积分]\x01 输入 \x05/buy\x01 查看快捷购买指令 (总积分: \x05%d\x01)", g_iPoints);
 }
 
 // 地图加载/开局: 每局重置为初始积分 (一局一结算)
@@ -290,6 +314,10 @@ public void OnMapStart()
     g_iPoints = g_cvStart.IntValue;
     if (g_iPoints < 0)
         g_iPoints = 0;
+
+    // 换图后强化等级同步归 0 (强化插件同样在换图时重置), 镜像保持一致
+    for (int i = 1; i <= MaxClients; i++)
+        g_iPlayerLevel[i] = 0;
 }
 
 // ============================================================================
@@ -417,6 +445,24 @@ bool IsUsableClient(int client)
 }
 
 // ============================================================================
+//  判断玩家是否真正在游戏中: 是否控制着任意陆战队员 (查 m_Commander)
+//  (不依赖队伍编号; 观战/等待/未入队玩家没有受控 marine, 判定为不在游戏中)
+// ============================================================================
+bool IsActivePlayer(int client)
+{
+    if (!IsUsableClient(client))
+        return false;
+
+    int iEnt = -1;
+    while ((iEnt = FindEntityByClassname(iEnt, "asw_marine")) != -1)
+    {
+        if (GetCommanderClient(iEnt) == client)
+            return true;
+    }
+    return false;
+}
+
+// ============================================================================
 //  判定是否为友军虫 (targetname=asrd_betray_swarm, 含玩家附身虫)
 // ============================================================================
 bool IsBetrayAlien(int ent)
@@ -435,10 +481,31 @@ public Action Listener_Restart(int client, const char[] command, int argc)
     g_iPoints = g_cvStart.IntValue;
     if (g_iPoints < 0)
         g_iPoints = 0;
+    ResetPlayerLevels();
 
     if (g_cvDebug.BoolValue)
         PrintToServer("[积分][debug] 检测到 %s, 积分重置为 %d", command, g_iPoints);
     return Plugin_Continue;
+}
+
+// ============================================================================
+//  AS:RD 任务即时重启 (重新开始游戏, 不换图): 重置积分 + 清强化等级镜像
+// ============================================================================
+public void Event_MissionRestart(Event event, const char[] name, bool dontBroadcast)
+{
+    g_iPoints = g_cvStart.IntValue;
+    if (g_iPoints < 0)
+        g_iPoints = 0;
+    ResetPlayerLevels();
+
+    if (g_cvDebug.BoolValue)
+        PrintToServer("[积分][debug] 任务重启(asw_mission_restart), 积分重置为 %d", g_iPoints);
+}
+
+void ResetPlayerLevels()
+{
+    for (int i = 1; i <= MaxClients; i++)
+        g_iPlayerLevel[i] = 0;
 }
 
 // ============================================================================
@@ -460,18 +527,57 @@ public Action Listener_BetrayPub(int client, const char[] command, int argc)
 }
 
 // ============================================================================
-//  命令监听: sm_power_up / sm_power_down
+//  命令监听: sm_power_up / sm_power_down (带满/低级别保护)
+//  达到等级上限/下限时直接放行给原插件(其会提示已达边界), 不扣积分;
+//  可升降时才扣分, 成功后同步等级镜像避免下次误判。
 // ============================================================================
 public Action Listener_PowerUp(int client, const char[] command, int argc)
 {
-    return HandlePurchase(client, command, argc, g_cvPowerCost,
+    // 已达最高等级: 不再扣分 (镜像判断; 放行让原插件提示满级)
+    if (g_iPlayerLevel[client] >= GetPowerMaxLevel())
+        return Plugin_Continue;
+
+    Action act = HandlePurchase(client, command, argc, g_cvPowerCost,
         "强化等级", "sm_asrd_power_enabled", "sm_asrd_power_public");
+    if (act == Plugin_Continue)
+        g_iPlayerLevel[client]++;
+    return act;
 }
 
 public Action Listener_PowerDown(int client, const char[] command, int argc)
 {
-    return HandlePurchase(client, command, argc, g_cvPowerCost,
+    // 已达最小体型: 不再扣分
+    if (g_iPlayerLevel[client] <= -GetPowerShrinkMax())
+        return Plugin_Continue;
+
+    Action act = HandlePurchase(client, command, argc, g_cvPowerCost,
         "强化等级", "sm_asrd_power_enabled", "sm_asrd_power_public");
+    if (act == Plugin_Continue)
+        g_iPlayerLevel[client]--;
+    return act;
+}
+
+// ============================================================================
+//  命令监听: sm_power_reset (免费): 只把等级镜像归 0, 放行给原插件恢复默认
+// ============================================================================
+public Action Listener_PowerReset(int client, const char[] command, int argc)
+{
+    if (client > 0 && client <= MaxClients)
+        g_iPlayerLevel[client] = 0;
+    return Plugin_Continue;
+}
+
+// 读取 asrd_marine_power 的等级上限/体型下限 (找不到时用其代码默认值)
+int GetPowerMaxLevel()
+{
+    ConVar c = FindConVar("sm_asrd_power_max_level");
+    return c != null ? c.IntValue : 5;
+}
+
+int GetPowerShrinkMax()
+{
+    ConVar c = FindConVar("sm_asrd_power_shrink_max");
+    return c != null ? c.IntValue : 3;
 }
 
 // ============================================================================
@@ -483,6 +589,15 @@ Action HandlePurchase(int client, const char[] command, int argc,
 {
     if (client <= 0)
         return Plugin_Continue;
+
+    // 不在游戏中 (未控制任何陆战队员: 观战/等待/未入队) 的玩家不能消耗积分
+    if (!IsActivePlayer(client))
+    {
+        if (g_cvDebug.BoolValue)
+            PrintToServer("[积分][debug] %N 队伍=%d, 拒绝购买 (未控制陆战队员)", client, GetClientTeam(client));
+        ReplyToCommand(client, "\x04[积分]\x01 不在游戏中的玩家不能购买, 请先加入游戏");
+        return Plugin_Handled;
+    }
 
     if (!g_cvEnabled.BoolValue)
         return Plugin_Continue;
@@ -561,16 +676,14 @@ bool IsValidBetrayType(const char[] sInput)
 }
 
 // ============================================================================
-//  玩家命令: sm_points 查看总积分与价格
+//  玩家命令: sm_points 查看总积分与购买引导
 // ============================================================================
 public Action Cmd_Points(int client, int args)
 {
-    char sMsg[512];
+    char sMsg[256];
     Format(sMsg, sizeof(sMsg),
-        "\x04[积分]\x01 总积分: \x05%d\x01 | 购买说明:\n" ...
-        "... \x05/1\x01 或 sm_nukepub 核弹(%d)\n" ...
-        "... \x05/2\x01 或 sm_betraypub 叛变虫群(%d)\n" ...
-        "... \x05/3\x01 或 sm_power_up 强化等级(%d)",
+        "\x04[积分]\x01 总积分: \x05%d\x01 | 输入 \x05/buy\x01 查看快捷购买指令\n" ...
+        "快捷: \x05/1\x01核弹(%d)  \x05/2\x01虫群(%d)  \x05/3\x01强化(%d)",
         g_iPoints, g_cvNukeCost.IntValue, g_cvBetrayCost.IntValue, g_cvPowerCost.IntValue);
 
     if (client > 0)
@@ -578,6 +691,30 @@ public Action Cmd_Points(int client, int args)
     else
         PrintToConsole(client, "%s", sMsg);
 
+    return Plugin_Handled;
+}
+
+// ============================================================================
+//  玩家命令: sm_buy 在聊天中显示快捷购买指令
+//  (快捷指令 /1 /2 /3 直接转发给原功能命令, 由命令监听统一扣分/放行)
+// ============================================================================
+public Action Cmd_BuyMenu(int client, int args)
+{
+    if (client <= 0)
+        return Plugin_Handled;
+
+    // 不在游戏中 (未控制任何陆战队员) 的玩家不能消耗积分
+    if (!IsActivePlayer(client))
+    {
+        ReplyToCommand(client, "\x04[积分]\x01 不在游戏中的玩家不能购买, 请先加入游戏");
+        return Plugin_Handled;
+    }
+
+    PrintToChat(client, "\x04[积分]\x01 总积分: \x05%d\x01 | 快捷购买指令 (聊天框输入):", g_iPoints);
+    PrintToChat(client, "  \x05/1\x01 战术核弹 (%d 分)", g_cvNukeCost.IntValue);
+    PrintToChat(client, "  \x05/2\x01 叛变虫群 (%d 分)", g_cvBetrayCost.IntValue);
+    PrintToChat(client, "  \x05/3\x01 强化等级 +1 (%d 分)", g_cvPowerCost.IntValue);
+    PrintToChat(client, "控制台也可输入 sm_1 / sm_2 / sm_3; 输入 \x05/sm_points\x01 查看总积分");
     return Plugin_Handled;
 }
 
@@ -675,24 +812,40 @@ public Action Cmd_PointsStatus(int client, int args)
         g_cvEnabled.IntValue, g_cvStart.IntValue, g_cvHpScale.FloatValue, g_iPoints);
     PrintToConsole(client, "[积分] 价格: 核弹=%d 叛变虫群=%d 强化等级=%d (0=不设门槛)",
         g_cvNukeCost.IntValue, g_cvBetrayCost.IntValue, g_cvPowerCost.IntValue);
-    PrintToConsole(client, "[积分] HUD: 开关=%d 通道=%d 位置=(%.2f, %.2f) 透明度=%d 帮助=%d",
+    PrintToConsole(client, "[积分] HUD: 开关=%d 通道=%d 位置=(%.2f, %.2f) 透明度=%d",
         g_cvHud.IntValue, g_cvHudChannel.IntValue, g_cvHudX.FloatValue, g_cvHudY.FloatValue,
-        g_cvHudAlpha.IntValue, g_cvHudHelp.IntValue);
+        g_cvHudAlpha.IntValue);
     return Plugin_Handled;
 }
 
 // ============================================================================
-//  HUD 刷新: 帧回调 + 0.5 秒节流, 常驻显示左上角总积分
+//  帧回调: HUD 刷新 (0.5 秒节流) + 使用说明公告 (默认 30 秒节流)
 //  (不依赖 SourceMod 定时器; 本环境定时器不触发, 否则 HUD 只闪一下)
 // ============================================================================
 public void OnGameFrame()
 {
     float fNow = GetEngineTime();
-    if (fNow - g_fLastHudCheck < HUD_REFRESH)
-        return;
-    g_fLastHudCheck = fNow;
 
-    RefreshHud();
+    if (fNow - g_fLastHudCheck >= HUD_REFRESH)
+    {
+        g_fLastHudCheck = fNow;
+        RefreshHud();
+    }
+
+    if (g_cvAdvert.BoolValue && fNow - g_fLastAdvert >= g_cvAdvertInterval.FloatValue)
+    {
+        g_fLastAdvert = fNow;
+        AdvertiseUsage();
+    }
+}
+
+// ============================================================================
+//  聊天公告: 基本使用说明 (每隔一段时间循环)
+// ============================================================================
+void AdvertiseUsage()
+{
+    PrintToChatAll("\x04[积分]\x01 输入 \x05/buy\x01 查看快捷购买指令: /1核弹(%d) /2虫群(%d) /3强化(%d) | 击杀虫族获取积分",
+        g_cvNukeCost.IntValue, g_cvBetrayCost.IntValue, g_cvPowerCost.IntValue);
 }
 
 void RefreshHud()
@@ -705,11 +858,6 @@ void RefreshHud()
     float fY = g_cvHudY.FloatValue;
     int   iAlpha = g_cvHudAlpha.IntValue;
 
-    // 帮助行内容 (含价格, 随 ConVar 实时变化)
-    char sHelp[128];
-    Format(sHelp, sizeof(sHelp), "快捷购买  /1核弹(%d)  /2虫群(%d)  /3强化(%d)  sm_points 帮助",
-        g_cvNukeCost.IntValue, g_cvBetrayCost.IntValue, g_cvPowerCost.IntValue);
-
     for (int i = 1; i <= MaxClients; i++)
     {
         if (!IsClientInGame(i) || IsFakeClient(i))
@@ -717,13 +865,6 @@ void RefreshHud()
 
         SetHudTextParams(fX, fY, HUD_HOLD, 255, 210, 0, iAlpha, 0, 0.0, 0.1, 0.1);
         ShowHudText(i, iChannel, "总积分: %d", g_iPoints);
-
-        // 快捷购买帮助: 常驻显示在积分行下方 (可独立关闭)
-        if (g_cvHudHelp.BoolValue)
-        {
-            SetHudTextParams(fX, fY + HUD_HELP_Y_OFF, HUD_HOLD, 255, 255, 255, iAlpha, 0, 0.0, 0.1, 0.1);
-            ShowHudText(i, HUD_HELP_CHANNEL, "%s", sHelp);
-        }
     }
 }
 
