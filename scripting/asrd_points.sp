@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 积分机制 (Points)
- *  版本 1.9.2  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.9.3  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  引入一套全队共享的积分经济:
@@ -45,6 +45,8 @@
  *   /buy [1] [2]      玩家: 聊天框购买 (唯一扣积分入口, 无控制台命令)
  *                        /buy = 显示格式; /buy 1=核弹; /buy 2 [1-6]=叛变虫群
  *                        (/buy 2 无选项=drone×10); /buy 3=强化+1
+ *                        (强化已满级时 /buy 3 转为加血: 血量<800 花
+ *                        power_cost 恢复 200 血, 封顶最大血量)
  *   /1 /2 /3          玩家: 聊天框快捷购买 核弹 / 叛变虫群(默认drone) / 强化等级
  *   /nukepub /betraypub /power_up /power_down
  *                     玩家: 聊天框直接调用原功能命令同样扣积分
@@ -79,7 +81,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Points"
-#define PLUGIN_VERSION "1.9.2"
+#define PLUGIN_VERSION "1.9.3"
 
 // ─── HUD 显示 (左上角, 与 4=哨戒塔/X-33、5=核弹 错开) ─────
 #define HUD_CHANNEL     6
@@ -92,6 +94,10 @@
 #define BUY_BETRAY_VARIANTS  6
 char g_sBetrayAlias[BUY_BETRAY_VARIANTS + 1][16] = { "", "drone", "buzzer", "ranger", "shield", "mortar", "shaman" };
 int  g_iBetrayCount[BUY_BETRAY_VARIANTS + 1] = { 0, 10, 20, 10, 5, 10, 5 };
+
+// ─── 满级加血 (强化满级后再购买 /buy 3): 血量低于阈值时可花积分治疗 ─
+#define MAX_LEVEL_HEAL_THRESHOLD 800   // 当前血量低于此值才可购买满级加血 (>=800 不操作)
+#define MAX_LEVEL_HEAL_AMOUNT   200    // 每次恢复量 (当前血量+200, 封顶最大血量)
 
 // 友军虫统一 targetname (镜像 asrd_alien_civilwar 的 INFECTED_NAME)
 #define BETRAY_NAME     "asrd_betray_swarm"
@@ -449,6 +455,21 @@ bool IsActivePlayer(int client)
     return false;
 }
 
+// 返回玩家当前控制的陆战队员实体 (0=未控制)
+int GetClientMarine(int client)
+{
+    if (!IsUsableClient(client))
+        return 0;
+
+    int iEnt = -1;
+    while ((iEnt = FindEntityByClassname(iEnt, "asw_marine")) != -1)
+    {
+        if (GetCommanderClient(iEnt) == client)
+            return iEnt;
+    }
+    return 0;
+}
+
 // ============================================================================
 //  判定是否为友军虫 (targetname=asrd_betray_swarm, 含玩家附身虫)
 // ============================================================================
@@ -610,10 +631,10 @@ void BuyPowerFromChat(int client, bool bUp)
 {
     if (bUp)
     {
-        // 已达最高等级: 不再扣分 (镜像判断; 放行让原插件提示满级)
+        // 已达最高等级: 不再强化, 转为满级加血 (治疗, 封顶最大血量)
         if (g_iPlayerLevel[client] >= GetPowerMaxLevel())
         {
-            FakeClientCommand(client, "sm_power_up");
+            BuyMaxLevelHeal(client);
             return;
         }
         if (PurchaseFromChat(client, "sm_power_up", "", g_cvPowerCost,
@@ -632,6 +653,67 @@ void BuyPowerFromChat(int client, bool bUp)
             "强化等级", "sm_asrd_power_enabled", "sm_asrd_power_public"))
             g_iPlayerLevel[client]--;
     }
+}
+
+// ============================================================================
+//  满级加血: 强化满级后再购买 /buy 3 的后续逻辑
+//    当前血量 >= 800            → 不做任何操作, 仅提示
+//    当前血量 < 800 且积分够    → 扣 power_cost, 当前血量 +200 (封顶最大血量)
+//    当前血量 < 800 但积分不足  → 不做任何操作, 仅提示
+// ============================================================================
+void BuyMaxLevelHeal(int client)
+{
+    // 积分机制关闭或价格=0: 不提供免费加血, 放行原插件自行处理 (会提示已达最高等级)
+    if (!g_cvEnabled.BoolValue || g_cvPowerCost.IntValue <= 0)
+    {
+        FakeClientCommand(client, "sm_power_up");
+        return;
+    }
+
+    if (!IsActivePlayer(client))
+    {
+        PrintToChat(client, "\x04[积分]\x01 不在游戏中的玩家不能购买, 请先加入游戏");
+        return;
+    }
+
+    int marine = GetClientMarine(client);
+    if (marine <= 0)
+        return;
+
+    int iHealth = GetEntProp(marine, Prop_Data, "m_iHealth");
+    if (iHealth <= 0)
+    {
+        PrintToChat(client, "\x04[积分]\x01 你已阵亡, 无法购买满级加血");
+        return;
+    }
+
+    // 血量 >= 800: 不做任何操作, 仅提示
+    if (iHealth >= MAX_LEVEL_HEAL_THRESHOLD)
+    {
+        PrintToChat(client, "\x04[积分]\x01 强化已满级且血量充足, 无需购买");
+        return;
+    }
+
+    // 积分不足: 不做任何操作, 仅提示
+    if (g_iPoints < g_cvPowerCost.IntValue)
+    {
+        PrintToChat(client, "\x04[积分]\x01 积分不足: 强化加血需要 \x05%d\x01 积分, 当前 \x05%d\x01 积分",
+            g_cvPowerCost.IntValue, g_iPoints);
+        return;
+    }
+
+    g_iPoints -= g_cvPowerCost.IntValue;
+    RefreshHud();
+    PrintToChatAll("\x04[积分]\x01 %N 花费 \x05%d\x01 积分购买【满级加血】, 剩余 \x05%d\x01 积分",
+        client, g_cvPowerCost.IntValue, g_iPoints);
+
+    // 治疗: 当前血量 +200, 封顶最大血量
+    int iMaxHealth = GetEntProp(marine, Prop_Data, "m_iMaxHealth");
+    int iNew = iHealth + MAX_LEVEL_HEAL_AMOUNT;
+    if (iMaxHealth > 0 && iNew > iMaxHealth)
+        iNew = iMaxHealth;
+    SetEntProp(marine, Prop_Data, "m_iHealth", iNew);
+    PrintToChat(client, "\x04[积分]\x01 血量已恢复至 \x05%d/%d\x01", iNew, iMaxHealth);
 }
 
 // ============================================================================
