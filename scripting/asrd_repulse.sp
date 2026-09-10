@@ -50,7 +50,7 @@
  *   sm_asrd_repulse_pull_time      单次击退推进时长/秒 (默认 0.35, 越大越慢越平滑)
  *   sm_asrd_repulse_cooldown       两次触发最小间隔秒 (默认 0=无冷却可连按)
  *
- *   sm_asrd_repulse_aura           管理员指定护盾总开关 (默认 0) — 配合 sm_repulseaura
+ *   sm_asrd_repulse_aura           管理员指定护盾总开关 (默认 1) — 配合 sm_repulseaura
  *   sm_asrd_repulse_aura_radius    护盾半径/游戏单位 (默认 260)
  *   sm_asrd_repulse_aura_mode      护盾模式 (默认 0: 0=斥力击退平滑弹开; 1=直接阻挡钉在圈外)
  *   sm_asrd_repulse_aura_push_speed 护盾斥力弹开怪的速度/单位每秒 (默认 900; 持续速度外推, 顺滑不卡)
@@ -225,7 +225,7 @@ public void OnPluginStart()
         "单次击退推进时长/秒 (越大越慢越平滑)", FCVAR_NOTIFY, true, 0.05, true, 3.0);
     g_cvCooldown = CreateConVar("sm_asrd_repulse_cooldown", "0",
         "手动触发最小间隔秒 (0=无冷却可连按)", FCVAR_NOTIFY, true, 0.0, true, 60.0);
-    g_cvAura = CreateConVar("sm_asrd_repulse_aura", "0",
+    g_cvAura = CreateConVar("sm_asrd_repulse_aura", "1",
         "持续斥力护盾 (1=开 0=关)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_cvAuraRadius = CreateConVar("sm_asrd_repulse_aura_radius", "260",
         "护盾半径 (游戏单位)", FCVAR_NOTIFY, true, 50.0, true, 3000.0);
