@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 积分机制 (Points)
- *  版本 1.9.3  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.9.4  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  引入一套全队共享的积分经济:
@@ -81,7 +81,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Points"
-#define PLUGIN_VERSION "1.9.3"
+#define PLUGIN_VERSION "1.9.4"
 
 // ─── HUD 显示 (左上角, 与 4=哨戒塔/X-33、5=核弹 错开) ─────
 #define HUD_CHANNEL     6
@@ -98,6 +98,7 @@ int  g_iBetrayCount[BUY_BETRAY_VARIANTS + 1] = { 0, 10, 20, 10, 5, 10, 5 };
 // ─── 满级加血 (强化满级后再购买 /buy 3): 血量低于阈值时可花积分治疗 ─
 #define MAX_LEVEL_HEAL_THRESHOLD 800   // 当前血量低于此值才可购买满级加血 (>=800 不操作)
 #define MAX_LEVEL_HEAL_AMOUNT   200    // 每次恢复量 (当前血量+200, 封顶最大血量)
+#define MAX_POWER_LEVEL_MAXHP   1000   // 强化插件满级(L5)最大血量 (代码固定) — 满级判断以此为准
 
 // 友军虫统一 targetname (镜像 asrd_alien_civilwar 的 INFECTED_NAME)
 #define BETRAY_NAME     "asrd_betray_swarm"
@@ -631,8 +632,10 @@ void BuyPowerFromChat(int client, bool bUp)
 {
     if (bUp)
     {
-        // 已达最高等级: 不再强化, 转为满级加血 (治疗, 封顶最大血量)
-        if (g_iPlayerLevel[client] >= GetPowerMaxLevel())
+        // 满级判断以实际最大血量为准 (IsMarineMaxLevel), 不再依赖镜像 g_iPlayerLevel:
+        // 镜像只随聊天框购买更新, 与 sm_power_set 指定 / 绑定键直调 sm_power_up 可能不同步,
+        // 旧逻辑会让满级玩家误走扣分放行(原插件不强化) → 扣分但血量不变
+        if (IsMarineMaxLevel(client))
         {
             BuyMaxLevelHeal(client);
             return;
@@ -653,6 +656,16 @@ void BuyPowerFromChat(int client, bool bUp)
             "强化等级", "sm_asrd_power_enabled", "sm_asrd_power_public"))
             g_iPlayerLevel[client]--;
     }
+}
+
+// 满级判断: 玩家控制的陆战队员最大血量达到强化插件等级表上限(L5=1000)即视为满级
+// (强化插件 m_iMaxHealth 同样用 Prop_Data 读写, 与血量加血一致)
+bool IsMarineMaxLevel(int client)
+{
+    int marine = GetClientMarine(client);
+    if (marine <= 0)
+        return false;
+    return GetEntProp(marine, Prop_Data, "m_iMaxHealth") >= MAX_POWER_LEVEL_MAXHP;
 }
 
 // ============================================================================
@@ -785,13 +798,7 @@ public Action Listener_PowerReset(int client, const char[] command, int argc)
     return Plugin_Continue;
 }
 
-// 读取 asrd_marine_power 的等级上限/体型下限 (找不到时用其代码默认值)
-int GetPowerMaxLevel()
-{
-    ConVar c = FindConVar("sm_asrd_power_max_level");
-    return c != null ? c.IntValue : 5;
-}
-
+// 读取 asrd_marine_power 的体型下限 (找不到时用其代码默认值)
 int GetPowerShrinkMax()
 {
     ConVar c = FindConVar("sm_asrd_power_shrink_max");
