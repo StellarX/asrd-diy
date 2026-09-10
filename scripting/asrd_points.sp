@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 积分机制 (Points)
- *  版本 1.8.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.9.2  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  引入一套全队共享的积分经济:
@@ -42,15 +42,13 @@
  *    - 友军虫 (targetname=asrd_betray_swarm, 含玩家附身虫) 不计分, 防刷分
  *
  *  ── 命令 ────────────────────────────────────────────────
- *   sm_buy              玩家: 参数式购买 (聊天框 /buy)
- *                        /buy 1=核弹  /buy 2 [1-6]=叛变虫群  /buy 3=强化+1
- *                        /buy 2 无选项=drone×10; 无参数=显示命令格式
- *   sm_points           玩家: 查看当前总积分与功能价格
- *   sm_1 / sm_2 / sm_3  玩家: 快捷购买 核弹 / 叛变虫群(默认drone) / 强化等级
- *   sm_points_add <n>   管理员: 给积分池加 n
- *   sm_points_set <n>   管理员: 把积分池设为 n
- *   sm_points_reset     管理员: 积分池清零
- *   sm_points_status    管理员: 查看积分池与各功能价格
+ *   /buy [1] [2]      玩家: 聊天框购买 (唯一扣积分入口, 无控制台命令)
+ *                        /buy = 显示格式; /buy 1=核弹; /buy 2 [1-6]=叛变虫群
+ *                        (/buy 2 无选项=drone×10); /buy 3=强化+1
+ *   /1 /2 /3          玩家: 聊天框快捷购买 核弹 / 叛变虫群(默认drone) / 强化等级
+ *   /nukepub /betraypub /power_up /power_down
+ *                     玩家: 聊天框直接调用原功能命令同样扣积分
+ *   注: 无任何 sm_points* 控制台命令; 控制台调用原功能命令不扣积分
  *
  *  ── 常用 ConVar (自动生成 cfg/sourcemod/asrd_points.cfg) ──
  *   sm_asrd_points_enabled    总开关 (0=关 1=开, 默认 1)
@@ -81,7 +79,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Points"
-#define PLUGIN_VERSION "1.8.0"
+#define PLUGIN_VERSION "1.9.2"
 
 // ─── HUD 显示 (左上角, 与 4=哨戒塔/X-33、5=核弹 错开) ─────
 #define HUD_CHANNEL     6
@@ -266,27 +264,9 @@ public void OnPluginStart()
     // 自动保存/读取配置到 cfg/sourcemod/asrd_points.cfg
     AutoExecConfig(true, "asrd_points");
 
-    // 玩家命令
-    RegConsoleCmd("sm_points", Cmd_Points, "查看当前总积分与功能价格");
-    RegConsoleCmd("sm_buy",    Cmd_Buy, "购买: /buy 1核弹 /buy 2 [虫种]虫群 /buy 3强化; 无参数显示格式");
+    // 无注册命令: /buy、/1、/2、/3 等聊天框购买统一走 OnClientSayCommand;
+    // 控制台没有积分相关命令 (原功能命令控制台调用不扣积分)。
 
-    // 快捷购买命令: 聊天框 /1 /2 /3 (或控制台 sm_1) 直接触发对应购买,
-    // 实际转发给原功能命令, 由下面的命令监听统一扣分/放行
-    RegConsoleCmd("sm_1", Cmd_BuyNukeShortcut,   "快捷购买核弹 (等同 sm_nukepub)");
-    RegConsoleCmd("sm_2", Cmd_BuyBetrayShortcut, "快捷购买叛变虫群 (等同 sm_betraypub)");
-    RegConsoleCmd("sm_3", Cmd_BuyPowerShortcut,  "快捷强化等级 (等同 sm_power_up)");
-
-    // 管理员命令
-    RegAdminCmd("sm_points_add",    Cmd_PointsAdd,    ADMFLAG_GENERIC, "给积分池加 n (用法: sm_points_add <n>)");
-    RegAdminCmd("sm_points_set",    Cmd_PointsSet,    ADMFLAG_GENERIC, "把积分池设为 n (用法: sm_points_set <n>)");
-    RegAdminCmd("sm_points_reset",  Cmd_PointsReset,  ADMFLAG_GENERIC, "积分池清零");
-    RegAdminCmd("sm_points_status", Cmd_PointsStatus, ADMFLAG_GENERIC, "查看积分池与各功能价格");
-
-    // 拦截玩家功能命令: 扣积分后放行给原插件 (零修改现有插件)
-    AddCommandListener(Listener_NukePub,   "sm_nukepub");
-    AddCommandListener(Listener_BetrayPub, "sm_betraypub");
-    AddCommandListener(Listener_PowerUp,   "sm_power_up");
-    AddCommandListener(Listener_PowerDown, "sm_power_down");
     // sm_power_reset 免费, 但需同步强化等级镜像 (镜像置 0), 不扣分
     AddCommandListener(Listener_PowerReset, "sm_power_reset");
 
@@ -516,52 +496,201 @@ void ResetPlayerLevels()
 }
 
 // ============================================================================
-//  命令监听: sm_nukepub
+//  聊天框统一购买入口 (唯一扣积分路径)
+//  玩家在聊天框输入 /buy、/1、/2、/3、/nukepub、/betraypub、/power_up 等,
+//  全部在此解析: 校验 → 扣分 → 转发给原插件命令执行。
+//  客户端控制台/服务器控制台调用原命令不经过这里 → 不扣积分。
 // ============================================================================
-public Action Listener_NukePub(int client, const char[] command, int argc)
+public Action OnClientSayCommand(int client, const char[] command, const char[] sArgs)
 {
-    return HandlePurchase(client, command, argc, g_cvNukeCost,
-        "核弹", "sm_asrd_nuke_enabled", "sm_asrd_nuke_public");
-}
-
-// ============================================================================
-//  命令监听: sm_betraypub
-// ============================================================================
-public Action Listener_BetrayPub(int client, const char[] command, int argc)
-{
-    return HandlePurchase(client, command, argc, g_cvBetrayCost,
-        "叛变虫群", "sm_asrd_betray_enabled", "sm_asrd_betray_public");
-}
-
-// ============================================================================
-//  命令监听: sm_power_up / sm_power_down (带满/低级别保护)
-//  达到等级上限/下限时直接放行给原插件(其会提示已达边界), 不扣积分;
-//  可升降时才扣分, 成功后同步等级镜像避免下次误判。
-// ============================================================================
-public Action Listener_PowerUp(int client, const char[] command, int argc)
-{
-    // 已达最高等级: 不再扣分 (镜像判断; 放行让原插件提示满级)
-    if (g_iPlayerLevel[client] >= GetPowerMaxLevel())
+    if (client <= 0 || !IsClientInGame(client) || IsFakeClient(client))
+        return Plugin_Continue;
+    if (sArgs[0] != '/' && sArgs[0] != '!')
         return Plugin_Continue;
 
-    Action act = HandlePurchase(client, command, argc, g_cvPowerCost,
-        "强化等级", "sm_asrd_power_enabled", "sm_asrd_power_public");
-    if (act == Plugin_Continue)
-        g_iPlayerLevel[client]++;
-    return act;
-}
-
-public Action Listener_PowerDown(int client, const char[] command, int argc)
-{
-    // 已达最小体型: 不再扣分
-    if (g_iPlayerLevel[client] <= -GetPowerShrinkMax())
+    char sText[192];
+    strcopy(sText, sizeof(sText), sArgs);
+    TrimString(sText);
+    if (sText[0] != '/' && sText[0] != '!')
         return Plugin_Continue;
 
-    Action act = HandlePurchase(client, command, argc, g_cvPowerCost,
-        "强化等级", "sm_asrd_power_enabled", "sm_asrd_power_public");
-    if (act == Plugin_Continue)
-        g_iPlayerLevel[client]--;
-    return act;
+    char sCmd[64];
+    GetArgFromString(sText, 0, sCmd, sizeof(sCmd));   // 参数 0 = 命令本身 (去前缀)
+
+    if (StrEqual(sCmd, "buy", false))
+    {
+        char sA1[16], sA2[16];
+        if (!GetArgFromString(sText, 1, sA1, sizeof(sA1)))
+        {
+            ShowBuyHelp(client);
+            return Plugin_Handled;
+        }
+        int iItem = StringToInt(sA1);
+        switch (iItem)
+        {
+            case 1:
+                PurchaseFromChat(client, "sm_nukepub", "", g_cvNukeCost,
+                    "核弹", "sm_asrd_nuke_enabled", "sm_asrd_nuke_public");
+            case 2:
+            {
+                int iVar = 1;
+                if (GetArgFromString(sText, 2, sA2, sizeof(sA2)))
+                    iVar = StringToInt(sA2);
+                if (iVar < 1 || iVar > BUY_BETRAY_VARIANTS)
+                {
+                    PrintToChat(client, "\x04[积分]\x01 /buy 2 选项: 1=工蜂 2=蜂群 3=游侠 4=盾甲虫 5=迫击炮虫 6=治疗虫");
+                    return Plugin_Handled;
+                }
+                char sBetray[64];
+                Format(sBetray, sizeof(sBetray), "%s %d", g_sBetrayAlias[iVar], g_iBetrayCount[iVar]);
+                PurchaseFromChat(client, "sm_betraypub", sBetray, g_cvBetrayCost,
+                    "叛变虫群", "sm_asrd_betray_enabled", "sm_asrd_betray_public");
+            }
+            case 3:
+                BuyPowerFromChat(client, true);
+            default:
+            {
+                PrintToChat(client, "\x04[积分]\x01 /buy 编号无效, 输入 \x05/buy\x01 查看格式");
+            }
+        }
+        return Plugin_Handled;
+    }
+
+    if (StrEqual(sCmd, "1", false))
+    {
+        PurchaseFromChat(client, "sm_nukepub", "", g_cvNukeCost,
+            "核弹", "sm_asrd_nuke_enabled", "sm_asrd_nuke_public");
+        return Plugin_Handled;
+    }
+    if (StrEqual(sCmd, "2", false))
+    {
+        char sBetray[64];
+        Format(sBetray, sizeof(sBetray), "%s %d", g_sBetrayAlias[1], g_iBetrayCount[1]);
+        PurchaseFromChat(client, "sm_betraypub", sBetray, g_cvBetrayCost,
+            "叛变虫群", "sm_asrd_betray_enabled", "sm_asrd_betray_public");
+        return Plugin_Handled;
+    }
+    if (StrEqual(sCmd, "3", false))
+    {
+        BuyPowerFromChat(client, true);
+        return Plugin_Handled;
+    }
+
+    if (StrEqual(sCmd, "nukepub", false))
+    {
+        char sRest[64];
+        JoinArgsFrom(sText, 1, sRest, sizeof(sRest));
+        PurchaseFromChat(client, "sm_nukepub", sRest, g_cvNukeCost,
+            "核弹", "sm_asrd_nuke_enabled", "sm_asrd_nuke_public");
+        return Plugin_Handled;
+    }
+    if (StrEqual(sCmd, "betraypub", false))
+    {
+        char sRest[64];
+        JoinArgsFrom(sText, 1, sRest, sizeof(sRest));
+        PurchaseFromChat(client, "sm_betraypub", sRest, g_cvBetrayCost,
+            "叛变虫群", "sm_asrd_betray_enabled", "sm_asrd_betray_public");
+        return Plugin_Handled;
+    }
+    if (StrEqual(sCmd, "power_up", false))
+    {
+        BuyPowerFromChat(client, true);
+        return Plugin_Handled;
+    }
+    if (StrEqual(sCmd, "power_down", false))
+    {
+        BuyPowerFromChat(client, false);
+        return Plugin_Handled;
+    }
+
+    return Plugin_Continue;
+}
+
+void BuyPowerFromChat(int client, bool bUp)
+{
+    if (bUp)
+    {
+        // 已达最高等级: 不再扣分 (镜像判断; 放行让原插件提示满级)
+        if (g_iPlayerLevel[client] >= GetPowerMaxLevel())
+        {
+            FakeClientCommand(client, "sm_power_up");
+            return;
+        }
+        if (PurchaseFromChat(client, "sm_power_up", "", g_cvPowerCost,
+            "强化等级", "sm_asrd_power_enabled", "sm_asrd_power_public"))
+            g_iPlayerLevel[client]++;
+    }
+    else
+    {
+        // 已达最小体型: 不再扣分
+        if (g_iPlayerLevel[client] <= -GetPowerShrinkMax())
+        {
+            FakeClientCommand(client, "sm_power_down");
+            return;
+        }
+        if (PurchaseFromChat(client, "sm_power_down", "", g_cvPowerCost,
+            "强化等级", "sm_asrd_power_enabled", "sm_asrd_power_public"))
+            g_iPlayerLevel[client]--;
+    }
+}
+
+// ============================================================================
+//  聊天命令解析辅助: 从 "!buy 2 3" 这类文本取第 n 个参数
+//  n=0 返回命令本体 (已去 / ! 前缀); 找不到返回 false
+// ============================================================================
+bool GetArgFromString(const char[] sInput, int n, char[] buf, int maxlen)
+{
+    int i = 1;   // 跳过 / 或 ! 前缀
+    int cur = 0;
+    for (;;)
+    {
+        while (sInput[i] == ' ')
+            i++;
+        if (sInput[i] == '\0')
+            return false;
+        int j = 0;
+        while (sInput[i] != '\0' && sInput[i] != ' ' && j < maxlen - 1)
+            buf[j++] = sInput[i++];
+        buf[j] = '\0';
+        if (cur == n)
+            return true;
+        cur++;
+    }
+}
+
+// 把第 n 个参数起的所有参数拼成 "a b c" (n 从 1 开始)
+void JoinArgsFrom(const char[] sInput, int n, char[] buf, int maxlen)
+{
+    buf[0] = '\0';
+    char sTmp[64];
+    int i = 1;
+    int cur = 1;
+    for (;;)
+    {
+        while (sInput[i] == ' ')
+            i++;
+        if (sInput[i] == '\0')
+            break;
+        int j = 0;
+        while (sInput[i] != '\0' && sInput[i] != ' ' && j < sizeof(sTmp) - 1)
+            sTmp[j++] = sInput[i++];
+        sTmp[j] = '\0';
+        if (cur >= n)
+        {
+            if (buf[0] != '\0')
+                StrCat(buf, maxlen, " ");
+            StrCat(buf, maxlen, sTmp);
+        }
+        cur++;
+    }
+}
+
+void ShowBuyHelp(int client)
+{
+    PrintToChat(client, "\x04[积分]\x01 命令格式: \x05/buy <编号> [选项]\x01  (总积分: \x05%d\x01)", g_iPoints);
+    PrintToChat(client, "  \x05/buy 1\x01  战术核弹 (%d 分)", g_cvNukeCost.IntValue);
+    PrintToChat(client, "  \x05/buy 2 [1-6]\x01  友军虫群 (%d 分): 1=工蜂 2=蜂群 3=游侠 4=盾甲虫 5=迫击炮虫 6=治疗虫", g_cvBetrayCost.IntValue);
+    PrintToChat(client, "  \x05/buy 3\x01  属性强化 +1 (%d 分)", g_cvPowerCost.IntValue);
 }
 
 // ============================================================================
@@ -588,37 +717,36 @@ int GetPowerShrinkMax()
 }
 
 // ============================================================================
-//  购买核心: 校验 → 扣分 → 放行给原插件 (Plugin_Continue)
+//  购买核心 (仅聊天框入口): 校验 → 扣分 → 转发给原插件执行
+//  返回 true = 已放行 (扣分成功或该功能无门槛), false = 阻止 (已提示原因)
 // ============================================================================
-Action HandlePurchase(int client, const char[] command, int argc,
+bool PurchaseFromChat(int client, const char[] sFullCommand, const char[] sArgs,
     ConVar costCv, const char[] sFeature,
     const char[] sEnabledCv, const char[] sPublicCv)
 {
-    if (client <= 0)
-        return Plugin_Continue;
-
     // 不在游戏中 (未控制任何陆战队员: 观战/等待/未入队) 的玩家不能消耗积分
     if (!IsActivePlayer(client))
     {
         if (g_cvDebug.BoolValue)
             PrintToServer("[积分][debug] %N 队伍=%d, 拒绝购买 (未控制陆战队员)", client, GetClientTeam(client));
-        ReplyToCommand(client, "\x04[积分]\x01 不在游戏中的玩家不能购买, 请先加入游戏");
-        return Plugin_Handled;
+        PrintToChat(client, "\x04[积分]\x01 不在游戏中的玩家不能购买, 请先加入游戏");
+        return false;
     }
 
-    if (!g_cvEnabled.BoolValue)
-        return Plugin_Continue;
-
+    // 插件总开关或价格=0: 不设积分门槛, 直接放行原命令
+    if (!g_cvEnabled.BoolValue || costCv.IntValue <= 0)
+    {
+        FakeClientCommand(client, "%s %s", sFullCommand, sArgs);
+        return true;
+    }
     int iCost = costCv.IntValue;
-    if (iCost <= 0)
-        return Plugin_Continue;   // 0 = 该功能不设积分门槛
 
     // 原插件总开关: 关着就拒绝, 不扣分
     ConVar cvEnabled = FindConVar(sEnabledCv);
     if (cvEnabled != null && !cvEnabled.BoolValue)
     {
         PrintToChat(client, "\x04[积分]\x01 %s 功能已禁用", sFeature);
-        return Plugin_Handled;
+        return false;
     }
 
     // 原插件 public 开关: 未开就拒绝, 不扣分
@@ -626,24 +754,30 @@ Action HandlePurchase(int client, const char[] command, int argc,
     if (cvPublic == null)
     {
         PrintToChat(client, "\x04[积分]\x01 %s 对应插件未加载, 无法购买", sFeature);
-        return Plugin_Handled;
+        return false;
     }
     if (!cvPublic.BoolValue)
     {
         PrintToChat(client, "\x04[积分]\x01 %s 未对玩家开放 (管理员需设置 \x05%s\x01 1)",
             sFeature, sPublicCv);
-        return Plugin_Handled;
+        return false;
     }
 
     // sm_betraypub: 扣分前预校验虫种, 防止打错字白扣积分
-    if (StrEqual(command, "sm_betraypub", false) && argc >= 1)
+    if (StrEqual(sFullCommand, "sm_betraypub", false))
     {
-        char sArg[64];
-        GetCmdArg(1, sArg, sizeof(sArg));
-        if (!IsValidBetrayType(sArg))
+        char sArg[64] = "";
+        int i = 0;
+        int j = 0;
+        while (sArgs[i] == ' ')
+            i++;
+        while (sArgs[i] != '\0' && sArgs[i] != ' ' && j < sizeof(sArg) - 1)
+            sArg[j++] = sArgs[i++];
+        sArg[j] = '\0';
+        if (sArg[0] != '\0' && !IsValidBetrayType(sArg))
         {
             PrintToChat(client, "\x04[积分]\x01 未知虫种 \"%s\", 用 sm_betray_list 查看可选虫种", sArg);
-            return Plugin_Handled;
+            return false;
         }
     }
 
@@ -651,10 +785,10 @@ Action HandlePurchase(int client, const char[] command, int argc,
     {
         PrintToChat(client, "\x04[积分]\x01 积分不足: %s 需要 \x05%d\x01 积分, 当前 \x05%d\x01 积分",
             sFeature, iCost, g_iPoints);
-        return Plugin_Handled;
+        return false;
     }
 
-    // 扣分并放行给原插件执行
+    // 扣分并转发给原插件执行
     g_iPoints -= iCost;
     RefreshHud();
     PrintToChatAll("\x04[积分]\x01 %N 花费 \x05%d\x01 积分购买【%s】, 剩余 \x05%d\x01 积分",
@@ -664,7 +798,8 @@ Action HandlePurchase(int client, const char[] command, int argc,
         PrintToServer("[积分][debug] %N 购买 %s 花费 %d, 剩余 %d",
             client, sFeature, iCost, g_iPoints);
 
-    return Plugin_Continue;
+    FakeClientCommand(client, "%s %s", sFullCommand, sArgs);
+    return true;
 }
 
 // ============================================================================
@@ -680,197 +815,6 @@ bool IsValidBetrayType(const char[] sInput)
             return true;
     }
     return false;
-}
-
-// ============================================================================
-//  玩家命令: sm_points 查看总积分与购买引导
-// ============================================================================
-public Action Cmd_Points(int client, int args)
-{
-    char sMsg[256];
-    Format(sMsg, sizeof(sMsg),
-        "\x04[积分]\x01 总积分: \x05%d\x01 | 输入 \x05/buy\x01 查看命令格式\n" ...
-        "快捷: \x05/buy 1\x01核弹(%d)  \x05/buy 2\x01虫群(%d)  \x05/buy 3\x01强化(%d)",
-        g_iPoints, g_cvNukeCost.IntValue, g_cvBetrayCost.IntValue, g_cvPowerCost.IntValue);
-
-    if (client > 0)
-        PrintToChat(client, "%s", sMsg);
-    else
-        PrintToConsole(client, "%s", sMsg);
-
-    return Plugin_Handled;
-}
-
-// ============================================================================
-//  玩家命令: sm_buy 参数式购买
-//   /buy           → 显示命令格式
-//   /buy 1         → 战术核弹
-//   /buy 2 [1-6]   → 叛变虫群 (1=drone×10 2=buzzer×20 3=ranger×10
-//                     4=shieldbug×5 5=mortarbug×10 6=shaman×5; 缺省=1 drone×10)
-//   /buy 3         → 强化等级 +1
-//  实际转发给原功能命令, 由命令监听统一扣分/放行 (含满级保护/积分校验)
-// ============================================================================
-public Action Cmd_Buy(int client, int args)
-{
-    if (client <= 0)
-        return Plugin_Handled;
-
-    // 不在游戏中 (未控制任何陆战队员) 的玩家不能消耗积分
-    if (!IsActivePlayer(client))
-    {
-        ReplyToCommand(client, "\x04[积分]\x01 不在游戏中的玩家不能购买, 请先加入游戏");
-        return Plugin_Handled;
-    }
-
-    if (args < 1)
-    {
-        PrintToChat(client, "\x04[积分]\x01 命令格式: \x05/buy <编号> [选项]\x01  (总积分: \x05%d\x01)", g_iPoints);
-        PrintToChat(client, "  \x05/buy 1\x01  战术核弹 (%d 分)", g_cvNukeCost.IntValue);
-        PrintToChat(client, "  \x05/buy 2 [1-6]\x01  叛变虫群 (%d 分): 1=工蜂×10 2=蜂群×20 3=游侠×10 4=盾甲虫×5 5=迫击炮虫×10 6=治疗虫×5", g_cvBetrayCost.IntValue);
-        PrintToChat(client, "  \x05/buy 3\x01  强化等级 +1 (%d 分)", g_cvPowerCost.IntValue);
-        PrintToChat(client, "控制台也可输入 sm_buy; 输入 \x05/sm_points\x01 查看总积分");
-        return Plugin_Handled;
-    }
-
-    char sArg[8];
-    GetCmdArg(1, sArg, sizeof(sArg));
-    int iItem = StringToInt(sArg);
-
-    switch (iItem)
-    {
-        case 1:
-        {
-            FakeClientCommand(client, "sm_nukepub");
-        }
-        case 2:
-        {
-            int iVar = 1;   // 缺省 = drone × 10
-            if (args >= 2)
-            {
-                GetCmdArg(2, sArg, sizeof(sArg));
-                int n = StringToInt(sArg);
-                if (n >= 1 && n <= BUY_BETRAY_VARIANTS)
-                    iVar = n;
-                else
-                {
-                    ReplyToCommand(client, "\x04[积分]\x01 /buy 2 选项: 1=工蜂 2=蜂群 3=游侠 4=盾甲虫 5=迫击炮虫 6=治疗虫");
-                    return Plugin_Handled;
-                }
-            }
-            FakeClientCommand(client, "sm_betraypub %s %d",
-                g_sBetrayAlias[iVar], g_iBetrayCount[iVar]);
-        }
-        case 3:
-        {
-            FakeClientCommand(client, "sm_power_up");
-        }
-        default:
-        {
-            ReplyToCommand(client, "\x04[积分]\x01 /buy 编号无效, 输入 \x05/buy\x01 查看格式");
-            return Plugin_Handled;
-        }
-    }
-    return Plugin_Handled;
-}
-
-// ============================================================================
-//  快捷购买: sm_1 / sm_2 / sm_3
-//  直接在聊天框输入 /1 /2 /3 (控制台输入 sm_1 等), 转发给原功能命令,
-//  由下方命令监听统一扣分/放行。sm_2 等价 /buy 2 1 = 10 只 drone。
-// ============================================================================
-public Action Cmd_BuyNukeShortcut(int client, int args)
-{
-    if (client <= 0)
-        return Plugin_Handled;
-    FakeClientCommand(client, "sm_nukepub");
-    return Plugin_Handled;
-}
-
-public Action Cmd_BuyBetrayShortcut(int client, int args)
-{
-    if (client <= 0)
-        return Plugin_Handled;
-    FakeClientCommand(client, "sm_betraypub %s %d", g_sBetrayAlias[1], g_iBetrayCount[1]);
-    return Plugin_Handled;
-}
-
-public Action Cmd_BuyPowerShortcut(int client, int args)
-{
-    if (client <= 0)
-        return Plugin_Handled;
-    FakeClientCommand(client, "sm_power_up");
-    return Plugin_Handled;
-}
-
-// ============================================================================
-//  管理员命令
-// ============================================================================
-public Action Cmd_PointsAdd(int client, int args)
-{
-    if (args < 1)
-    {
-        PrintToConsole(client, "用法: sm_points_add <n>");
-        return Plugin_Handled;
-    }
-
-    char sArg[16];
-    GetCmdArg(1, sArg, sizeof(sArg));
-    int n = StringToInt(sArg);
-    g_iPoints += n;
-    RefreshHud();
-
-    if (client > 0)
-        PrintToChatAll("\x04[积分]\x01 %N 给积分池添加 \x05%d\x01 积分, 当前 \x05%d\x01",
-            client, n, g_iPoints);
-    else
-        PrintToServer("[积分] 服务器管理员添加 %d 积分, 当前 %d", n, g_iPoints);
-    return Plugin_Handled;
-}
-
-public Action Cmd_PointsSet(int client, int args)
-{
-    if (args < 1)
-    {
-        PrintToConsole(client, "用法: sm_points_set <n>");
-        return Plugin_Handled;
-    }
-
-    char sArg[16];
-    GetCmdArg(1, sArg, sizeof(sArg));
-    g_iPoints = StringToInt(sArg);
-    if (g_iPoints < 0)
-        g_iPoints = 0;
-    RefreshHud();
-
-    if (client > 0)
-        PrintToChatAll("\x04[积分]\x01 %N 把积分池设为 \x05%d\x01", client, g_iPoints);
-    else
-        PrintToServer("[积分] 服务器管理员把积分池设为 %d", g_iPoints);
-    return Plugin_Handled;
-}
-
-public Action Cmd_PointsReset(int client, int args)
-{
-    g_iPoints = 0;
-    RefreshHud();
-
-    if (client > 0)
-        PrintToChatAll("\x04[积分]\x01 %N 已清零积分池", client);
-    else
-        PrintToServer("[积分] 服务器管理员已清零积分池");
-    return Plugin_Handled;
-}
-
-public Action Cmd_PointsStatus(int client, int args)
-{
-    PrintToConsole(client, "[积分] 总开关=%d 初始积分=%d hp_scale=%.3f 当前积分=%d",
-        g_cvEnabled.IntValue, g_cvStart.IntValue, g_cvHpScale.FloatValue, g_iPoints);
-    PrintToConsole(client, "[积分] 价格: 核弹=%d 叛变虫群=%d 强化等级=%d (0=不设门槛)",
-        g_cvNukeCost.IntValue, g_cvBetrayCost.IntValue, g_cvPowerCost.IntValue);
-    PrintToConsole(client, "[积分] HUD: 开关=%d 通道=%d 位置=(%.2f, %.2f) 透明度=%d",
-        g_cvHud.IntValue, g_cvHudChannel.IntValue, g_cvHudX.FloatValue, g_cvHudY.FloatValue,
-        g_cvHudAlpha.IntValue);
-    return Plugin_Handled;
 }
 
 // ============================================================================
