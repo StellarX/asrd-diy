@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 核弹轰炸 (Nuke Strike)
- *  版本 1.7.1  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.7.7  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  玩家按下绑定按键 (或输入命令) 后, 触发一次"战术核弹":
@@ -27,7 +27,7 @@
  *   sm_asrd_nuke_enabled    总开关 (0=关 1=开, 默认 1)
  *   sm_asrd_nuke_damage     对虫族造成的伤害 (默认 999999.0)
  *   sm_asrd_nuke_delay      预计抵达秒数 ETA (默认 3.0, 0=立即引爆)
- *   sm_asrd_nuke_public     允许所有玩家使用 sm_nukepub (默认 0)
+ *   sm_asrd_nuke_public     允许所有玩家使用 sm_nukepub (默认 1)
  *   sm_asrd_nuke_debug      调试输出 (默认 0)
  *
  *  依赖: SourceMod 1.11+ (核心 + sdktools + sdkhooks)
@@ -42,7 +42,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Nuke Strike"
-#define PLUGIN_VERSION "1.7.1"
+#define PLUGIN_VERSION "1.7.7"
 
 // 倒计时红字的位置与颜色 (内置 HUD 坐标: -1=居中; game_text: 0=居中)
 #define ETA_HUD_X       -1.0
@@ -87,9 +87,11 @@ ConVar g_cvDelay;
 ConVar g_cvPublic;
 ConVar g_cvDebug;
 
-// ─── 倒计时全局状态 (单发锁定, 同一时刻仅一发在路上) ─────
-bool g_bPending;                  // 是否有核弹正在倒计时
-int  g_iEtaSeconds;               // 剩余秒数
+// ─── 倒计时全局状态 (单发锁定, 帧回调驱动; 每帧推进, 不依赖 SourceMod 定时器) ──
+bool   g_bPending;                // 是否有核弹正在倒计时
+int    g_iEtaSeconds;             // 剩余秒数
+float  g_fCountEnd;               // 预计引爆时刻 (GetEngineTime 秒, 帧回调据此推进)
+float  g_fLastCountCheck;         // 上次执行倒计时计算的时间 (1 秒节流, 其余帧直接跳过)
 
 // ─── 红字显示状态 (每玩家独立, 与哨戒塔 HUD 同一套双保险思路) ───
 int g_iHudMode[MAXPLAYERS + 1];        // 0=未试 1=内置HUD 2=game_text
@@ -127,7 +129,7 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 0.0, true, 60.0
     );
     g_cvPublic = CreateConVar(
-        "sm_asrd_nuke_public", "0",
+        "sm_asrd_nuke_public", "1",
         "允许所有玩家使用 sm_nukepub (0=仅管理员 1=所有人)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
@@ -152,7 +154,10 @@ public void OnPluginStart()
 // ============================================================================
 public void OnMapStart()
 {
+    // 换图时若有核弹正倒计时, 直接清空倒计时状态。
+    // (v1.7.5 起倒计时代由帧回调推进, 不再有带 NO_MAPCHANGE 的残留定时器)
     g_bPending = false;
+    g_fCountEnd = 0.0;
     g_iEtaSeconds = 0;
 
     for (int i = 1; i <= MaxClients; i++)
@@ -160,6 +165,16 @@ public void OnMapStart()
         g_iHudMode[i] = 0;
         g_iEtaTextEnt[i] = 0;
     }
+}
+
+// ============================================================================
+//  地图结束: 同样杀掉残留倒计时定时器 (双保险)
+// ============================================================================
+public void OnMapEnd()
+{
+    g_bPending = false;
+    g_fCountEnd = 0.0;
+    g_iEtaSeconds = 0;
 }
 
 // ============================================================================
@@ -214,7 +229,8 @@ public Action Command_NukePublic(int client, int args)
 }
 
 // ============================================================================
-//  呼叫核弹: 加锁 → 倒计时显示 ETA → 到期引爆
+//  呼叫核弹: 加锁 → 记录引爆时刻 → OnGameFrame 每帧推进倒计时/引爆
+//  v1.7.6: 不再依赖 SourceMod 定时器 (本环境定时器不触发), 改用已实测可靠的帧回调
 // ============================================================================
 void StartNuke(int client)
 {
@@ -234,28 +250,47 @@ void StartNuke(int client)
 
     g_bPending = true;
     g_iEtaSeconds = RoundToNearest(delay);
+    g_fCountEnd = GetEngineTime() + delay;
+    g_fLastCountCheck = GetEngineTime();   // 立即开始, 无需等待首个 1 秒窗口
 
     ShowEta(g_iEtaSeconds);
-    CreateTimer(1.0, Timer_Countdown, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+    if (g_cvDebug.BoolValue)
+        PrintToServer("[核弹][debug] 已启动帧驱动倒计时: end=%.2f", g_fCountEnd);
 }
 
 // ============================================================================
-//  每秒刷新 ETA 倒计时, 归零时引爆并解锁
+//  每帧推进: 刷新 ETA 倒计时, 到时刻引爆并解锁 (帧类回调驱动, 替代旧定时器)
 // ============================================================================
-public Action Timer_Countdown(Handle timer)
+public void OnGameFrame()
 {
-    g_iEtaSeconds--;
+    if (!g_bPending)
+        return;
 
-    if (g_iEtaSeconds <= 0)
+    float fNow = GetEngineTime();
+    // 1 秒节流: 未满 1 秒的帧直接跳过, 只在到点那帧计算/重绘/引爆 (降低每帧开销)
+    if (fNow - g_fLastCountCheck < 1.0)
+        return;
+    g_fLastCountCheck = fNow;
+
+    int iNew = RoundToCeil(g_fCountEnd - fNow);
+
+    // 剩余秒数发生变化时刷新字幕 (从高到低, 归零时才停)
+    if (iNew != g_iEtaSeconds && iNew >= 0)
     {
-        g_bPending = false;
-        ClearEta();
-        Detonate();
-        return Plugin_Stop;
+        g_iEtaSeconds = iNew;
+        ShowEta(iNew);
+        if (g_cvDebug.BoolValue)
+            PrintToServer("[核弹][debug] 倒计时: %d 秒", iNew);
     }
 
-    ShowEta(g_iEtaSeconds);
-    return Plugin_Continue;
+    // 到时刻 → 引爆并解锁
+    if (fNow >= g_fCountEnd)
+    {
+        g_bPending = false;
+        g_iEtaSeconds = 0;
+        ClearEta();
+        Detonate();
+    }
 }
 
 // ============================================================================

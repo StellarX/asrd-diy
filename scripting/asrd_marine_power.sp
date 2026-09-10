@@ -1,11 +1,11 @@
 /**
  * ============================================================================
  *  [AS:RD] 陆战队员强化 (Marine Power)
- *  版本 1.2.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.2.1  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 功能 ───────────────────────────────────────────
  *  玩家按键实时调大/调小自己的 血量 / 体型 / 近战 / 移速:
- *    - 放大(等级 1~5): 血量 +400/级(最高2000) + 体型 +0.2/级(最高x2.0) + 移速同步(x1.2~2.0) + 近战全局放大
+ *    - 放大(等级 1~5): 血量固定: L1=200 / L2=300 / L3=500 / L4=800 / L5=1000 + 体型 +0.1/级 + 移速同步(随等级) + 近战全局放大
  *    - 缩小(等级 -1~-3): 仅模型变小(0.8/0.6/0.4倍), 血量/近战/移速等属性不变
  *    - 等级0 = 恢复默认(100血 / 1.0倍体型 / 1.0倍移速)
  *  近战因 AS:RD 无逐人字段, 按当前最高"放大"等级做全局等比放大。
@@ -27,7 +27,7 @@
  *   sm_asrd_power_enabled     总开关 (0=关 1=开, 默认 1)
  *   sm_asrd_power_public      是否允许普通玩家自行强化 (0=仅管理员 1=公开, 默认 1)
  *   sm_asrd_power_max_level   放大最大等级 (默认 5)
- *   sm_asrd_power_hp_step     每级血量增量 (默认 400, 5级=2000)
+ *   血量上限(固定, 代码内配置): L1=200 / L2=300 / L3=500 / L4=800 / L5=1000
  *   sm_asrd_power_scale_step     每级体型增量 (默认 0.2, 5级=2.0)
  *   sm_asrd_power_shrink_max     缩小最大等级 (默认 3, 仅缩模型)
  *   sm_asrd_power_shrink_step    每级缩小比例 (默认 0.2, 3级=0.4倍)
@@ -57,7 +57,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Marine Power"
-#define PLUGIN_VERSION "1.2.0"
+#define PLUGIN_VERSION "1.2.1"
 
 // 重新断言周期(秒): 换陆战队员/复活后仍生效, 不回血
 #define REAPPLY_INTERVAL 1.0
@@ -65,11 +65,15 @@
 // 默认基础血量(AS:RD 陆战队员基础 100)
 #define DEFAULT_BASE_HEALTH 100
 
+// 各强化等级对应的血量上限(绝对上限值; 下标即等级)
+//   L1=200  L2=300  L3=500  L4=800  L5=1000;  等级超过 LEVEL_COUNT 按 L5 封顶
+#define LEVEL_COUNT 5
+int g_iHpForLevel[LEVEL_COUNT + 1] = { 0, 200, 300, 500, 800, 1000 };
+
 // ─── ConVar 句柄 ──────────────────────────────────────
 ConVar g_cvEnabled;
 ConVar g_cvPublic;
 ConVar g_cvMaxLevel;
-ConVar g_cvHpStep;
 ConVar g_cvScaleStep;
 ConVar g_cvMeleeEnabled;
 ConVar g_cvShrinkMax;
@@ -122,11 +126,6 @@ public void OnPluginStart()
         "最大强化等级 (1~10)",
         FCVAR_NOTIFY, true, 1.0, true, 10.0
     );
-    g_cvHpStep = CreateConVar(
-        "sm_asrd_power_hp_step", "400",
-        "每级血量增量 (默认 400, 5级=2000)",
-        FCVAR_NOTIFY, true, 1.0
-    );
     g_cvScaleStep = CreateConVar(
         "sm_asrd_power_scale_step", "0.1",
         "每级体型增量 (默认 0.2, 5级=2.0), 体型 = 1.0 + step*等级",
@@ -174,8 +173,31 @@ public void OnPluginStart()
     RegAdminCmd("sm_power_status", Cmd_PowerStatus, ADMFLAG_GENERIC, "查看所有玩家强化状态");
     RegAdminCmd("sm_power_set", Cmd_PowerSet, ADMFLAG_GENERIC, "指定强化某个玩家 (用法: sm_power_set <玩家> <等级>)");
 
+    // 任务即时重启(重新开始游戏): AS:RD 实测事件 asw_mission_restart, 用于清除上一局强化
+    HookEventEx("asw_mission_restart", Event_MissionRestart, EventHookMode_Post);
+
     // 周期性重新断言(换人/复活后仍生效)
     g_hReapplyTimer = CreateTimer(REAPPLY_INTERVAL, Timer_Reapply, _, TIMER_REPEAT);
+}
+
+// AS:RD 任务即时重启(重新开始游戏, 不换图): 清除所有玩家的强化
+public void Event_MissionRestart(Event event, const char[] name, bool dontBroadcast)
+{
+    // 该事件在游戏帧处理中段触发, 且 RestartMission 即刻重建陆战队员实体,
+    // 延迟到实体重建后再恢复, 避免中途改写实体属性导致崩溃
+    CreateTimer(REAPPLY_INTERVAL, Timer_ResetAllPower);
+}
+
+public Action Timer_ResetAllPower(Handle timer)
+{
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (IsClientInGame(i) && g_iLevel[i] != 0)
+            RestoreMarine(i);
+        ResetPlayer(i);
+    }
+    ApplyMeleeConvars();
+    return Plugin_Continue;
 }
 
 public void OnPluginEnd()
@@ -369,10 +391,10 @@ public Action Cmd_PowerStatus(int client, int args)
     if (client > 0)
     {
         PrintToChat(client, "\x04[强化]\x01 ============ 玩家强化状态 (v%s) ============", PLUGIN_VERSION);
-        PrintToChat(client, "\x04[强化]\x01 开关:%s | 公开:%s | 血量+%d/级 | 体型+%.1f/级 | 移速+%.1f/级 | 等级%d~%d",
+        PrintToChat(client, "\x04[强化]\x01 开关:%s | 公开:%s | 血量上限 %d/%d/%d/%d/%d | 体型+%.1f/级 | 移速+%.1f/级 | 等级%d~%d",
             g_cvEnabled.BoolValue ? "开" : "关",
             g_cvPublic.BoolValue ? "是" : "否",
-            RoundToFloor(g_cvHpStep.FloatValue),
+            g_iHpForLevel[1], g_iHpForLevel[2], g_iHpForLevel[3], g_iHpForLevel[4], g_iHpForLevel[5],
             g_cvScaleStep.FloatValue,
             g_cvSpeedStep.FloatValue,
             -g_cvShrinkMax.IntValue, g_cvMaxLevel.IntValue);
@@ -474,7 +496,9 @@ int GetHpForLevel(int client)
     int level = g_iLevel[client];
     if (level <= 0)
         return (g_iBaseMaxHealth[client] > 0) ? g_iBaseMaxHealth[client] : DEFAULT_BASE_HEALTH;
-    return RoundToFloor(g_cvHpStep.FloatValue) * level;
+    if (level > LEVEL_COUNT)
+        level = LEVEL_COUNT;
+    return g_iHpForLevel[level];
 }
 
 float GetScaleForLevel(int client)
