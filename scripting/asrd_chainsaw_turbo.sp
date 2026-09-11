@@ -58,11 +58,13 @@
 // 电锯实体类名 (游戏源码: asw_weapon_chainsaw_shared.cpp)
 #define CHAINSAW_CLASSNAME "asw_weapon_chainsaw"
 
-// 增强电锯的视觉标记颜色 (金色) —— 仅作用于本插件掉落的增强电锯, 玩家自带不变
-// 格式: RGB, 用于 glow 描边与模型染色
+// 增强电锯的视觉标记颜色 (纯白) —— 仅作用于本插件掉落的增强电锯, 玩家自带不变
+// 格式: RGB, 直接给电锯模型染色 (m_clrRender); AS:RD 武器每帧会复位该属性,
+// 故插件在 OnGameFrame 里对增强电锯持续重涂, 保证地上/手里都稳定是白色。
+// 纯白与原版生锈橙棕对比最强, 一眼可辨 (金色/青色都不如纯白跳)。
 #define ENHANCED_COLOR_R 255
-#define ENHANCED_COLOR_G 170
-#define ENHANCED_COLOR_B 0
+#define ENHANCED_COLOR_G 255
+#define ENHANCED_COLOR_B 255
 
 // 电锯的三种开火状态 (CHAINSAW_FIRE_STATE 枚举)
 // 0 = 关闭  1 = 启动中(蓄力约1秒)  2 = 全速运转
@@ -240,6 +242,13 @@ public void OnGameFrame()
 
         g_bLastHolding[i] = bHolding;
         g_bLastAttack[i]  = bAttack;
+    }
+
+    // 增强电锯: 每帧重涂金色染色 (AS:RD 武器会复位 m_clrRender, 只设一次会被刷掉)
+    for (int w = MaxClients + 1; w < sizeof(g_bEnhancedChainsaw); w++)
+    {
+        if (g_bEnhancedChainsaw[w])
+            ApplyEnhancedColor(w);
     }
 }
 
@@ -531,26 +540,37 @@ public Action Command_ChainsawDropPublic(int client, int args)
 
 // ============================================================================
 //  增强电锯视觉标记: 仅作用于本插件掉落的增强电锯
-//  - 金色描边光晕 (m_bGlowEnabled + m_glowColorOverride): 隔着墙也能看到,
-//    类似 AS:RD 标记重要物品的高亮, 远处一眼可辨
-//  - 金色染色 (m_bGlowEnabled 之外的 render 染色): 近看模型本身就是金色,
-//    和玩家那把灰扑扑的原版电锯区分明显
-//  不影响拾取/伤害逻辑; 玩家自带电锯不经过 SpawnChainsawNear, 不会有此外观
+//  - 直接给电锯模型染金色 (m_clrRender + RENDER_TRANSCOLOR); 这是电锯自身属性,
+//    天然跟着电锯走 —— 在地上、被捡起、被持有时都显示, 不会和电锯分离。
+//  - AS:RD 武器每帧会把 m_clrRender 复位成默认, 所以 OnGameFrame 里持续重涂
+//    (见 ApplyEnhancedColor), 单设一次会被刷掉。
+//  - 同时给持有者的第一人称视图模型 (m_hViewModel) 上同色, 让持锯者自己也能看出不同。
+//  不影响拾取/伤害逻辑; 玩家自带电锯不经过 SpawnChainsawNear, 不会有此染色。
 // ============================================================================
 void MakeEnhancedVisual(int iWeapon)
+{
+    ApplyEnhancedColor(iWeapon);
+}
+
+// 给增强电锯及其持有者的视图模型染上标记色 (每帧调用以对抗引擎复位)
+void ApplyEnhancedColor(int iWeapon)
 {
     if (!IsValidEntity(iWeapon))
         return;
 
-    // 1) 描边光晕 (send 属性, 可被其他玩家透视看到)
-    SetEntProp(iWeapon, Prop_Send, "m_bGlowEnabled", 1);
-    SetEntProp(iWeapon, Prop_Send, "m_nGlowRange", 4096);     // 可见光晕的距离
-    SetEntProp(iWeapon, Prop_Send, "m_nGlowRangeMin", 0);
-    // 颜色打包: value = R | (G << 8) | (B << 16)
-    int iGlow = (ENHANCED_COLOR_B << 16) | (ENHANCED_COLOR_G << 8) | ENHANCED_COLOR_R;
-    SetEntProp(iWeapon, Prop_Send, "m_glowColorOverride", iGlow);
-
-    // 2) 模型染色 (金色)
     SetEntityRenderMode(iWeapon, RENDER_TRANSCOLOR);
     SetEntityRenderColor(iWeapon, ENHANCED_COLOR_R, ENHANCED_COLOR_G, ENHANCED_COLOR_B, 255);
+
+    // 持有者的第一人称视图模型也上色, 持锯者自己视角里同样是金色
+    // (AS:RD 里武器由 marine 持有, 视图模型挂在持有者实体上)
+    int iOwner = GetEntPropEnt(iWeapon, Prop_Send, "m_hOwnerEntity");
+    if (iOwner > 0 && IsValidEntity(iOwner))
+    {
+        int iVM = GetEntPropEnt(iOwner, Prop_Send, "m_hViewModel", 0);
+        if (iVM > 0 && IsValidEntity(iVM))
+        {
+            SetEntityRenderMode(iVM, RENDER_TRANSCOLOR);
+            SetEntityRenderColor(iVM, ENHANCED_COLOR_R, ENHANCED_COLOR_G, ENHANCED_COLOR_B, 255);
+        }
+    }
 }
