@@ -60,9 +60,11 @@
  *                        无选项默认 0=机枪; 喷火/冰冻暂不支持);
  *                        /buy 5=满配哨戒塔
  *                        (地图上没有哨戒塔时不允许购买, 不扣分)
+ *                        /buy 6=增强电锯 (在身边掉落一把, 伤害由
+ *                        asrd_chainsaw_turbo 插件的 sm_asrd_chainsaw_dmg_mult 决定)
  *   /1 ../5           玩家: 聊天框快捷购买, 与 /buy <编号> **完全等价**且同样能带选项:
  *                        /1 强化等级  /2 核弹  /3 [1-6] 叛变虫群(默认 drone×10)
- *                        /4 [0/1] 哨戒塔箱  /5 全场哨戒塔满配
+ *                        /4 [0/1] 哨戒塔箱  /5 全场哨戒塔满配  /6 增强电锯
  *                        例: /3 2 = /buy 3 2 (游侠); /4 1 = /buy 4 1 (炮塔)
  *   /nukepub /betraypub /power_up /power_down
  *                     玩家: 聊天框直接调用原功能命令同样扣积分
@@ -77,6 +79,7 @@
  *   sm_asrd_points_power_cost 强化等级价格 (默认 400, 0=不设门槛)
  *   sm_asrd_points_sentry_cost 强化哨戒塔价格 (默认 300, 0=不设门槛)
  *   sm_asrd_points_refill_cost 全场哨戒塔满配价格 (默认 500, 0=不设门槛)
+ *   sm_asrd_points_chainsaw_cost 增强电锯价格 (默认 300, 0=不设门槛)
  *   sm_asrd_points_hud        积分显示开关 (0=关 1=开, 默认 1)
  *   sm_asrd_points_hud_channel HUD 通道 (默认 6, 避开 4=哨戒塔/X-33, 5=核弹)
  *   sm_asrd_points_hud_x      横向位置 (默认 0.01 左上角; -1=居中)
@@ -100,7 +103,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Points"
-#define PLUGIN_VERSION "1.16.0"
+#define PLUGIN_VERSION "1.17.0"
 
 // ─── /buy 4 强化哨戒塔可选编号 (哨戒塔插件 sm_sentrydrop 的塔类型; 2喷火/3冰冻暂不支持) ─
 #define BUY_SENTRY_VARIANTS_MAX 1   // 当前支持的最高塔编号 (0=机枪 1=炮塔)
@@ -119,7 +122,7 @@
 #define BUY_BETRAY_VARIANTS  6
 
 // ─── 快捷指令编号上限: /1 ~ /5 与 /buy 1 ~ /buy 5 一一对应 ─
-#define BUY_ITEM_MAX         5
+#define BUY_ITEM_MAX         6
 char g_sBetrayAlias[BUY_BETRAY_VARIANTS + 1][16] = { "", "drone", "buzzer", "ranger", "shield", "mortar", "shaman" };
 int  g_iBetrayCount[BUY_BETRAY_VARIANTS + 1] = { 0, 10, 20, 10, 5, 10, 5 };
 
@@ -193,6 +196,7 @@ ConVar g_cvBetrayCost;
 ConVar g_cvPowerCost;
 ConVar g_cvSentryCost;
 ConVar g_cvRefillCost;
+ConVar g_cvChainsawCost;  // /buy 6 增强电锯的积分价格
 ConVar g_cvHud;
 ConVar g_cvHudChannel;
 ConVar g_cvHudX;
@@ -267,6 +271,11 @@ public void OnPluginStart()
     g_cvRefillCost = CreateConVar(
         "sm_asrd_points_refill_cost", "500",
         "全场哨戒塔满配(/buy 5)积分价格 (0=不设积分门槛)",
+        FCVAR_NOTIFY, true, 0.0
+    );
+    g_cvChainsawCost = CreateConVar(
+        "sm_asrd_points_chainsaw_cost", "300",
+        "增强电锯(sm_chainsawdrop)积分价格 (0=不设积分门槛)",
         FCVAR_NOTIFY, true, 0.0
     );
     g_cvHud = CreateConVar(
@@ -680,7 +689,7 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
         }
         else
         {
-            iItem = StringToInt(sCmd);                        // IsBuyShortcut() 已保证是 1..5
+            iItem = StringToInt(sCmd);                        // IsBuyShortcut() 已保证是 1..6
             GetArgFromString(sText, 1, sOpt, sizeof(sOpt));   // 快捷指令的选项紧跟命令
         }
 
@@ -821,6 +830,7 @@ void HandleBuyItem(int client, int iItem, const char[] sOpt)
 
             PurchaseFromChat(client, "sm_sentrydrop", sTypeArg, g_cvSentryCost,
                 sFeature, "sm_asrd_sentry_enabled", "sm_asrd_sentry_drop_public");
+            return;
         }
 
         case 5:
@@ -835,6 +845,15 @@ void HandleBuyItem(int client, int iItem, const char[] sOpt)
 
             PurchaseFromChat(client, "sm_sentry_refill", "", g_cvRefillCost,
                 "全场哨戒塔满配", "sm_asrd_sentry_enabled", "sm_asrd_sentry_refill_public");
+            return;
+        }
+
+        case 6:
+        {
+            // /buy 6 与 /6: 增强电锯 (掉落在身边)
+            PurchaseFromChat(client, "sm_chainsawdrop", "", g_cvChainsawCost,
+                "增强电锯", "sm_asrd_chainsaw_enabled", "sm_asrd_chainsaw_drop_public");
+            return;
         }
 
         default:
@@ -1003,7 +1022,8 @@ void ShowBuyHelp(int client)
     PrintToChat(client, "  \x05/buy 3 [1-6]\x01  友军虫群 (%d 分): 1=工蜂 2=蜂群 3=游侠 4=盾甲虫 5=迫击炮虫 6=治疗虫", g_cvBetrayCost.IntValue);
     PrintToChat(client, "  \x05/buy 4 <0/1>\x01  强化哨戒塔箱 (%d 分): 0=机枪 1=炮塔", g_cvSentryCost.IntValue);
     PrintToChat(client, "  \x05/buy 5\x01  满配哨戒塔 (%d 分)", g_cvRefillCost.IntValue);
-    PrintToChat(client, "  快捷指令: \x05/1\x01 强化   \x05/2\x01 核弹   \x05/3 [1-6]\x01 虫群   \x05/4 [0/1]\x01 哨戒塔箱   \x05/5\x01 满配");
+    PrintToChat(client, "  \x05/buy 6\x01  增强电锯 (%d 分, 掉落在身边)", g_cvChainsawCost.IntValue);
+    PrintToChat(client, "  快捷指令: \x05/1\x01 强化   \x05/2\x01 核弹   \x05/3 [1-6]\x01 虫群   \x05/4 [0/1]\x01 哨戒塔箱   \x05/5\x01 满配   \x05/6\x01 增强电锯");
     PrintToChat(client, "  例: \x05/3 2\x01 = /buy 3 2 (游侠)   \x05/4 1\x01 = /buy 4 1 (炮塔)   \x05/2\x01 = /buy 2 (核弹)");
 }
 
@@ -1176,9 +1196,9 @@ public void OnGameFrame()
 // ============================================================================
 void AdvertiseUsage()
 {
-    PrintToChatAll("\x04[积分]\x01 购买: \x05/buy 1\x01强化(%d) \x05/buy 2\x01核弹(%d) \x05/buy 3 [1-6]\x01虫群(%d) \x05/buy 4 [0/1]\x01哨戒塔(%d) \x05/buy 5\x01补充哨戒弹药(%d); \x05/1\x01~\x05/5\x01 与 /buy 完全等价",
+    PrintToChatAll("\x04[积分]\x01 购买: \x05/buy 1\x01强化(%d) \x05/buy 2\x01核弹(%d) \x05/buy 3 [1-6]\x01虫群(%d) \x05/buy 4 [0/1]\x01哨戒塔(%d) \x05/buy 5\x01满配(%d) \x05/buy 6\x01电锯(%d); \x05/1\x01~\x05/6\x01 与 /buy 完全等价",
         g_cvPowerCost.IntValue, g_cvNukeCost.IntValue, g_cvBetrayCost.IntValue,
-        g_cvSentryCost.IntValue, g_cvRefillCost.IntValue);
+        g_cvSentryCost.IntValue, g_cvRefillCost.IntValue, g_cvChainsawCost.IntValue);
 }
 
 void RefreshHud()
