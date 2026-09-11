@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 哨戒塔增强 + 头顶哨戒塔 + 信息 HUD
- *  版本 6.5.2  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 6.5.3  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ─────────────────────────────────────
  *  1. 增强地图里的哨戒塔: 生命/射速/射程/弹药/伤害 乘以倍率,
@@ -11,6 +11,8 @@
  *  4. 一键补满地图上所有哨戒塔的生命与弹药 (sm_sentry_refill, 供积分插件 /buy 5 调用)
  *  5. 强制关闭无限弹药: 持续把引擎的 asw_sentry_infinite_ammo 压成 0,
  *     覆盖挑战(甚至其它插件)设置的"哨戒塔无线弹药", 保证弹药正常消耗
+ *  6. 保留拆卸后的剩余弹药: 玩家部署/拆除/再部署哨戒塔时, 弹药不会被自动补满
+ *     (插件不再覆盖引擎带回箱子的剩余量, 并把 rd_sentry_refilled_by_dismantling 压成 0)
  *
  *  ── 玩家命令 (控制台输入, 或在聊天栏加 ! 前缀) ───────────
  *   sm_sentryhud      开关右上角信息 HUD (默认关)
@@ -49,6 +51,8 @@
  *   sm_asrd_sentry_refill_public      允许所有玩家使用一键满配命令 (默认 1)
  *   sm_asrd_sentry_no_infinite_ammo   强制 asw_sentry_infinite_ammo=0 (默认 1;
  *                                     独立于总开关, 0=不干预, 1=持续压制)
+ *   sm_asrd_sentry_no_dismantle_refill 拆除哨戒塔不补满弹药 (默认 1;
+ *                                     强制 rd_sentry_refilled_by_dismantling=0)
  *   sm_asrd_sentry_debug              调试输出 (默认 0)
  *
  *  依赖: SourceMod 1.11+ (不依赖任何扩展)
@@ -62,7 +66,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Sentry Enhancer + Sentry Hat"
-#define PLUGIN_VERSION "6.5.2"
+#define PLUGIN_VERSION "6.5.3"
 
 // 每个玩家头顶哨戒塔的数量上限 (写死, 不提供 ConVar 让挑战/玩家随意调整)
 #define SENTRY_HAT_LIMIT 3
@@ -105,6 +109,10 @@ ConVar g_cvNoInfiniteAmmo;      // 强制关闭无限弹药 (asw_sentry_infinite
 ConVar g_cvEngineInfiniteAmmo;  // 引擎/挑战定义的 asw_sentry_infinite_ammo (找到后缓存)
 bool   g_bFixingInfiniteAmmo;   // 正在压制无限弹药 (防止与变更钩子互相递归)
 bool   g_bAmmoGuardWarned;      // 找不到引擎 ConVar 时只报错一次
+ConVar g_cvNoDismantleRefill;      // 拆除哨戒塔不补满弹药 开关
+ConVar g_cvEngineDismantleRefill;  // 引擎/挑战定义的 rd_sentry_refilled_by_dismantling (找到后缓存)
+bool   g_bFixingDismantleRefill;   // 正在压制拆除补弹 (防止与变更钩子互相递归)
+bool   g_bDismantleGuardWarned;    // 找不到引擎 ConVar 时只报错一次
 
 // ============================================================================
 //  属性偏移缓存
@@ -289,6 +297,12 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
 
+    g_cvNoDismantleRefill = CreateConVar(
+        "sm_asrd_sentry_no_dismantle_refill", "1",
+        "拆掉哨戒塔时不要补满弹药 (强制 rd_sentry_refilled_by_dismantling=0), 让重部署保留箱内剩余 (0=不干预, 1=持续压制)",
+        FCVAR_NOTIFY, true, 0.0, true, 1.0
+    );
+
     // 把以上 ConVar 的设置自动保存/读取到配置文件
     AutoExecConfig(true, "asrd_sentry_enhancer");
 
@@ -317,11 +331,15 @@ public void OnPluginStart()
     g_cvInvulnerable.AddChangeHook(OnInvulnCvarChanged);
     g_cvNoPlayerDamage.AddChangeHook(OnNoDamageCvarChanged);
     g_cvNoInfiniteAmmo.AddChangeHook(OnAmmoGuardCvarChanged);   // 开关被打开时立即压制一次
+    g_cvNoDismantleRefill.AddChangeHook(OnDismantleGuardCvarChanged);
 
     g_hSentries = new ArrayList(sizeof(SentryData));
 
     // 无限弹药压制: 找到引擎的 asw_sentry_infinite_ammo 并挂上变更钩子
     SetupInfiniteAmmoGuard();
+
+    // 拆除不补弹: 找到引擎的 rd_sentry_refilled_by_dismantling 并挂上变更钩子
+    SetupDismantleRefillGuard();
 
     // 若插件是在游戏进行中才被加载, 把地图里已存在的哨戒塔也增强一遍
     // (正常启动时此时还没有塔, 这个循环什么都不会找到)
@@ -343,6 +361,10 @@ public void OnConfigsExecuted()
     // 服务器/挑战的 cfg 都在此之前执行完, 这里再压一次无限弹药
     SetupInfiniteAmmoGuard();
     ForceNoInfiniteAmmo();
+
+    // 同一时机把"拆除补弹"也压回关闭
+    SetupDismantleRefillGuard();
+    ForceNoDismantleRefill();
 }
 
 // ============================================================================
@@ -544,6 +566,10 @@ public void OnMapStart()
     // 换图后挑战可能重新设过无限弹药, 这里压回 0
     SetupInfiniteAmmoGuard();
     ForceNoInfiniteAmmo();
+
+    // 拆除补弹同样压回关闭
+    SetupDismantleRefillGuard();
+    ForceNoDismantleRefill();
 }
 
 // ============================================================================
@@ -851,9 +877,10 @@ void EnhanceSentry(int iBase, bool bForce)
     // 记录初始值 (底座属性在生成时已就绪)
     data.gunType       = (g_offBaseGunType  >= 0) ? GetEntProp(iBase, Prop_Data, "m_nGunType")    : 0;
     data.origMaxHealth = (g_offBaseMaxHealth >= 0) ? GetEntProp(iBase, Prop_Data, "m_iMaxHealth") : 0;
-    // 弹药基准用该类型的"自然满弹药量", 而非当前 m_iAmmo。
-    // 重部署时当前 m_iAmmo 已经是增强过的值, 拿它再乘倍率会导致弹药越叠越高;
-    // 改用固定基准后, 每座塔的弹药永远是 满弹药 x 倍率, 稳定一致。
+    // 弹药基准用该类型的"自然满弹药量"(取值与引擎 GetBaseAmmoForGunType 一致:
+    // 机枪450/炮40/喷火1200/冰冻800/电磁300), 而非当前 m_iAmmo ——
+    // 重部署时当前 m_iAmmo 已经是增强过的值, 拿它再乘倍率会导致弹药越叠越高。
+    // 该基准只用于: ①全新塔按倍率放大 ②判断当前弹药是否为"未增强的基础值"。
     data.origAmmo      = GetSentryMaxAmmo(data.gunType);
     data.origCollision = (g_offBaseCollisionGrp >= 0) ? GetEntProp(iBase, Prop_Send, "m_CollisionGroup") : 0;
     data.origMoveType  = GetEntityMoveType(iBase);
@@ -872,11 +899,29 @@ void EnhanceSentry(int iBase, bool bForce)
     // 应用弹药倍率
     if (data.origAmmo > 0)
     {
-        int iNewAmmo = RoundToFloor(float(data.origAmmo) * fAmmoMult);
-        SetEntProp(iBase, Prop_Data, "m_iAmmo", iNewAmmo);
-        // 同步放大最大弹药, 让 HUD 弹药条按增强后的上限递减, 否则会一直显示满格
+        int iFullAmmo = RoundToFloor(float(data.origAmmo) * fAmmoMult);
+        int iCurAmmo  = GetEntProp(iBase, Prop_Data, "m_iAmmo");
+
+        // 引擎部署哨戒塔时, 会把"箱子里带的弹药"交给新塔
+        //   (CASW_Weapon_Sentry::DeploySentry -> pBase->SetAmmo( m_nSentryAmmo ));
+        // 而拆掉一座塔时, 引擎会先把它的剩余弹药存回箱子
+        //   (CASW_Sentry_Base::ActivateUseIcon, 前提 rd_sentry_refilled_by_dismantling=0,
+        //    该 cvar 已被插件持续压成 0)。
+        // 所以: 只有"全新塔"(弹药恰好等于该类型的基础满弹药)才按倍率放大;
+        //       若当前弹药已是增强后的量级, 说明是拆卸后重新部署, 必须原样保留
+        //       箱内剩余弹药, 不能覆盖成满弹药。
+        if (iCurAmmo == data.origAmmo || iCurAmmo > iFullAmmo)
+        {
+            SetEntProp(iBase, Prop_Data, "m_iAmmo", iFullAmmo);
+        }
+        else if (g_cvDebug.BoolValue)
+        {
+            PrintToServer("[哨戒塔] #%d 重新部署: 保留箱内剩余弹药 %d (不补满)", iBase, iCurAmmo);
+        }
+
+        // 最大弹药始终按倍率放大, 让 HUD 弹药条按增强后的上限递减, 否则会一直显示满格
         if (g_offBaseMaxAmmo >= 0)
-            SetEntData(iBase, g_offBaseMaxAmmo, iNewAmmo);
+            SetEntData(iBase, g_offBaseMaxAmmo, iFullAmmo);
     }
 
     // 应用无敌
@@ -994,6 +1039,84 @@ public void OnAmmoGuardCvarChanged(ConVar convar, const char[] oldValue, const c
 }
 
 // ============================================================================
+//  拆除补弹压制 (强制 rd_sentry_refilled_by_dismantling = 0)
+//
+//  背景: 某些挑战会把 rd_sentry_refilled_by_dismantling 设成 1, 此时玩家拆掉
+//        自己部署的哨戒塔, 引擎会**跳过**"把剩余弹药存回箱子"这一步
+//        (CASW_Sentry_Base::ActivateUseIcon 里的 pWeapon->SetSentryAmmo),
+//        箱子便按满弹药处理, 重新部署后弹药直接回满。
+//        本插件把它持续压回 0, 让拆除保留剩余弹药、重新部署不补满。
+//
+//  依据: 与 asw_sentry_infinite_ammo 相同 —— FCVAR_CHEAT 不拦 SourceMod 的
+//        ConVar.SetInt(), 详见上面 ForceNoInfiniteAmmo 的说明。
+// ============================================================================
+void SetupDismantleRefillGuard()
+{
+    if (g_cvEngineDismantleRefill != null)
+        return;   // 已经拿到引用并挂好钩子
+
+    g_cvEngineDismantleRefill = FindConVar("rd_sentry_refilled_by_dismantling");
+    if (g_cvEngineDismantleRefill == null)
+    {
+        if (!g_bDismantleGuardWarned)
+        {
+            g_bDismantleGuardWarned = true;
+            LogError("[AS:RD] 未找到引擎 ConVar rd_sentry_refilled_by_dismantling, 无法强制关闭拆除补弹");
+        }
+        return;
+    }
+
+    g_cvEngineDismantleRefill.AddChangeHook(OnDismantleRefillChanged);
+    ForceNoDismantleRefill();
+}
+
+void ForceNoDismantleRefill()
+{
+    if (!g_cvNoDismantleRefill.BoolValue)
+        return;                       // 开关关着, 不干预
+    if (g_cvEngineDismantleRefill == null)
+        return;                       // 还没拿到引擎 ConVar
+    if (g_bFixingDismantleRefill)
+        return;                       // 正在压制, 避免递归
+    if (g_cvEngineDismantleRefill.IntValue == 0)
+        return;                       // 已经是 0, 什么都不用做
+
+    g_bFixingDismantleRefill = true;
+    g_cvEngineDismantleRefill.SetInt(0);
+
+    // 兜底: 若引擎因 FCVAR_CHEAT 拒绝写入 (值仍非 0), 去掉该标志后再写一次
+    if (g_cvEngineDismantleRefill.IntValue != 0)
+    {
+        int iFlags = g_cvEngineDismantleRefill.Flags;
+        if ((iFlags & FCVAR_CHEAT) != 0)
+        {
+            g_cvEngineDismantleRefill.Flags = iFlags & ~FCVAR_CHEAT;
+            g_cvEngineDismantleRefill.SetInt(0);
+        }
+    }
+    g_bFixingDismantleRefill = false;
+}
+
+// 有人 (挑战/其它插件/控制台) 把 rd_sentry_refilled_by_dismantling 改成非 0 时立刻压回去
+public void OnDismantleRefillChanged(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+    if (!g_cvNoDismantleRefill.BoolValue || convar.IntValue == 0)
+        return;
+
+    if (g_cvDebug.BoolValue)
+        PrintToServer("[哨戒塔][debug] rd_sentry_refilled_by_dismantling 被外部设为 %s, 已强制改回 0", newValue);
+
+    ForceNoDismantleRefill();
+}
+
+// 本插件自己的开关被改动: 打开时立即压制一次
+public void OnDismantleGuardCvarChanged(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+    if (convar.BoolValue)
+        ForceNoDismantleRefill();
+}
+
+// ============================================================================
 //  每游戏帧执行: 补采炮口、射速加速、无敌维持、头顶塔跟随
 //  只遍历有记录的塔 (通常不到 20 个), 不扫描全部实体
 // ============================================================================
@@ -1001,6 +1124,9 @@ public void OnGameFrame()
 {
     // 无限弹药压制必须每帧跑, 且不能受总开关/哨戒塔列表为空影响 (见 ForceNoInfiniteAmmo)
     ForceNoInfiniteAmmo();
+
+    // "拆除不补满弹药" 同样每帧保证 (挑战可能周期性重设)
+    ForceNoDismantleRefill();
 
     if (!g_cvEnabled.BoolValue)
         return;

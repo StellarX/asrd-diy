@@ -1007,7 +1007,7 @@ public void OnGameFrame()
 // ============================================================================
 void AdvertiseUsage()
 {
-    PrintToChatAll("\x04[积分]\x01 快捷购买: \x05/buy 1\x01核弹(%d) \x05/buy 2\x01虫群(%d) \x05/buy 3\x01强化(%d) \x05/buy 4\x01哨戒塔(%d) \x05/buy 5\x01满配(%d)",
+    PrintToChatAll("\x04[积分]\x01 快捷购买: \x05/buy 1\x01核弹(%d) \x05/buy 2\x01虫群(%d) \x05/buy 3\x01强化(%d) \x05/buy 4\x01哨戒塔(%d) \x05/buy 5\x01补充全部哨戒弹药(%d)",
         g_cvNukeCost.IntValue, g_cvBetrayCost.IntValue, g_cvPowerCost.IntValue,
         g_cvSentryCost.IntValue, g_cvRefillCost.IntValue);
 }
