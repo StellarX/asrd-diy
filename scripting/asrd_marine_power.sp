@@ -1,14 +1,20 @@
 /**
  * ============================================================================
  *  [AS:RD] 陆战队员强化 (Marine Power)
- *  版本 1.2.1  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.3.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
- *  ── 功能 ───────────────────────────────────────────
+ *  ── 这个插件做什么 ─────────────────────────────────────
  *  玩家按键实时调大/调小自己的 血量 / 体型 / 近战 / 移速:
- *    - 放大(等级 1~5): 血量固定: L1=200 / L2=300 / L3=500 / L4=800 / L5=1000 + 体型 +0.1/级 + 移速同步(随等级) + 近战全局放大
+ *    - 放大(等级 1~5): 血量固定: L1=200 / L2=300 / L3=500 / L4=800 / L5=1000
+ *                      + 体型 +0.1/级 + 移速同步(随等级) + 近战加成(逐人)
  *    - 缩小(等级 -1~-3): 仅模型变小(0.8/0.6/0.4倍), 血量/近战/移速等属性不变
  *    - 等级0 = 恢复默认(100血 / 1.0倍体型 / 1.0倍移速)
- *  近战因 AS:RD 无逐人字段, 按当前最高"放大"等级做全局等比放大。
+ *
+ *  近战加成只作用于**普通近战**(徒手/踢击那套, 引擎伤害类型 DMG_CLUB),
+ *  按**攻击者本人**的等级取倍率, 逐次命中时叠加。
+ *  【电锯 (asw_weapon_chainsaw) 属于独立伤害系统, 完全不受强化等级影响】
+ *    —— 电锯伤害 = 武器基础伤害 + 陆战队员"近战"技能值 (引擎侧, DMG_SLASH),
+ *       本插件对此不做任何干预。
  *
  *  ── 玩家命令 (绑定 2 个按键即可) ─────────────────────
  *   sm_power_up      调大 1 级
@@ -24,17 +30,17 @@
  *                                  玩家可填 名字 / 部分名字 / #userid
  *
  *  ── 常用 ConVar (仅代码默认值, 不生成 cfg 文件) ─
- *   sm_asrd_power_enabled     总开关 (0=关 1=开, 默认 1)
- *   sm_asrd_power_public      是否允许普通玩家自行强化 (0=仅管理员 1=公开, 默认 1)
- *   sm_asrd_power_max_level   放大最大等级 (默认 5)
+ *   sm_asrd_power_enabled        总开关 (0=关 1=开, 默认 1)
+ *   sm_asrd_power_public         是否允许普通玩家自行强化 (0=仅管理员 1=公开, 默认 1)
+ *   sm_asrd_power_max_level      放大最大等级 (默认 5)
  *   血量上限(固定, 代码内配置): L1=200 / L2=300 / L3=500 / L4=800 / L5=1000
- *   sm_asrd_power_scale_step     每级体型增量 (默认 0.2, 5级=2.0)
+ *   sm_asrd_power_scale_step     每级体型增量 (默认 0.1, 5级=1.5)
  *   sm_asrd_power_shrink_max     缩小最大等级 (默认 3, 仅缩模型)
  *   sm_asrd_power_shrink_step    每级缩小比例 (默认 0.2, 3级=0.4倍)
  *   sm_asrd_power_speed_enabled  放大时是否同步提高移速 (0/1, 默认 1)
- *   sm_asrd_power_speed_step     每级移速增量 (默认 0.2, 与体型同比例)
- *   sm_asrd_power_melee_enabled  是否启用全局近战放大 (0/1, 默认 1)
- *   近战放大倍率(固定): 等级1~5 = x2 / x4 / x8 / x16 / x32
+ *   sm_asrd_power_speed_step     每级移速增量 (默认 0.1, 与体型同比例)
+ *   sm_asrd_power_melee_enabled  是否启用近战加成 (0/1, 默认 1; 只加成普通近战)
+ *   近战倍率(固定): 等级1~5 = x2 / x4 / x8 / x16 / x32 (逐人, 按攻击者本人等级)
  *   sm_asrd_power_debug          调试输出 (默认 0)
  *
  *  ── 实现原理 ───────────────────────────────────────
@@ -43,21 +49,26 @@
  *   - 血量: 写 marine 的 m_iMaxHealth / m_iHealth (Prop_Data)
  *   - 体型: 写 marine 的 m_flModelScale (Prop_Send), 纯视觉缩放(不改变碰撞)
  *   - 移速: 写 marine 的 m_fSpeedScale (Prop_Send, AS:RD MaxSpeed 中的乘数)
- *   - 近战: 等比缩放 asw_skill_melee_dmg_base/_step (全局, 近战基础伤害, 影响所有陆战队员)
+ *   - 近战: SDKHook_OnTakeDamage 挂在虫族 victim 侧 (与 asrd_points 同模式),
+ *     只在"普通近战"(damagetype & DMG_CLUB) 时把伤害乘以攻击者本人等级的倍率;
+ *     电锯 (DMG_SLASH) 天然不满足条件, 另加类名双保险 —— 一律放行不改。
+ *   - **绝不改写任何引擎 ConVar**: v1.3.0 起不再触碰 asw_skill_melee_dmg_base/_step
+ *     (旧版按全场最高等级全局放大这两个 cvar, 会连带把电锯伤害放大 x32, 故废弃)
  *   - 定时器(1s)重新断言血量/体型/移速, 应对换人/复活, 但不会持续回血
  *
- *  依赖: SourceMod 1.11+ (仅核心 API + sdktools, 不依赖 SDKHooks)
+ *  依赖: SourceMod 1.11+ (核心 API + sdktools + SDKHooks)
  * ============================================================================
  */
 
 #include <sourcemod>
 #include <sdktools>
+#include <sdkhooks>
 
 #pragma semicolon 1
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Marine Power"
-#define PLUGIN_VERSION "1.2.1"
+#define PLUGIN_VERSION "1.3.0"
 
 // 重新断言周期(秒): 换陆战队员/复活后仍生效, 不回血
 #define REAPPLY_INTERVAL 1.0
@@ -69,6 +80,13 @@
 //   L1=200  L2=300  L3=500  L4=800  L5=1000;  等级超过 LEVEL_COUNT 按 L5 封顶
 #define LEVEL_COUNT 5
 int g_iHpForLevel[LEVEL_COUNT + 1] = { 0, 200, 300, 500, 800, 1000 };
+
+// 近战加成倍率表的最大等级 (与 LEVEL_COUNT 一致: 1~5 级 = x2 / x4 / x8 / x16 / x32)
+#define MELEE_MULT_LEVELS 5
+
+// 电锯实体类名 (游戏源码: asw_weapon_chainsaw_shared.cpp)
+// 电锯伤害走 DMG_SLASH + 独立公式, 本插件对它一律放行
+#define CHAINSAW_CLASSNAME "asw_weapon_chainsaw"
 
 // ─── ConVar 句柄 ──────────────────────────────────────
 ConVar g_cvEnabled;
@@ -82,17 +100,41 @@ ConVar g_cvSpeedEnabled;
 ConVar g_cvSpeedStep;
 ConVar g_cvDebug;
 
-// ─── 近战(全局) ──────────────────────────────────────
-ConVar g_hMeleeDmgBase = null;   // asw_skill_melee_dmg_base (近战基础伤害, 默认 30)
-ConVar g_hMeleeDmgStep  = null;  // asw_skill_melee_dmg_step  (每技能点伤害, 默认 6)
-float  g_fMeleeDmgBaseDefault = 30.0;
-float  g_fMeleeDmgStepDefault  = 6.0;
-bool   g_bMeleeConvarsReady   = false;
-
 // ─── 每玩家状态 ───────────────────────────────────────
 int  g_iLevel[MAXPLAYERS + 1];          // 当前强化等级 0..maxLevel
 int  g_iBaseMaxHealth[MAXPLAYERS + 1];  // 首次强化前记录的原生最大血量(等级0恢复用)
 Handle g_hReapplyTimer = null;
+
+// ─── 可被近战加成的虫族类名 (与 asrd_points 保持一致) ──
+char g_sAlienClasses[][] =
+{
+    "asw_drone",             // 普通工蜂
+    "asw_drone_jumper",      // 跳跃工蜂
+    "asw_drone_uber",        // 强化工蜂(血厚)
+    "asw_drone_antlion",     // 蚁狮工蜂
+    "asw_parasite",          // 抱脸寄生虫
+    "asw_parasite_defanged", // 无牙寄生虫
+    "asw_egg",               // 异形卵(会孵化)
+    "asw_boomer",            // 爆裂虫
+    "asw_boomer_blob",       // 爆裂虫酸液残留
+    "asw_buzzer",            // 蜂群
+    "asw_harvester",         // 收割者
+    "asw_mortarbug",         // 迫击炮虫
+    "asw_ranger",            // 游侠
+    "asw_shieldbug",         // 盾甲虫
+    "asw_grub",              // 幼虫
+    "asw_grub_sac",          // 幼虫囊
+    "asw_queen",             // 蜂后
+    "asw_mender",            // 医疗虫 (旧名, 保留兼容)
+    "asw_shaman",            // 治疗虫 (RD 真实类名)
+    "asw_xenomite",          // 自爆孢子虫 (收割者产出)
+    "asw_antlion_guard",     // 蚁狮守卫 (旧名, 保留兼容)
+    // RD 蚁狮守卫/工蜂真实类名 (npc_ 前缀)
+    "npc_antlionguard",
+    "npc_antlionguard_cavern",
+    "npc_antlionguard_normal",
+    "npc_antlion_worker"
+};
 
 // ============================================================================
 //  插件信息
@@ -101,7 +143,7 @@ public Plugin myinfo =
 {
     name        = PLUGIN_NAME,
     author      = "jack",
-    description = "按键实时调大/调小血量/体型/移速(逐人)与近战(全局), 放大5级+缩小3级",
+    description = "按键实时调大/调小血量/体型/移速(逐人); 近战加成逐次命中生效, 电锯不受影响",
     version     = PLUGIN_VERSION,
     url         = ""
 };
@@ -128,12 +170,12 @@ public void OnPluginStart()
     );
     g_cvScaleStep = CreateConVar(
         "sm_asrd_power_scale_step", "0.1",
-        "每级体型增量 (默认 0.2, 5级=2.0), 体型 = 1.0 + step*等级",
+        "每级体型增量 (默认 0.1, 5级=1.5), 体型 = 1.0 + step*等级",
         FCVAR_NOTIFY, true, 0.0
     );
     g_cvMeleeEnabled = CreateConVar(
         "sm_asrd_power_melee_enabled", "1",
-        "启用全局近战放大 (0=关 1=开, 影响所有陆战队员)",
+        "启用近战加成 (0=关 1=开; 只加成普通近战, 电锯不受影响)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
     g_cvShrinkMax = CreateConVar(
@@ -153,7 +195,7 @@ public void OnPluginStart()
     );
     g_cvSpeedStep = CreateConVar(
         "sm_asrd_power_speed_step", "0.1",
-        "每级移速增量 (默认0.2, 与体型同比例, 5级=x2.0)",
+        "每级移速增量 (默认0.1, 与体型同比例, 5级=x1.5)",
         FCVAR_NOTIFY, true, 0.0
     );
     g_cvDebug = CreateConVar(
@@ -176,6 +218,9 @@ public void OnPluginStart()
     // 任务即时重启(重新开始游戏): AS:RD 实测事件 asw_mission_restart, 用于清除上一局强化
     HookEventEx("asw_mission_restart", Event_MissionRestart, EventHookMode_Post);
 
+    // 迟加载(地图运行中 sm plugins load)时, 补挂当前已存在的虫族
+    HookExistingAliens();
+
     // 周期性重新断言(换人/复活后仍生效)
     g_hReapplyTimer = CreateTimer(REAPPLY_INTERVAL, Timer_Reapply, _, TIMER_REPEAT);
 }
@@ -196,20 +241,19 @@ public Action Timer_ResetAllPower(Handle timer)
             RestoreMarine(i);
         ResetPlayer(i);
     }
-    ApplyMeleeConvars();
     return Plugin_Continue;
 }
 
 public void OnPluginEnd()
 {
     // 插件卸载前恢复所有被强化玩家的体型/血量, 避免残留
+    // (近战加成不再改写任何引擎 ConVar, 无需恢复)
     for (int i = 1; i <= MaxClients; i++)
     {
         if (IsClientInGame(i) && g_iLevel[i] > 0)
             RestoreMarine(i);
         ResetPlayer(i);
     }
-    RestoreMeleeDefaults();
     if (g_hReapplyTimer != null)
     {
         KillTimer(g_hReapplyTimer);
@@ -226,7 +270,9 @@ public void OnMapStart()
             RestoreMarine(i);
         ResetPlayer(i);
     }
-    ApplyMeleeConvars();
+
+    // 新地图的虫族都要重新挂伤害回调
+    HookExistingAliens();
 }
 
 public void OnClientDisconnect(int client)
@@ -234,7 +280,6 @@ public void OnClientDisconnect(int client)
     if (g_iLevel[client] > 0)
         RestoreMarine(client);
     ResetPlayer(client);
-    ApplyMeleeConvars();
 }
 
 // ============================================================================
@@ -255,7 +300,6 @@ public Action Cmd_PowerUp(int client, int args)
 
     g_iLevel[client]++;
     ApplyPower(client, true);
-    ApplyMeleeConvars();
     ShowStatus(client);
     return Plugin_Handled;
 }
@@ -275,7 +319,6 @@ public Action Cmd_PowerDown(int client, int args)
 
     g_iLevel[client]--;
     ApplyPower(client, true);
-    ApplyMeleeConvars();
     ShowStatus(client);
     return Plugin_Handled;
 }
@@ -287,7 +330,6 @@ public Action Cmd_PowerReset(int client, int args)
 
     g_iLevel[client] = 0;
     ApplyPower(client, true);
-    ApplyMeleeConvars();
     ShowStatus(client);
     return Plugin_Handled;
 }
@@ -329,7 +371,6 @@ public Action Cmd_PowerSet(int client, int args)
     // 写入目标玩家等级并应用(与普通玩家自调走同一套逻辑)
     g_iLevel[target] = level;
     ApplyPower(target, true);
-    ApplyMeleeConvars();
     ShowStatus(target);
 
     if (client > 0)
@@ -398,6 +439,8 @@ public Action Cmd_PowerStatus(int client, int args)
             g_cvScaleStep.FloatValue,
             g_cvSpeedStep.FloatValue,
             -g_cvShrinkMax.IntValue, g_cvMaxLevel.IntValue);
+        PrintToChat(client, "\x04[强化]\x01 近战加成:%s (逐人, 电锯不受影响) | 倍率 L1~L5 = x2/x4/x8/x16/x32",
+            g_cvMeleeEnabled.BoolValue ? "开" : "关");
     }
 
     int count = 0;
@@ -411,8 +454,8 @@ public Action Cmd_PowerStatus(int client, int args)
         {
             char sName[MAX_NAME_LENGTH];
             GetClientName(i, sName, sizeof(sName));
-            PrintToConsole(client, "[%s] L%d | 血量%d | 体型x%.2f",
-                sName, g_iLevel[i], GetHpForLevel(i), GetScaleForLevel(i));
+            PrintToConsole(client, "[%s] L%d | 血量%d | 体型x%.2f | 近战x%.2f",
+                sName, g_iLevel[i], GetHpForLevel(i), GetScaleForLevel(i), GetMeleeMultForLevel(g_iLevel[i]));
         }
     }
 
@@ -463,7 +506,8 @@ void ApplyPower(int client, bool refill)
     }
 
     if (g_cvDebug.BoolValue)
-        PrintToServer("[强化] %N L%d: 体型=x%.2f 移速=x%.2f", client, level, newScale, GetSpeedForLevel(client));
+        PrintToServer("[强化] %N L%d: 体型=x%.2f 移速=x%.2f 近战=x%.2f",
+            client, level, newScale, GetSpeedForLevel(client), GetMeleeMultForLevel(level));
 }
 
 // 恢复某玩家 marine 的原始血量/体型/移速
@@ -524,67 +568,149 @@ float GetSpeedForLevel(int client)
 }
 
 // ============================================================================
-//  近战(全局): 等比缩放 asw_skill_melee_dmg_base / _step (AS:RD 实际近战伤害)
-//  伤害 = asw_skill_melee_dmg_base + asw_skill_melee_dmg_step * 技能点 (再乘攻击 DamageScale)
-//  两者同乘倍数 => 近战伤害整体同乘倍数
+//  近战加成倍率: 放大等级 1~5 = x2 / x4 / x8 / x16 / x32; 其余(含缩小/0级) = x1.0
+//  【逐人】: 只按"出手那个人"自己的等级取倍率, 不再受其他玩家等级影响
 // ============================================================================
-void EnsureMeleeConvars()
+float GetMeleeMultForLevel(int level)
 {
-    if (g_bMeleeConvarsReady)
-        return;
-    g_bMeleeConvarsReady = true;
+    if (level <= 0)
+        return 1.0;
+    if (level > MELEE_MULT_LEVELS)
+        level = MELEE_MULT_LEVELS;
 
-    g_hMeleeDmgBase = FindConVar("asw_skill_melee_dmg_base");
-    g_hMeleeDmgStep  = FindConVar("asw_skill_melee_dmg_step");
-    if (g_hMeleeDmgBase != null)
-        g_fMeleeDmgBaseDefault = GetConVarFloat(g_hMeleeDmgBase);
-    if (g_hMeleeDmgStep != null)
-        g_fMeleeDmgStepDefault = GetConVarFloat(g_hMeleeDmgStep);
+    static const float s_fMultTable[MELEE_MULT_LEVELS + 1] = { 1.0, 2.0, 4.0, 8.0, 16.0, 32.0 };
+    return s_fMultTable[level];
 }
 
-// 当前近战倍率 = 所有玩家中的最高等级推算; 禁用/无人强化 => x1.0
-float GetGlobalMeleeMult()
+// ============================================================================
+//  近战加成 (SDKHooks, 挂在虫族 victim 侧):
+//    只处理"普通近战" —— 引擎里 CASW_Marine::MeleeTraceHullAttack() 发出的
+//    DMG_CLUB 伤害(伤害值 = 陆战队员近战技能值), 乘以攻击者本人等级的倍率。
+//
+//    电锯完全不受影响, 两道保险:
+//      1) 电锯伤害类型是 DMG_SLASH (asw_weapon_chainsaw_shared.cpp), 不满足 DMG_CLUB
+//      2) 再显式判断攻击武器类名不是 asw_weapon_chainsaw
+// ============================================================================
+public Action OnAlienDamaged(int victim, int &attacker, int &inflictor,
+    float &damage, int &damagetype, int &weapon,
+    float damageForce[3], float damagePosition[3], int damagecustom)
 {
     if (!g_cvEnabled.BoolValue || !g_cvMeleeEnabled.BoolValue)
-        return 1.0;
+        return Plugin_Continue;
 
-    int maxLevel = 0;
-    for (int i = 1; i <= MaxClients; i++)
+    // 只看普通近战 (徒手/踢击), 电锯的 DMG_SLASH 在这里就被排除
+    if ((damagetype & DMG_CLUB) == 0)
+        return Plugin_Continue;
+    if (damage <= 0.0)
+        return Plugin_Continue;
+
+    // 双保险: 攻击武器若是电锯, 一律不参与强化
+    if (weapon > 0 && IsValidEntity(weapon))
     {
-        if (IsClientInGame(i) && !IsFakeClient(i) && g_iLevel[i] > maxLevel)
-            maxLevel = g_iLevel[i];
+        char sWeapon[64];
+        if (GetEntityClassname(weapon, sWeapon, sizeof(sWeapon))
+            && StrEqual(sWeapon, CHAINSAW_CLASSNAME, false))
+            return Plugin_Continue;
     }
-    if (maxLevel <= 0)
-        return 1.0;
 
-    // 近战倍率查表: 放大等级 1~5 对应 x2 / x4 / x8 / x16 / x32
-    static const float s_fMultTable[6] = { 0.0, 2.0, 4.0, 8.0, 16.0, 32.0 };
-    if (maxLevel >= 1 && maxLevel <= 5)
-        return s_fMultTable[maxLevel];
-    return s_fMultTable[5];   // 超过 5 级按 x32 封顶
-}
+    int client = ResolveMeleeAttackerClient(attacker);
+    if (client <= 0)
+        return Plugin_Continue;
 
-void ApplyMeleeConvars()
-{
-    EnsureMeleeConvars();
-    if (g_hMeleeDmgBase == null || g_hMeleeDmgStep == null)
-        return;
-
-    float mult = GetGlobalMeleeMult();
-    SetConVarFloat(g_hMeleeDmgBase, g_fMeleeDmgBaseDefault * mult);
-    SetConVarFloat(g_hMeleeDmgStep,  g_fMeleeDmgStepDefault  * mult);
+    float mult = GetMeleeMultForLevel(g_iLevel[client]);
+    if (mult <= 1.0)
+        return Plugin_Continue;
 
     if (g_cvDebug.BoolValue)
-        PrintToServer("[强化] 近战全局倍率 x%.2f (base=%.1f step=%.1f)",
-            mult, g_fMeleeDmgBaseDefault * mult, g_fMeleeDmgStepDefault * mult);
+        PrintToServer("[强化] %N L%d 近战加成 x%.1f (%.1f -> %.1f)",
+            client, g_iLevel[client], mult, damage, damage * mult);
+
+    damage *= mult;
+    return Plugin_Changed;
 }
 
-void RestoreMeleeDefaults()
+// ============================================================================
+//  普通近战的攻击者 -> 操控该陆战队员的玩家 (0=不是玩家操控的陆战队员)
+//  只认 asw_marine: 被玩家附身的虫族走的是虫族自己的近战路径, 不在此加成范围内
+// ============================================================================
+int ResolveMeleeAttackerClient(int attacker)
 {
-    if (g_hMeleeDmgBase != null)
-        SetConVarFloat(g_hMeleeDmgBase, g_fMeleeDmgBaseDefault);
-    if (g_hMeleeDmgStep != null)
-        SetConVarFloat(g_hMeleeDmgStep, g_fMeleeDmgStepDefault);
+    if (attacker <= 0)
+        return 0;
+
+    if (attacker <= MaxClients)
+        return IsUsableClient(attacker) ? attacker : 0;
+
+    if (!IsValidEntity(attacker))
+        return 0;
+
+    char cls[64];
+    if (!GetEntityClassname(attacker, cls, sizeof(cls)))
+        return 0;
+    if (!StrEqual(cls, "asw_marine", false))
+        return 0;
+
+    return GetCommanderClient(attacker);
+}
+
+// ============================================================================
+//  查实体上的 m_Commander (CASW_Inhabitable_NPC 字段, marine 持有):
+//  先数据属性后网络属性, 返回操控该实体的玩家 (0=无人操控)
+// ============================================================================
+int GetCommanderClient(int ent)
+{
+    if (FindDataMapInfo(ent, "m_Commander") > 0)
+    {
+        int client = GetEntPropEnt(ent, Prop_Data, "m_Commander");
+        if (IsUsableClient(client))
+            return client;
+    }
+
+    char sNetClass[64];
+    if (GetEntityNetClass(ent, sNetClass, sizeof(sNetClass))
+        && FindSendPropInfo(sNetClass, "m_Commander") > 0)
+    {
+        int client = GetEntPropEnt(ent, Prop_Send, "m_Commander");
+        if (IsUsableClient(client))
+            return client;
+    }
+
+    return 0;
+}
+
+bool IsUsableClient(int client)
+{
+    return client > 0 && client <= MaxClients
+        && IsClientInGame(client) && !IsFakeClient(client);
+}
+
+// ============================================================================
+//  虫族伤害回调挂钩: 新虫族生成时补挂 + 地图开始时横扫已有虫族
+// ============================================================================
+public void OnEntityCreated(int entity, const char[] classname)
+{
+    if (IsAlienClass(classname))
+        SDKHookEx(entity, SDKHook_OnTakeDamage, OnAlienDamaged);
+}
+
+bool IsAlienClass(const char[] classname)
+{
+    for (int c = 0; c < sizeof(g_sAlienClasses); c++)
+    {
+        if (StrEqual(classname, g_sAlienClasses[c], false))
+            return true;
+    }
+    return false;
+}
+
+void HookExistingAliens()
+{
+    for (int c = 0; c < sizeof(g_sAlienClasses); c++)
+    {
+        int ent = -1;
+        while ((ent = FindEntityByClassname(ent, g_sAlienClasses[c])) != -1)
+            SDKHookEx(ent, SDKHook_OnTakeDamage, OnAlienDamaged);
+    }
 }
 
 // ============================================================================
@@ -611,9 +737,9 @@ bool CanUsePower(int client)
 void ShowStatus(int client)
 {
     float scale = GetScaleForLevel(client);
-    float melee = GetGlobalMeleeMult();
+    float melee = GetMeleeMultForLevel(g_iLevel[client]);
     float speed = GetSpeedForLevel(client);
-    PrintHintText(client, "强化等级 %d (范围 %d~%d)\n血量上限: %d | 体型: x%.2f\n移速: x%.2f | 近战(全局): x%.2f",
+    PrintHintText(client, "强化等级 %d (范围 %d~%d)\n血量上限: %d | 体型: x%.2f\n移速: x%.2f | 近战: x%.2f (电锯除外)",
         g_iLevel[client], -g_cvShrinkMax.IntValue, g_cvMaxLevel.IntValue,
         GetHpForLevel(client), scale, speed, melee);
     PrintToChat(client, "\x04[强化]\x01 等级 \x05%d\x01 | 血量 \x05%d\x01 | 体型 x\x05%.2f\x01 | 移速 x\x05%.2f\x01 | 近战 x\x05%.2f\x01",
@@ -627,7 +753,7 @@ void ResetPlayer(int client)
 }
 
 // ============================================================================
-//  周期定时器: 重新断言血量上限/体型/移速(换人/复活后仍生效, 不回血), 并重算近战倍率
+//  周期定时器: 重新断言血量上限/体型/移速(换人/复活后仍生效, 不回血)
 // ============================================================================
 public Action Timer_Reapply(Handle timer)
 {
@@ -640,9 +766,6 @@ public Action Timer_Reapply(Handle timer)
             ApplyPower(i, false);
         }
     }
-
-    // 近战为全局倍率: 按当前最高等级重算(禁用/无人强化时自动恢复默认)
-    ApplyMeleeConvars();
     return Plugin_Continue;
 }
 
