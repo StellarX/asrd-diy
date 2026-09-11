@@ -9,7 +9,7 @@
  *       (血量越高积分越多, 倍率见 sm_asrd_points_hp_scale, 最少 1 分)
  *    2. 积分购买: 玩家使用 sm_nukepub / sm_betraypub / sm_power_up|down 时,
  *       先扣除积分再放行给原插件执行功能; 聊天框用 /buy 4 <编号> 购买强化
- *       哨戒塔 (0机枪 1炮塔, 喷火/冰冻暂不支持), /buy 5 一键满配全场哨戒塔
+ *       哨戒塔 (0机枪 1炮塔, 喷火/冰冻暂不支持), /buy 5 满配哨戒塔
  *    3. 积分显示: 屏幕左上方常驻显示总积分, 每 0.5 秒刷新, 击杀/消费即时更新
  *    4. 进服通知: 玩家连上服务器后, 延迟几秒在聊天框私聊发送 /buy 购买说明
  *       (避开加载画面; 开关见 sm_asrd_points_join_help)
@@ -56,10 +56,14 @@
  *                        /buy 3 [1-6]=叛变虫群 (/buy 3 无选项=drone×10)
  *                        (强化已满级时 /buy 1 转为加血: 血量<800 花
  *                        power_cost 恢复 200 血, 封顶最大血量)
- *                        /buy 4 <编号>=强化哨戒塔箱 (0机枪 1炮塔,
- *                        喷火/冰冻暂不支持); /buy 5=一键满配全场哨戒塔
+ *                        /buy 4 [编号]=强化哨戒塔箱 (0机枪 1炮塔,
+ *                        无选项默认 0=机枪; 喷火/冰冻暂不支持);
+ *                        /buy 5=满配哨戒塔
  *                        (地图上没有哨戒塔时不允许购买, 不扣分)
- *   /1 /2 /3          玩家: 聊天框快捷购买 强化等级 / 核弹 / 叛变虫群(默认drone)
+ *   /1 ../5           玩家: 聊天框快捷购买, 与 /buy <编号> **完全等价**且同样能带选项:
+ *                        /1 强化等级  /2 核弹  /3 [1-6] 叛变虫群(默认 drone×10)
+ *                        /4 [0/1] 哨戒塔箱  /5 全场哨戒塔满配
+ *                        例: /3 2 = /buy 3 2 (游侠); /4 1 = /buy 4 1 (炮塔)
  *   /nukepub /betraypub /power_up /power_down
  *                     玩家: 聊天框直接调用原功能命令同样扣积分
  *   注: 无任何 sm_points* 控制台命令; 控制台调用原功能命令不扣积分
@@ -68,7 +72,7 @@
  *   sm_asrd_points_enabled    总开关 (0=关 1=开, 默认 1)
  *   sm_asrd_points_start      每局初始积分 (默认 1000; 开局/换图时重置)
  *   sm_asrd_points_hp_scale   击杀积分 = 虫族最大血量 x 倍率 (默认 0.05, 最少 1 分)
- *   sm_asrd_points_nuke_cost  核弹价格 (默认 300, 0=不设门槛)
+ *   sm_asrd_points_nuke_cost  核弹价格 (默认 200, 0=不设门槛)
  *   sm_asrd_points_betray_cost 叛变虫群价格 (默认 100, 0=不设门槛)
  *   sm_asrd_points_power_cost 强化等级价格 (默认 400, 0=不设门槛)
  *   sm_asrd_points_sentry_cost 强化哨戒塔价格 (默认 300, 0=不设门槛)
@@ -96,7 +100,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Points"
-#define PLUGIN_VERSION "1.15.0"
+#define PLUGIN_VERSION "1.16.0"
 
 // ─── /buy 4 强化哨戒塔可选编号 (哨戒塔插件 sm_sentrydrop 的塔类型; 2喷火/3冰冻暂不支持) ─
 #define BUY_SENTRY_VARIANTS_MAX 1   // 当前支持的最高塔编号 (0=机枪 1=炮塔)
@@ -113,6 +117,9 @@
 
 // ─── /buy 3 叛变虫群可选虫种 (别名 + 数量, 对应 asrd_alien_civilwar 的 sm_betraypub) ─
 #define BUY_BETRAY_VARIANTS  6
+
+// ─── 快捷指令编号上限: /1 ~ /5 与 /buy 1 ~ /buy 5 一一对应 ─
+#define BUY_ITEM_MAX         5
 char g_sBetrayAlias[BUY_BETRAY_VARIANTS + 1][16] = { "", "drone", "buzzer", "ranger", "shield", "mortar", "shaman" };
 int  g_iBetrayCount[BUY_BETRAY_VARIANTS + 1] = { 0, 10, 20, 10, 5, 10, 5 };
 
@@ -238,7 +245,7 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 0.001, true, 100.0
     );
     g_cvNukeCost = CreateConVar(
-        "sm_asrd_points_nuke_cost", "300",
+        "sm_asrd_points_nuke_cost", "200",
         "核弹(sm_nukepub)积分价格 (0=不设积分门槛)",
         FCVAR_NOTIFY, true, 0.0
     );
@@ -311,7 +318,7 @@ public void OnPluginStart()
     // 自动保存/读取配置到 cfg/sourcemod/asrd_points.cfg
     AutoExecConfig(true, "asrd_points");
 
-    // 无注册命令: /buy、/1、/2、/3 等聊天框购买统一走 OnClientSayCommand;
+    // 无注册命令: /buy、/1~/5 等聊天框购买统一走 OnClientSayCommand (同一份逻辑);
     // 控制台没有积分相关命令 (原功能命令控制台调用不扣积分)。
 
     // sm_power_reset 免费, 但需同步强化等级镜像 (镜像置 0), 不扣分
@@ -630,8 +637,9 @@ void ResetPlayerLevels()
 
 // ============================================================================
 //  聊天框统一购买入口 (唯一扣积分路径)
-//  玩家在聊天框输入 /buy、/1、/2、/3、/nukepub、/betraypub、/power_up 等,
+//  玩家在聊天框输入 /buy、/1~/5、/nukepub、/betraypub、/power_up 等,
 //  全部在此解析: 校验 → 扣分 → 转发给原插件命令执行。
+//  /1~/5 与 /buy <编号> 完全等价 (可带选项), 见 HandleBuyItem()。
 //  客户端控制台/服务器控制台调用原命令不经过这里 → 不扣积分。
 // ============================================================================
 public Action OnClientSayCommand(int client, const char[] command, const char[] sArgs)
@@ -650,100 +658,33 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
     char sCmd[64];
     GetArgFromString(sText, 0, sCmd, sizeof(sCmd));   // 参数 0 = 命令本身 (去前缀)
 
-    if (StrEqual(sCmd, "buy", false))
+    // ── /buy <编号> [选项] 与快捷指令 /1 ~ /5 走**同一套逻辑** ──
+    //    /buy 3 2  等价于  /3 2       (编号后的选项位置不同, 统一收进 sOpt)
+    if (StrEqual(sCmd, "buy", false) || IsBuyShortcut(sCmd))
     {
-        char sA1[16], sA2[16];
-        if (!GetArgFromString(sText, 1, sA1, sizeof(sA1)))
+        char sOpt[16];
+        sOpt[0] = '\0';
+        int iItem = -1;
+
+        if (StrEqual(sCmd, "buy", false))
         {
-            ShowBuyHelp(client);
-            return Plugin_Handled;
+            char sA1[16];
+            if (!GetArgFromString(sText, 1, sA1, sizeof(sA1)))
+            {
+                ShowBuyHelp(client);
+                return Plugin_Handled;
+            }
+            if (IsNumericArg(sA1))
+                iItem = StringToInt(sA1);
+            GetArgFromString(sText, 2, sOpt, sizeof(sOpt));   // 选项可缺省
         }
-        int iItem = StringToInt(sA1);
-        switch (iItem)
+        else
         {
-            case 1:
-                BuyPowerFromChat(client, true);
-            case 2:
-                PurchaseFromChat(client, "sm_nukepub", "", g_cvNukeCost,
-                    "核弹", "sm_asrd_nuke_enabled", "sm_asrd_nuke_public");
-            case 3:
-            {
-                int iVar = 1;
-                if (GetArgFromString(sText, 2, sA2, sizeof(sA2)))
-                    iVar = StringToInt(sA2);
-                if (iVar < 1 || iVar > BUY_BETRAY_VARIANTS)
-                {
-                    PrintToChat(client, "\x04[积分]\x01 /buy 3 选项: 1=工蜂 2=蜂群 3=游侠 4=盾甲虫 5=迫击炮虫 6=治疗虫");
-                    return Plugin_Handled;
-                }
-                char sBetray[64];
-                Format(sBetray, sizeof(sBetray), "%s %d", g_sBetrayAlias[iVar], g_iBetrayCount[iVar]);
-                PurchaseFromChat(client, "sm_betraypub", sBetray, g_cvBetrayCost,
-                    "叛变虫群", "sm_asrd_betray_enabled", "sm_asrd_betray_public");
-            }
-            case 4:
-            {
-                // /buy 4 <编号>: 购买强化哨戒塔箱 (0=机枪 1=炮塔; 喷火/冰冻暂不支持)
-                char sType[16];
-                int iType = -1;
-                if (GetArgFromString(sText, 2, sType, sizeof(sType)))
-                    iType = StringToInt(sType);
-
-                if (iType < 0 || iType > BUY_SENTRY_VARIANTS_MAX)
-                {
-                    PrintToChat(client, "\x04[积分]\x01 /buy 4 编号无效: 0=机枪 1=炮塔 (喷火/冰冻暂不支持)");
-                }
-                else
-                {
-                    char sTypeArg[8];
-                    IntToString(iType, sTypeArg, sizeof(sTypeArg));
-
-                    char sFeature[32];
-                    Format(sFeature, sizeof(sFeature), "强化哨戒塔(%s)", iType == 0 ? "机枪" : "炮塔");
-
-                    PurchaseFromChat(client, "sm_sentrydrop", sTypeArg, g_cvSentryCost,
-                        sFeature, "sm_asrd_sentry_enabled", "sm_asrd_sentry_drop_public");
-                }
-            }
-            case 5:
-            {
-                // /buy 5: 一键满配全场哨戒塔 (补满生命与弹药)
-                // 先查地图上有没有塔: 一座都没有就别让玩家白扣 500 分
-                int iSentries = CountMapSentries();
-                if (iSentries <= 0)
-                {
-                    PrintToChat(client, "\x04[积分]\x01 地图上目前没有任何哨戒塔, 不能购买【%s】", "全场哨戒塔满配");
-                    return Plugin_Handled;
-                }
-
-                PurchaseFromChat(client, "sm_sentry_refill", "", g_cvRefillCost,
-                    "全场哨戒塔满配", "sm_asrd_sentry_enabled", "sm_asrd_sentry_refill_public");
-            }
-            default:
-            {
-                PrintToChat(client, "\x04[积分]\x01 /buy 编号无效, 输入 \x05/buy\x01 查看格式");
-            }
+            iItem = StringToInt(sCmd);                        // IsBuyShortcut() 已保证是 1..5
+            GetArgFromString(sText, 1, sOpt, sizeof(sOpt));   // 快捷指令的选项紧跟命令
         }
-        return Plugin_Handled;
-    }
 
-    if (StrEqual(sCmd, "1", false))
-    {
-        BuyPowerFromChat(client, true);
-        return Plugin_Handled;
-    }
-    if (StrEqual(sCmd, "2", false))
-    {
-        PurchaseFromChat(client, "sm_nukepub", "", g_cvNukeCost,
-            "核弹", "sm_asrd_nuke_enabled", "sm_asrd_nuke_public");
-        return Plugin_Handled;
-    }
-    if (StrEqual(sCmd, "3", false))
-    {
-        char sBetray[64];
-        Format(sBetray, sizeof(sBetray), "%s %d", g_sBetrayAlias[1], g_iBetrayCount[1]);
-        PurchaseFromChat(client, "sm_betraypub", sBetray, g_cvBetrayCost,
-            "叛变虫群", "sm_asrd_betray_enabled", "sm_asrd_betray_public");
+        HandleBuyItem(client, iItem, sOpt);
         return Plugin_Handled;
     }
 
@@ -775,6 +716,130 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
     }
 
     return Plugin_Continue;
+}
+
+// ============================================================================
+//  快捷指令 /1 ~ /5: 判定 + 与 /buy 共用的分发入口
+// ============================================================================
+bool IsBuyShortcut(const char[] sCmd)
+{
+    for (int i = 1; i <= BUY_ITEM_MAX; i++)
+    {
+        char sNum[4];
+        IntToString(i, sNum, sizeof(sNum));
+        if (StrEqual(sCmd, sNum, false))
+            return true;
+    }
+    return false;
+}
+
+// 参数是否为纯数字 (允许正负号): 防止 /4 abc 被 StringToInt 静默当成 0 而误购
+bool IsNumericArg(const char[] s)
+{
+    int n = strlen(s);
+    if (n <= 0)
+        return false;
+
+    for (int i = 0; i < n; i++)
+    {
+        if (i == 0 && (s[i] == '-' || s[i] == '+'))
+            continue;
+        if (s[i] < '0' || s[i] > '9')
+            return false;
+    }
+    return true;
+}
+
+// ============================================================================
+//  /buy <编号> [选项] 的统一实现 (唯一扣分入口), 快捷 /编号 亦调用此处
+//    iItem  1=强化 2=核弹 3=虫群 4=哨戒塔箱 5=满配; 其它 → 编号无效提示
+//    sOpt   编号之后的选项 (可缺省; 空串 = 未指定)
+// ============================================================================
+void HandleBuyItem(int client, int iItem, const char[] sOpt)
+{
+    switch (iItem)
+    {
+        case 1:
+            BuyPowerFromChat(client, true);
+
+        case 2:
+            PurchaseFromChat(client, "sm_nukepub", "", g_cvNukeCost,
+                "核弹", "sm_asrd_nuke_enabled", "sm_asrd_nuke_public");
+
+        case 3:
+        {
+            // /buy 3 [1-6] 与 /3 [1-6]: 缺省 = 1 (工蜂×10)
+            int iVar = 1;
+            if (sOpt[0] != '\0')
+            {
+                if (!IsNumericArg(sOpt))
+                {
+                    PrintToChat(client, "\x04[积分]\x01 选项必须是数字: /buy 3 [1-6] 或 /3 [1-6]");
+                    return;
+                }
+                iVar = StringToInt(sOpt);
+            }
+            if (iVar < 1 || iVar > BUY_BETRAY_VARIANTS)
+            {
+                PrintToChat(client, "\x04[积分]\x01 /buy 3 选项: 1=工蜂 2=蜂群 3=游侠 4=盾甲虫 5=迫击炮虫 6=治疗虫");
+                return;
+            }
+
+            char sBetray[64];
+            Format(sBetray, sizeof(sBetray), "%s %d", g_sBetrayAlias[iVar], g_iBetrayCount[iVar]);
+            PurchaseFromChat(client, "sm_betraypub", sBetray, g_cvBetrayCost,
+                "叛变虫群", "sm_asrd_betray_enabled", "sm_asrd_betray_public");
+        }
+
+        case 4:
+        {
+            // /buy 4 [0/1] 与 /4 [0/1]: 强化哨戒塔箱 (0=机枪 1=炮塔; 喷火/冰冻暂不支持)
+            bool bHasOpt = (sOpt[0] != '\0');
+            int  iType   = 0;                       // 未指定编号 → 默认 0=机枪
+            if (bHasOpt)
+            {
+                if (!IsNumericArg(sOpt))
+                {
+                    PrintToChat(client, "\x04[积分]\x01 选项必须是数字: /buy 4 <0/1> (0=机枪 1=炮塔)");
+                    return;
+                }
+                iType = StringToInt(sOpt);
+            }
+            if (iType < 0 || iType > BUY_SENTRY_VARIANTS_MAX)
+            {
+                PrintToChat(client, "\x04[积分]\x01 /buy 4 编号无效: 0=机枪 1=炮塔 (喷火/冰冻暂不支持)");
+                return;
+            }
+            if (!bHasOpt)
+                PrintToChat(client, "\x04[积分]\x01 未指定编号, 默认购买 0=机枪 (炮塔: \x05/buy 4 1\x01 或 \x05/4 1\x01)");
+
+            char sTypeArg[8];
+            IntToString(iType, sTypeArg, sizeof(sTypeArg));
+
+            char sFeature[32];
+            Format(sFeature, sizeof(sFeature), "强化哨戒塔(%s)", iType == 0 ? "机枪" : "炮塔");
+
+            PurchaseFromChat(client, "sm_sentrydrop", sTypeArg, g_cvSentryCost,
+                sFeature, "sm_asrd_sentry_enabled", "sm_asrd_sentry_drop_public");
+        }
+
+        case 5:
+        {
+            // /buy 5 与 /5: 满配哨戒塔 (补满生命与弹药)
+            // 先查地图上有没有塔: 一座都没有就别让玩家白扣 refill_cost 分
+            if (CountMapSentries() <= 0)
+            {
+                PrintToChat(client, "\x04[积分]\x01 地图上目前没有任何哨戒塔, 不能购买【%s】", "全场哨戒塔满配");
+                return;
+            }
+
+            PurchaseFromChat(client, "sm_sentry_refill", "", g_cvRefillCost,
+                "全场哨戒塔满配", "sm_asrd_sentry_enabled", "sm_asrd_sentry_refill_public");
+        }
+
+        default:
+            PrintToChat(client, "\x04[积分]\x01 /buy 编号无效, 输入 \x05/buy\x01 查看格式");
+    }
 }
 
 void BuyPowerFromChat(int client, bool bUp)
@@ -932,13 +997,14 @@ void JoinArgsFrom(const char[] sInput, int n, char[] buf, int maxlen)
 // 购买用法说明 (玩家输入 /buy 查询 & 进服通知 共用同一份)
 void ShowBuyHelp(int client)
 {
-    PrintToChat(client, "\x04[积分]\x01 欢迎 \x05%N\x01! ── 快捷购买 ──  当前总积分: \x05%d\x01   用法: \x05/buy <编号> [选项]", client, g_iPoints);
+    PrintToChat(client, "\x04[积分]\x01 欢迎 \x05%N\x01! 当前总积分: \x05%d\x01   用法: \x05/buy <编号> [选项]", client, g_iPoints);
     PrintToChat(client, "  \x05/buy 1\x01  属性强化 +1 (%d 分; 满级后转为加血)", g_cvPowerCost.IntValue);
     PrintToChat(client, "  \x05/buy 2\x01  战术核弹 (%d 分)", g_cvNukeCost.IntValue);
     PrintToChat(client, "  \x05/buy 3 [1-6]\x01  友军虫群 (%d 分): 1=工蜂 2=蜂群 3=游侠 4=盾甲虫 5=迫击炮虫 6=治疗虫", g_cvBetrayCost.IntValue);
     PrintToChat(client, "  \x05/buy 4 <0/1>\x01  强化哨戒塔箱 (%d 分): 0=机枪 1=炮塔", g_cvSentryCost.IntValue);
-    PrintToChat(client, "  \x05/buy 5\x01  一键满配全场哨戒塔 (%d 分; 场上无塔时不会扣分)", g_cvRefillCost.IntValue);
-    PrintToChat(client, "  快捷指令: \x05/1\x01 强化   \x05/2\x01 核弹   \x05/3\x01 虫群");
+    PrintToChat(client, "  \x05/buy 5\x01  满配哨戒塔 (%d 分)", g_cvRefillCost.IntValue);
+    PrintToChat(client, "  快捷指令: \x05/1\x01 强化   \x05/2\x01 核弹   \x05/3 [1-6]\x01 虫群   \x05/4 [0/1]\x01 哨戒塔箱   \x05/5\x01 满配");
+    PrintToChat(client, "  例: \x05/3 2\x01 = /buy 3 2 (游侠)   \x05/4 1\x01 = /buy 4 1 (炮塔)   \x05/2\x01 = /buy 2 (核弹)");
 }
 
 // ============================================================================
@@ -1110,7 +1176,7 @@ public void OnGameFrame()
 // ============================================================================
 void AdvertiseUsage()
 {
-    PrintToChatAll("\x04[积分]\x01 快捷购买: \x05/buy 1\x01强化(%d) \x05/buy 2\x01核弹(%d) \x05/buy 3\x01虫群(%d) \x05/buy 4\x01哨戒塔(%d) \x05/buy 5\x01补充全部哨戒弹药(%d)",
+    PrintToChatAll("\x04[积分]\x01 购买: \x05/buy 1\x01强化(%d) \x05/buy 2\x01核弹(%d) \x05/buy 3 [1-6]\x01虫群(%d) \x05/buy 4 [0/1]\x01哨戒塔(%d) \x05/buy 5\x01补充哨戒弹药(%d); \x05/1\x01~\x05/5\x01 与 /buy 完全等价",
         g_cvPowerCost.IntValue, g_cvNukeCost.IntValue, g_cvBetrayCost.IntValue,
         g_cvSentryCost.IntValue, g_cvRefillCost.IntValue);
 }

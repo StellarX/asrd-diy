@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 范围击退 (Repulse)
- *  版本 1.7.3  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.7.4  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  1. 手动击退: 按绑定键以自己为中心, 把周围虫族沿径向往外推开。
@@ -21,9 +21,15 @@
  *     护盾自然到期时信标同步燃尽 (marine 阵亡则保留信标原版自然燃烧)。
  *
  *  ── 投射物(炮弹) ───────────────────────────────────────
- *   已内置 mortarbug(迫击炮虫)的炮弹 asw_mortarbug_shell。
- *   用"速度弹开"而非 teleport, 防止被投射物原速度拉回。
- *   其余(如 ranger 的酸液)可在 debug 抓到类名后,
+ *   已内置:
+ *     asw_mortarbug_shell  迫击炮虫的炮弹
+ *     asw_missile_round    ranger 酸球 + 玩家导弹/火箭 (同一实体)
+ *     grenade_spit         蚁狮工兵 npc_antlion_worker 的酸液弹
+ *                          (引擎 npc_antlion.cpp 的 AE_ANTLION_WORKER_SPIT
+ *                           一次创建 6 枚)
+ *   用"速度弹开"而非 teleport, 防止被投射物原速度拉回;
+ *   护盾模式下除 asw_mortarbug_shell 外一律直接消失(阻挡)。
+ *   其余投射物可在 debug 抓到类名后,
  *   追加到 sm_asrd_repulse_projectile_classes 即可。
  *
  *  ── 为什么有些虫打不到? ────────────────────────────────
@@ -81,7 +87,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] 范围击退"
-#define PLUGIN_VERSION "1.7.3"
+#define PLUGIN_VERSION "1.7.4"
 
 // ─── 平滑推进动画池 (手动击退用) ──
 #define MAX_PUSH 512
@@ -100,14 +106,19 @@ float  g_fLastAuraDump;           // 护盾类名点名节流
 float  g_fLastProjLog;            // 投射物 owner 日志节流
 
 // ─── 敌方投射物清单 (用速度弹开, 不用 teleport) ──
-// asw_mortarbug_shell = mortarbug(迫击炮虫)的炮弹
+// asw_mortarbug_shell = mortarbug(迫击炮虫)的炮弹 (护盾模式下也只用速度弹开, 不删除)
 // asw_missile_round   = ranger 酸球 + 玩家的导弹/火箭, 共用同一实体!
-//   对 asw_missile_round 我们只弹"玩家之外"发射的(owner 是 alien), 避免误伤玩家武器。
+//   ⚠ 当前**不做敌我区分** (见 PushProjectiles 注释): 玩家自己打出的导弹进入半径
+//     同样会被弹开 / 护盾模式下被删除。
+// grenade_spit        = 蚁狮工兵 npc_antlion_worker 的酸液弹
+//   (引擎 src/game/server/hl2/npc_antlion.cpp:1099, 动画事件 AE_ANTLION_WORKER_SPIT
+//    一次创建 6 枚; 仅该 NPC 的发射动作会用到, 玩家武器不使用此类名)
 // 其余可在 debug 抓到类名后追加
 char g_sBuiltinProjClasses[][] =
 {
     "asw_mortarbug_shell",
-    "asw_missile_round"
+    "asw_missile_round",
+    "grenade_spit"
 };
 char g_sProjClasses[MAX_PROJ_CLASSES][64];
 int  g_iProjClassCount;
