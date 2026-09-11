@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 积分机制 (Points)
- *  版本 1.11.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.12.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  引入一套全队共享的积分经济:
@@ -40,8 +40,12 @@
  *  ── 击杀归属判定 ───────────────────────────────────────
  *    - 伤害回调挂在虫族 victim 侧 (SDKHook_OnTakeDamage, 与扫描机插件同模式)
  *    - 致命一击的归属按攻击者解析: 玩家客户端 / 陆战队员实体(查 m_Commander)
- *      / 被玩家附身的虫族(查 m_Commander), 其它来源 (核弹/哨戒塔/扫描机/
- *      虫族互杀) 不计分
+ *      / 被玩家附身的虫族(查 m_Commander) / 哨戒塔塔顶炮台(反查塔底座
+ *      m_hSentryBase -> 部署者 m_hDeployer -> 操控者), 其它来源 (核弹/
+ *      扫描机/虫族互杀) 不计分
+ *    - 哨戒塔: 炮弹/喷火/冰冻塔引擎本就填部署者 marine (原本就计分); 机枪塔
+ *      走 hitscan 子弹, 引擎只填塔顶实体自身, 由本插件补一路反查使其一并计分。
+ *      地图预置的塔没有部署者, 一律不计分
  *    - 友军虫 (targetname=asrd_betray_swarm, 含玩家附身虫) 不计分, 防刷分
  *
  *  ── 命令 ────────────────────────────────────────────────
@@ -89,7 +93,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Points"
-#define PLUGIN_VERSION "1.11.0"
+#define PLUGIN_VERSION "1.12.0"
 
 // ─── /buy 4 强化哨戒塔可选编号 (哨戒塔插件 sm_sentrydrop 的塔类型; 2喷火/3冰冻暂不支持) ─
 #define BUY_SENTRY_VARIANTS_MAX 1   // 当前支持的最高塔编号 (0=机枪 1=炮塔)
@@ -406,6 +410,7 @@ void AwardPoints(int victim, int killer)
 // ============================================================================
 //  把攻击者实体解析为击杀玩家 (0=无人):
 //   玩家客户端 / 陆战队员实体(查 m_Commander) / 被玩家附身的虫族(查 m_Commander)
+//   / 哨戒塔塔顶炮台(反查 m_hSentryBase -> m_hDeployer -> 操控者)
 // ============================================================================
 int ResolveKillerClient(int attacker)
 {
@@ -424,10 +429,68 @@ int ResolveKillerClient(int attacker)
 
     char cls[64];
     GetEntityClassname(attacker, cls, sizeof(cls));
+
+    // 哨戒塔塔顶炮台 (asw_sentry_top_*): 机枪塔走 hitscan 子弹, 引擎在
+    // FireBulletsInfo_t 里只填了塔顶实体自身 (asw_sentry_top_machinegun.cpp
+    // "info.m_pAttacker = this"), 插件必须自己反查这座塔是谁部署的。
+    // (炮弹/喷火/冰冻塔引擎直接填部署者 marine, 不走这里, 但一并兜住无害。)
+    if (IsSentryTopClass(cls))
+        return GetSentryTopDeployerClient(attacker);
+
     if (!StrEqual(cls, "asw_marine", false) && !IsAlienClass(cls))
         return 0;
 
     return GetCommanderClient(attacker);
+}
+
+// ============================================================================
+//  是否是哨戒塔塔顶炮台类 (asw_sentry_top_machinegun / _cannon / _flamer
+//  / _icer / _railgun)
+// ============================================================================
+bool IsSentryTopClass(const char[] classname)
+{
+    return StrContains(classname, "asw_sentry_top_", false) == 0;
+}
+
+// ============================================================================
+//  塔顶实体 -> 塔底座 (m_hSentryBase) -> 部署者陆战队员 (m_hDeployer)
+//  -> 操控该 marine 的玩家 (0=无归属)
+//  地图预置的塔 (非玩家部署) m_hDeployer 为空, 返回 0 不计分
+// ============================================================================
+int GetSentryTopDeployerClient(int iTop)
+{
+    int iBase = GetNetHandleEnt(iTop, "m_hSentryBase");
+    if (iBase <= 0)
+        return 0;
+
+    int iMarine = GetNetHandleEnt(iBase, "m_hDeployer");
+    if (iMarine <= 0)
+        return 0;
+
+    return GetCommanderClient(iMarine);
+}
+
+// ============================================================================
+//  读取 CNetworkHandle 字段指向的实体 (Prop_Send 优先, Prop_Data 兜底;
+//  与插件其它位置读取坐标/操控者的做法一致, 避免单一路径拿不到值)
+// ============================================================================
+int GetNetHandleEnt(int iEnt, const char[] sProp)
+{
+    if (HasEntProp(iEnt, Prop_Send, sProp))
+    {
+        int iTarget = GetEntPropEnt(iEnt, Prop_Send, sProp);
+        if (iTarget > 0 && IsValidEntity(iTarget))
+            return iTarget;
+    }
+
+    if (HasEntProp(iEnt, Prop_Data, sProp))
+    {
+        int iTarget = GetEntPropEnt(iEnt, Prop_Data, sProp);
+        if (iTarget > 0 && IsValidEntity(iTarget))
+            return iTarget;
+    }
+
+    return 0;
 }
 
 // ============================================================================
