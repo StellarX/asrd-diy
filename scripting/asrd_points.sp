@@ -9,10 +9,11 @@
  *       (血量越高积分越多, 倍率见 sm_asrd_points_hp_scale, 最少 1 分)
  *    2. 积分购买: 玩家使用 sm_nukepub / sm_betraypub / sm_power_up|down 时,
  *       先扣除积分再放行给原插件执行功能; 聊天框用 /buy 4 <编号> 购买强化
- *       哨戒塔 (0机枪 1炮塔, 喷火/冰冻暂不支持), /buy 5 满配哨戒塔
+ *       哨戒塔 (0机枪 1炮塔, 喷火/冰冻暂不支持), /buy 5 补充全部哨戒塔弹药
  *    3. 积分显示: 屏幕左上方常驻显示总积分, 每 0.5 秒刷新, 击杀/消费即时更新
- *    4. 进服通知: 玩家连上服务器后, 延迟几秒在聊天框私聊发送 /buy 购买说明
- *       (避开加载画面; 开关见 sm_asrd_points_join_help)
+ *    4. 进服通知: 玩家连上服务器后, 延迟几秒在聊天框私聊发送欢迎,
+ *       并提示输入 /buy 查看详细用法 (详细用法在玩家输入 /buy 后才显示;
+ *       不再周期性公告。开关见 sm_asrd_points_join_help)
  *
  *  ── 积分池规则 ─────────────────────────────────────────
  *    - 全队共享一个积分池: 任何玩家击杀都加分, 任何玩家都能消费
@@ -58,13 +59,13 @@
  *                        power_cost 恢复 200 血, 封顶最大血量)
  *                        /buy 4 [编号]=强化哨戒塔箱 (0机枪 1炮塔,
  *                        无选项默认 0=机枪; 喷火/冰冻暂不支持);
- *                        /buy 5=满配哨戒塔
+ *                        /buy 5=补充全部哨戒塔弹药
  *                        (地图上没有哨戒塔时不允许购买, 不扣分)
  *                        /buy 6=增强电锯 (在身边掉落一把, 伤害由
  *                        asrd_chainsaw_turbo 插件的 sm_asrd_chainsaw_dmg_mult 决定)
  *   /1 ../5           玩家: 聊天框快捷购买, 与 /buy <编号> **完全等价**且同样能带选项:
  *                        /1 强化等级  /2 核弹  /3 [1-6] 叛变虫群(默认 drone×10)
- *                        /4 [0/1] 哨戒塔箱  /5 全场哨戒塔满配  /6 增强电锯
+ *                        /4 [0/1] 哨戒塔箱  /5 补充全部哨戒塔弹药  /6 增强电锯
  *                        例: /3 2 = /buy 3 2 (游侠); /4 1 = /buy 4 1 (炮塔)
  *   /nukepub /betraypub /power_up /power_down
  *                     玩家: 聊天框直接调用原功能命令同样扣积分
@@ -78,7 +79,7 @@
  *   sm_asrd_points_betray_cost 叛变虫群价格 (默认 100, 0=不设门槛)
  *   sm_asrd_points_power_cost 强化等级价格 (默认 400, 0=不设门槛)
  *   sm_asrd_points_sentry_cost 强化哨戒塔价格 (默认 300, 0=不设门槛)
- *   sm_asrd_points_refill_cost 全场哨戒塔满配价格 (默认 500, 0=不设门槛)
+ *   sm_asrd_points_refill_cost 补充全部哨戒塔弹药价格 (默认 500, 0=不设门槛)
  *   sm_asrd_points_chainsaw_cost 增强电锯价格 (默认 300, 0=不设门槛)
  *   sm_asrd_points_hud        积分显示开关 (0=关 1=开, 默认 1)
  *   sm_asrd_points_hud_channel HUD 通道 (默认 6, 避开 4=哨戒塔/X-33, 5=核弹)
@@ -86,9 +87,7 @@
  *   sm_asrd_points_hud_y      纵向位置 (默认 0.02)
  *   sm_asrd_points_hud_alpha  文字透明度 (默认 170 半透明; 0=全透明 255=不透明)
  *   sm_asrd_points_debug      调试输出 (默认 0)
- *   sm_asrd_points_advert     聊天公告使用说明开关 (默认 1)
- *   sm_asrd_points_advert_interval 公告间隔秒数 (默认 30)
- *   sm_asrd_points_join_help  玩家进服后私聊通知购买说明 (默认 1; 0=不通知)
+ *   sm_asrd_points_join_help  玩家进服后私聊发送欢迎与 /buy 用法提示 (默认 1; 0=不通知)
  *
  *  依赖: SourceMod 1.11+ (核心 + sdktools + sdkhooks)
  * ============================================================================
@@ -103,7 +102,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Points"
-#define PLUGIN_VERSION "1.17.0"
+#define PLUGIN_VERSION "1.18.3"
 
 // ─── /buy 4 强化哨戒塔可选编号 (哨戒塔插件 sm_sentrydrop 的塔类型; 2喷火/3冰冻暂不支持) ─
 #define BUY_SENTRY_VARIANTS_MAX 1   // 当前支持的最高塔编号 (0=机枪 1=炮塔)
@@ -203,14 +202,11 @@ ConVar g_cvHudX;
 ConVar g_cvHudY;
 ConVar g_cvHudAlpha;
 ConVar g_cvDebug;
-ConVar g_cvAdvert;
-ConVar g_cvAdvertInterval;
 ConVar g_cvJoinHelp;
 
 // ─── 积分池与 HUD 状态 ──────────────────────────────────
 int    g_iPoints;
 float  g_fLastHudCheck;         // HUD 帧回调节流时间 (秒)
-float  g_fLastAdvert;           // 使用说明公告帧回调节流时间 (秒)
 int    g_iPlayerLevel[MAXPLAYERS + 1];   // 强化等级镜像, 与 asrd_marine_power 同步, 用于满/低级别拦截扣分
 float  g_fJoinHelpAt[MAXPLAYERS + 1];    // 进服购买说明的待发时刻 (GetEngineTime; 0=无待发)
 
@@ -270,7 +266,7 @@ public void OnPluginStart()
     );
     g_cvRefillCost = CreateConVar(
         "sm_asrd_points_refill_cost", "500",
-        "全场哨戒塔满配(/buy 5)积分价格 (0=不设积分门槛)",
+        "补充全部哨戒塔弹药(/buy 5)积分价格 (0=不设积分门槛)",
         FCVAR_NOTIFY, true, 0.0
     );
     g_cvChainsawCost = CreateConVar(
@@ -307,16 +303,6 @@ public void OnPluginStart()
         "sm_asrd_points_debug", "0",
         "调试输出到服务器控制台 (0=关 1=开)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
-    );
-    g_cvAdvert = CreateConVar(
-        "sm_asrd_points_advert", "1",
-        "每隔一段时间在聊天中公告基本使用说明 (0=关 1=开)",
-        FCVAR_NOTIFY, true, 0.0, true, 1.0
-    );
-    g_cvAdvertInterval = CreateConVar(
-        "sm_asrd_points_advert_interval", "30",
-        "使用说明公告间隔秒数",
-        FCVAR_NOTIFY, true, 5.0
     );
     g_cvJoinHelp = CreateConVar(
         "sm_asrd_points_join_help", "1",
@@ -761,7 +747,7 @@ bool IsNumericArg(const char[] s)
 
 // ============================================================================
 //  /buy <编号> [选项] 的统一实现 (唯一扣分入口), 快捷 /编号 亦调用此处
-//    iItem  1=强化 2=核弹 3=虫群 4=哨戒塔箱 5=满配; 其它 → 编号无效提示
+//    iItem  1=强化 2=核弹 3=虫群 4=哨戒塔箱 5=补弹药; 其它 → 编号无效提示
 //    sOpt   编号之后的选项 (可缺省; 空串 = 未指定)
 // ============================================================================
 void HandleBuyItem(int client, int iItem, const char[] sOpt)
@@ -835,16 +821,16 @@ void HandleBuyItem(int client, int iItem, const char[] sOpt)
 
         case 5:
         {
-            // /buy 5 与 /5: 满配哨戒塔 (补满生命与弹药)
+            // /buy 5 与 /5: 补充全部哨戒塔弹药 (底层命令实际补满生命与弹药)
             // 先查地图上有没有塔: 一座都没有就别让玩家白扣 refill_cost 分
             if (CountMapSentries() <= 0)
             {
-                PrintToChat(client, "\x04[积分]\x01 地图上目前没有任何哨戒塔, 不能购买【%s】", "全场哨戒塔满配");
+                PrintToChat(client, "\x04[积分]\x01 地图上目前没有任何哨戒塔, 不能购买【%s】", "补充全部哨戒塔弹药");
                 return;
             }
 
             PurchaseFromChat(client, "sm_sentry_refill", "", g_cvRefillCost,
-                "全场哨戒塔满配", "sm_asrd_sentry_enabled", "sm_asrd_sentry_refill_public");
+                "补充全部哨戒塔弹药", "sm_asrd_sentry_enabled", "sm_asrd_sentry_refill_public");
             return;
         }
 
@@ -1013,18 +999,19 @@ void JoinArgsFrom(const char[] sInput, int n, char[] buf, int maxlen)
     }
 }
 
-// 购买用法说明 (玩家输入 /buy 查询 & 进服通知 共用同一份)
+// 购买用法说明 (玩家输入 /buy 查询时显示)
 void ShowBuyHelp(int client)
 {
-    PrintToChat(client, "\x04[积分]\x01 欢迎 \x05%N\x01! 当前总积分: \x05%d\x01   用法: \x05/buy <编号> [选项]", client, g_iPoints);
+    PrintToChat(client, "欢迎 \x05%N\x01! 当前总积分: \x05%d\x01   用法: \x05/buy <编号> [选项]", client, g_iPoints);
     PrintToChat(client, "  \x05/buy 1\x01  属性强化 +1 (%d 分; 满级后转为加血)", g_cvPowerCost.IntValue);
     PrintToChat(client, "  \x05/buy 2\x01  战术核弹 (%d 分)", g_cvNukeCost.IntValue);
     PrintToChat(client, "  \x05/buy 3 [1-6]\x01  友军虫群 (%d 分): 1=工蜂 2=蜂群 3=游侠 4=盾甲虫 5=迫击炮虫 6=治疗虫", g_cvBetrayCost.IntValue);
     PrintToChat(client, "  \x05/buy 4 <0/1>\x01  强化哨戒塔箱 (%d 分): 0=机枪 1=炮塔", g_cvSentryCost.IntValue);
-    PrintToChat(client, "  \x05/buy 5\x01  满配哨戒塔 (%d 分)", g_cvRefillCost.IntValue);
+    PrintToChat(client, "  \x05/buy 5\x01  补充全部哨戒塔弹药 (%d 分)", g_cvRefillCost.IntValue);
     PrintToChat(client, "  \x05/buy 6\x01  增强电锯 (%d 分, 掉落在身边)", g_cvChainsawCost.IntValue);
-    PrintToChat(client, "  快捷指令: \x05/1\x01 强化   \x05/2\x01 核弹   \x05/3 [1-6]\x01 虫群   \x05/4 [0/1]\x01 哨戒塔箱   \x05/5\x01 满配   \x05/6\x01 增强电锯");
+    PrintToChat(client, "  快捷指令: \x05/1\x01 强化   \x05/2\x01 核弹   \x05/3 [1-6]\x01 虫群   \x05/4 [0/1]\x01 哨戒塔箱   \x05/5\x01 补弹药   \x05/6\x01 增强电锯");
     PrintToChat(client, "  例: \x05/3 2\x01 = /buy 3 2 (游侠)   \x05/4 1\x01 = /buy 4 1 (炮塔)   \x05/2\x01 = /buy 2 (核弹)");
+    PrintToChat(client, "  积分: \x05通过击杀虫族获取\x01");
 }
 
 // ============================================================================
@@ -1050,7 +1037,7 @@ int GetPowerShrinkMax()
 // ============================================================================
 // ============================================================================
 //  统计地图上现有的哨戒塔数量 (底座实体 asw_sentry_base)
-//  仅用于 /buy 5 的前置检查: 一座塔都没有时不允许购买满配, 免得白扣积分
+//  仅用于 /buy 5 的前置检查: 一座塔都没有时不允许购买, 免得白扣积分
 // ============================================================================
 int CountMapSentries()
 {
@@ -1160,14 +1147,14 @@ bool IsValidBetrayType(const char[] sInput)
 }
 
 // ============================================================================
-//  帧回调: HUD 刷新 (0.5 秒节流) + 使用说明公告 (默认 30 秒节流)
+//  帧回调: HUD 刷新 (0.5 秒节流) + 进服欢迎/用法提示的延迟发送
 //  (不依赖 SourceMod 定时器; 本环境定时器不触发, 否则 HUD 只闪一下)
 // ============================================================================
 public void OnGameFrame()
 {
     float fNow = GetEngineTime();
 
-    // 进服购买说明: 到点的玩家逐个私聊发送 (预约见 OnClientPutInServer)
+    // 进服欢迎与用法提示: 到点的玩家逐个私聊发送 (预约见 OnClientPutInServer)
     for (int i = 1; i <= MaxClients; i++)
     {
         if (g_fJoinHelpAt[i] <= 0.0 || fNow < g_fJoinHelpAt[i])
@@ -1175,7 +1162,7 @@ public void OnGameFrame()
 
         g_fJoinHelpAt[i] = 0.0;
         if (g_cvJoinHelp.BoolValue && IsClientInGame(i) && !IsFakeClient(i))
-            ShowBuyHelp(i);
+            SendJoinWelcome(i);
     }
 
     if (fNow - g_fLastHudCheck >= HUD_REFRESH)
@@ -1183,22 +1170,18 @@ public void OnGameFrame()
         g_fLastHudCheck = fNow;
         RefreshHud();
     }
-
-    if (g_cvAdvert.BoolValue && fNow - g_fLastAdvert >= g_cvAdvertInterval.FloatValue)
-    {
-        g_fLastAdvert = fNow;
-        AdvertiseUsage();
-    }
 }
 
 // ============================================================================
-//  聊天公告: 基本使用说明 (每隔一段时间循环)
+//  进服欢迎: 仅聊天私发一行 —— 欢迎 + 提示输入 /buy 查看用法 (无 [积分] 前缀)
+//  (详细购买命令与快捷指令由玩家输入 /buy 后经 ShowBuyHelp 显示)
 // ============================================================================
-void AdvertiseUsage()
+void SendJoinWelcome(int client)
 {
-    PrintToChatAll("\x04[积分]\x01 购买: \x05/buy 1\x01强化(%d) \x05/buy 2\x01核弹(%d) \x05/buy 3 [1-6]\x01虫群(%d) \x05/buy 4 [0/1]\x01哨戒塔(%d) \x05/buy 5\x01满配(%d) \x05/buy 6\x01电锯(%d); \x05/1\x01~\x05/6\x01 与 /buy 完全等价",
-        g_cvPowerCost.IntValue, g_cvNukeCost.IntValue, g_cvBetrayCost.IntValue,
-        g_cvSentryCost.IntValue, g_cvRefillCost.IntValue, g_cvChainsawCost.IntValue);
+    if (!IsClientInGame(client) || IsFakeClient(client))
+        return;
+
+    PrintToChat(client, "欢迎 \x05%N\x01！请输入\x05/buy\x01查看积分使用方法。", client);
 }
 
 void RefreshHud()
