@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 范围击退 (Repulse)
- *  版本 1.7.4  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.8.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  1. 手动击退: 按绑定键以自己为中心, 把周围虫族沿径向往外推开。
@@ -19,6 +19,11 @@
  *     特效同步: 护盾期间每帧把信标的燃烧截止时间回填为护盾结束时间 —
  *     抵消携带消耗, 保证增益特效与屏幕倒计时同时开始/结束;
  *     护盾自然到期时信标同步燃尽 (marine 阵亡则保留信标原版自然燃烧)。
+ *     特效放大: 信标的 m_flRadius (网络属性, 原版由武器传入 120) 会被客户端
+ *     每帧写进脉冲粒子 buffgrenade_pulse 的控制点 CP1, 决定那圈"水面涟漪"
+ *     向外扩散的范围; 护盾期间把它放大即可让波纹变大 (视觉最大约 1.55 倍值)。
+ *     服务器只在信标落地时按 GetEffectRadius()==m_flRadius 生成一次 AOE 触发盒,
+ *     因此只在落地(m_bSettled)之后再改 — 只改视觉, 不会扩大伤害增益的判定范围。
  *
  *  ── 投射物(炮弹) ───────────────────────────────────────
  *   已内置:
@@ -64,6 +69,8 @@
  *   sm_asrd_repulse_x33            X-33 威力增强器护盾 (默认 1): 仅 Wildcat/Wolfe (重武兵)
  *                                  使用 X-33 时获得限时护盾; 不依赖 sm_asrd_repulse_aura,
  *                                  护盾方式(斥力/阻挡)仍由 sm_asrd_repulse_aura_mode 决定
+ *   sm_asrd_repulse_x33_fx_radius  X-33 护盾特效(水面涟漪那圈光波)的扩散半径/游戏单位
+ *                                  (默认 260; 0=不改, 保持原版的 120; 见下方"特效放大原理")
  *   sm_asrd_repulse_x33_duration   每使用一次 X-33 的护盾秒数 (默认 15; 只叠时间不叠强度;
  *                                  信标特效燃烧截止时间每帧同步为护盾结束时间,
  *                                  抵消携带消耗; >30 时等效延长原版增益信标)
@@ -172,6 +179,7 @@ ConVar g_cvAuraRadius;
 ConVar g_cvAuraMode;
 ConVar g_cvX33;
 ConVar g_cvX33Duration;
+ConVar g_cvX33FxRadius;
 ConVar g_cvClasses;
 ConVar g_cvProjectiles;
 ConVar g_cvProjSpeed;
@@ -203,6 +211,7 @@ bool   g_bX33Active[MAXPLAYERS + 1];   // 上一帧是否处于 X-33 护盾中(�
 bool   g_bAnyX33Active;                // 是否有任一玩家处于 X-33 护盾中(帧回调开关)
 int    g_iX33HudMode[MAXPLAYERS + 1];  // 倒计时显示模式: 0=未检测 1=内置HudText 2=game_text兜底
 int    g_iX33TextEnt[MAXPLAYERS + 1];  // game_text 兜底实体引用 (模式2)
+float  g_fX33FxOrig[MAXPLAYERS + 1];   // 放大前信标原版特效半径 (0=未记录; 护盾结束后还原)
 
 float g_fLastUse[MAXPLAYERS + 1];   // 手动击退冷却用
 
@@ -250,6 +259,9 @@ public void OnPluginStart()
     g_cvX33Duration = CreateConVar("sm_asrd_repulse_x33_duration", "15",
         "每使用一次 X-33 的护盾秒数 (默认 15; 叠加规则: 结束时间以最后一次使用为基准刷新, 只叠时间不叠强度; 增益信标特效的燃烧截止时间每帧同步为护盾结束时间 — 顺带抵消携带信标移动的额外消耗, 并在时长>30 时等效延长信标)",
         FCVAR_NOTIFY, true, 1.0, true, 600.0);
+    g_cvX33FxRadius = CreateConVar("sm_asrd_repulse_x33_fx_radius", "260",
+        "X-33 护盾特效(水面涟漪那圈光波)的扩散半径/游戏单位 (默认 260; 0=不改, 保持原版 120; 客户端每帧把信标的 m_flRadius 写进粒子控制点 CP1 决定波纹范围, 视觉上最大约扩散到该值的 1.55 倍; 想让波纹边缘正好贴住护盾圈就把这个值设为 护盾半径/1.55)",
+        FCVAR_NOTIFY, true, 0.0, true, 2000.0);
     g_cvX33HudChannel = CreateConVar("sm_asrd_repulse_x33_hud_channel", "4",
         "X-33 护盾倒计时 HUD 通道 (需避开核弹插件的 5; 若倒计时不显示可换 2/6/7 等通道试验, 无需重编译)",
         FCVAR_NOTIFY, true, 0.0, true, 15.0);
@@ -421,6 +433,53 @@ void SyncX33Beacons(int marine, float fEnd)
     }
 }
 
+// 放大 / 还原 X-33 信标的特效范围 (那圈像水面涟漪一样向外扩散的光波):
+//   客户端 C_ASW_AOEGrenade_Projectile::UpdatePingEffects 每帧把网络属性
+//   m_flRadius 写进脉冲粒子 buffgrenade_pulse 的控制点 CP1 — 它就是波纹扩散的
+//   半径; 原版值由武器创建信标时传入 (asw_weapon_buff_grenade: flRadius = 120)。
+//   服务器只在信标落地时用 GetEffectRadius() (返回 m_flRadius) 生成一次 AOE
+//   触发盒, 那才是"伤害增益给谁"的判定范围; 所以这里只在 m_bSettled 之后再改:
+//   纯视觉放大, 不会让更远的队友也蹭到伤害加成。
+// fRadius > 0 = 放大 (第一次改写前把原版值记到 g_fX33FxOrig[client]);
+// bRestore   = 还原 (写回 g_fX33FxOrig[client] 后清空记录)。
+void ApplyX33BeaconFxRadius(int marine, int client, float fRadius, bool bRestore)
+{
+    if (marine <= 0 || client <= 0)
+        return;
+    if (bRestore && g_fX33FxOrig[client] <= 0.0)
+        return;                       // 从没放大过, 无需还原
+
+    float fTarget = bRestore ? g_fX33FxOrig[client] : fRadius;
+    if (fTarget <= 0.0)
+        return;
+
+    int ent = -1;
+    while ((ent = FindEntityByClassname(ent, X33_BEACON_CLASS)) != -1)
+    {
+        if (!IsValidEntity(ent))
+            continue;
+        if (!HasEntProp(ent, Prop_Send, "m_hOwnerEntity")
+            || GetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity") != marine)
+            continue;
+        if (!HasEntProp(ent, Prop_Send, "m_flRadius"))
+            continue;
+        // 还没落地(settle)的信标尚未生成 AOE 触发盒,
+        // 此时改半径会连带扩大伤害增益范围 — 跳过, 等落地后再放大
+        if (HasEntProp(ent, Prop_Send, "m_bSettled")
+            && GetEntProp(ent, Prop_Send, "m_bSettled") == 0)
+            continue;
+
+        float fCur = GetEntPropFloat(ent, Prop_Send, "m_flRadius");
+        if (!bRestore && g_fX33FxOrig[client] <= 0.0)
+            g_fX33FxOrig[client] = fCur;            // 记下原版值, 护盾结束后还原
+        if (fCur != fTarget)
+            SetEntPropFloat(ent, Prop_Send, "m_flRadius", fTarget);
+    }
+
+    if (bRestore)
+        g_fX33FxOrig[client] = 0.0;
+}
+
 // ============================================================================
 //  [管理员] 按玩家开关护盾: sm_repulseaura [玩家] [on|off|1|0]
 //  默认只有管理员可用; 护盾仍受总开关 sm_asrd_repulse_aura 控制 (需=1 才真正生效)
@@ -532,6 +591,7 @@ public void OnMapStart()
         g_bX33Active[c] = false;
         g_iX33HudMode[c] = 0;    // game_text 实体随切图销毁, 重新做模式检测
         g_iX33TextEnt[c] = 0;
+        g_fX33FxOrig[c] = 0.0;   // 信标随切图消失, 放大记录一并清掉
     }
 
     ParseCustomClasses();
@@ -971,6 +1031,12 @@ void ThinkAura()
                 // 保证特效与倒计时同时结束 (Wildcat/Wolfe 才能携带信标, 故尤其明显)
                 SyncX33Beacons(marine, g_fX33End[client]);
 
+                // 特效放大: 把信标的 m_flRadius 调到设定值, 让那圈涟漪扩得更大
+                // (0 = 不动, 保持原版 120)
+                float fFxRadius = g_cvX33FxRadius.FloatValue;
+                if (fFxRadius > 0.0)
+                    ApplyX33BeaconFxRadius(marine, client, fFxRadius, false);
+
                 // 倒计时显示由 Timer_X33Hud 定时器负责 (与核弹插件一致的发送方式)
             }
             else
@@ -986,6 +1052,9 @@ void ThinkAura()
                     // 阵亡则不烧 — 保留原版行为: 掉落的信标继续给队友提供增益
                     if (bAlive)
                         SyncX33Beacons(marine, now - 0.1);
+
+                    // 还原信标的原版特效范围 (阵亡时信标掉落按原版继续燃烧, 同样还原)
+                    ApplyX33BeaconFxRadius(marine, client, 0.0, true);
 
                     PrintToChat(client, "\x04[击退]\x01 X-33 力场护盾已失效");
                 }
@@ -1331,6 +1400,7 @@ public void OnClientDisconnect(int client)
     g_bAuraOn[client] = false;
     g_fX33End[client] = 0.0;
     g_bX33Active[client] = false;
+    g_fX33FxOrig[client] = 0.0;
 
     // 清理 game_text 兜底实体: 只有确实创建过(模式2)才清理。
     // 警告: EntRefToEntIndex(0) 返回 0 = worldspawn(世界实体) 且 IsValidEntity(0)
