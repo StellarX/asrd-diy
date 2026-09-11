@@ -56,8 +56,6 @@
  *   /1 /2 /3          玩家: 聊天框快捷购买 核弹 / 叛变虫群(默认drone) / 强化等级
  *   /nukepub /betraypub /power_up /power_down
  *                     玩家: 聊天框直接调用原功能命令同样扣积分
- *   !hat / !hat_off   玩家: 头顶塔由哨戒塔插件提供 (每人最多 4 座),
- *                     聊天提示见 OnClientPutInServer 与使用说明公告
  *   注: 无任何 sm_points* 控制台命令; 控制台调用原功能命令不扣积分
  *
  *  ── 常用 ConVar (自动生成 cfg/sourcemod/asrd_points.cfg) ──
@@ -1012,7 +1010,6 @@ void AdvertiseUsage()
     PrintToChatAll("\x04[积分]\x01 快捷购买: \x05/buy 1\x01核弹(%d) \x05/buy 2\x01虫群(%d) \x05/buy 3\x01强化(%d) \x05/buy 4\x01哨戒塔(%d) \x05/buy 5\x01满配(%d)",
         g_cvNukeCost.IntValue, g_cvBetrayCost.IntValue, g_cvPowerCost.IntValue,
         g_cvSentryCost.IntValue, g_cvRefillCost.IntValue);
-    PrintToChatAll("\x04[积分]\x01 头顶塔: \x05!hat\x01 放到头顶 (每人最多 4 座), \x05!hat_off\x01 取消 | 输入 \x05/buy\x01 查看完整格式");
 }
 
 void RefreshHud()

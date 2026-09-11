@@ -6,14 +6,13 @@
  *  ── 这个插件做什么 ─────────────────────────────────────
  *  1. 增强地图里的哨戒塔: 生命/射速/射程/弹药/伤害 乘以倍率,
  *     可选无敌、可选关闭对队友的误伤
- *  2. 把哨戒塔放到角色头顶, 当"随行炮台" (sm_sentryhat), 每人最多 hat_max 座 (默认 4)
- *     玩家阵亡 / 掉线时, 他头顶的塔会自动落回地面 (不会停在半空)
+ *  2. 把哨戒塔放到角色头顶, 当"随行炮台" (sm_sentryhat)
  *  3. 在画面右上角显示哨戒塔信息 HUD (sm_sentryhud)
  *  4. 一键补满地图上所有哨戒塔的生命与弹药 (sm_sentry_refill, 供积分插件 /buy 5 调用)
  *
  *  ── 玩家命令 (控制台输入, 或在聊天栏加 ! 前缀) ───────────
  *   sm_sentryhud      开关右上角信息 HUD (默认关)
- *   sm_hat            把最近的塔放到自己头顶 (需管理员开启该功能; 每人最多 hat_max 座)
+ *   sm_hat            把最近的塔放到自己头顶 (需管理员开启该功能)
  *   sm_hat_off        取消自己的头顶塔
  *   sm_sentrydrop [0-3]  在身边掉落一座哨戒塔拾取箱 (0机枪 1炮 2喷火 3冰冻; 需管理员开启该功能)
  *   sm_sentry_refill  一键补满地图上所有哨戒塔的生命与弹药 (需管理员开启该功能)
@@ -39,7 +38,6 @@
  *   sm_asrd_sentry_invulnerable       无敌 (默认 0)
  *   sm_asrd_sentry_no_player_damage   关闭误伤队友 (默认 1)
  *   sm_asrd_sentry_hat_public         允许所有玩家用头顶塔命令 (默认 1)
- *   sm_asrd_sentry_hat_max            每个玩家头顶塔数量上限 (默认 4, 0=不限制)
  *   sm_asrd_sentry_hat_turnspeed      头顶塔转向速度 度/秒 (默认 360)
  *   sm_asrd_sentry_hat_maxdist        头顶塔命令允许的最大距离 (默认 100, 0=不限制)
  *   sm_asrd_sentry_hat_layerspace     头顶多座塔的层间距 (默认 60, 20~200)
@@ -88,7 +86,6 @@ ConVar g_cvInvulnerable;
 ConVar g_cvNoPlayerDamage;
 ConVar g_cvHatTurnSpeed;
 ConVar g_cvHatPublic;
-ConVar g_cvHatMax;       // 每个玩家头顶塔数量上限 (0=不限制)
 ConVar g_cvHatMaxDist;
 ConVar g_cvHatLayerSpace;   // 头顶多座塔的层间距 (世界单位)
 ConVar g_cvTurnRate;     // 哨戒塔顶转向速度 (度/秒, 0=瞬间转向)
@@ -249,11 +246,6 @@ public void OnPluginStart()
         "允许所有玩家使用头顶哨戒塔命令 (0=仅管理员, 1=所有玩家)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
-    g_cvHatMax = CreateConVar(
-        "sm_asrd_sentry_hat_max", "4",
-        "每个玩家头顶哨戒塔数量上限 (0=不限制)",
-        FCVAR_NOTIFY, true, 0.0
-    );
     g_cvDebug = CreateConVar(
         "sm_asrd_sentry_debug", "0",
         "调试模式",
@@ -336,19 +328,6 @@ public void OnClientPutInServer(int client)
     g_bHudEnabled[client] = g_cvHudDefault.BoolValue;
     g_iHudMode[client]    = 0;   // 还没试过用哪种方式显示
     g_iHudTextEnt[client] = 0;
-
-    // 聊天提示头顶塔命令 (积分插件 /buy 帮助与公告里也会提示)
-    if (g_cvHatPublic.BoolValue)
-    {
-        char sLimit[24];
-        if (g_cvHatMax.IntValue > 0)
-            Format(sLimit, sizeof(sLimit), "每人最多 %d 座", g_cvHatMax.IntValue);
-        else
-            strcopy(sLimit, sizeof(sLimit), "数量不限");
-
-        PrintToChat(client, "\x04[哨戒塔]\x01 输入 \x05!hat\x01 把最近的塔放到头顶 (%s), \x05!hat_off\x01 取消",
-            sLimit);
-    }
 }
 
 // ============================================================================
@@ -1073,14 +1052,7 @@ void UpdateHatSentry(int listIdx, int iBase, float fTurnSpeed, float fTickInterv
     int iClient = GetClientOfUserId(data.hatUserId);
     if (iClient <= 0 || !IsClientInGame(iClient))
     {
-        DropHatSentryToGround(listIdx, data, iBase);   // 玩家不在了: 塔落回地面
-        return;
-    }
-
-    // 玩家阵亡: 头顶的塔立即落回地面 (需求: 人死了塔不能挂在半空)
-    if (!IsPlayerAlive(iClient))
-    {
-        DropHatSentryToGround(listIdx, data, iBase);
+        ClearHatState(listIdx, data, iBase);   // 玩家不在了, 取消头顶塔
         return;
     }
 
@@ -1099,10 +1071,10 @@ void UpdateHatSentry(int listIdx, int iBase, float fTurnSpeed, float fTickInterv
     if (iMarine <= 0 || !IsValidEntity(iMarine))
         return;   // 角色还没部署, 本帧不动
 
-    // 角色本体血量归零 (IsPlayerAlive 没覆盖到的情形) 同样落下塔
+    // 角色死亡则取消头顶塔
     if (GetEntProp(iMarine, Prop_Data, "m_iHealth") <= 0)
     {
-        DropHatSentryToGround(listIdx, data, iBase);
+        ClearHatState(listIdx, data, iBase);
         return;
     }
 
@@ -1168,52 +1140,6 @@ void ClearHatState(int listIdx, SentryData data, int iBase)
     data.hatMarineRef = 0;
     data.hatYawOffset = 0.0;
     g_hSentries.SetArray(listIdx, data);
-}
-
-// ============================================================================
-//  头顶塔落地: 玩家阵亡/掉线时, 把塔从半空挪到脚下的地面, 再取消头顶归属
-//  只向下打一条射线找地面, 只认世界固体 (忽略塔自己/玛丽/虫族), 一次性开销
-// ============================================================================
-void DropHatSentryToGround(int listIdx, SentryData data, int iBase)
-{
-    if (IsValidEntity(iBase))
-    {
-        // 世界坐标: 优先读网络属性 m_vecOrigin, 读到 (0,0) 占位值再退回 Data
-        float fPos[3];
-        GetEntPropVector(iBase, Prop_Send, "m_vecOrigin", fPos);
-        if (fPos[0] == 0.0 && fPos[1] == 0.0)
-            GetEntPropVector(iBase, Prop_Data, "m_vecOrigin", fPos);
-
-        if (fPos[0] != 0.0 || fPos[1] != 0.0)
-        {
-            float fStart[3], fEnd[3];
-            fStart[0] = fPos[0];  fStart[1] = fPos[1];  fStart[2] = fPos[2] + 4.0;
-            fEnd[0]   = fPos[0];  fEnd[1]   = fPos[1];  fEnd[2]   = fPos[2] - 4096.0;
-
-            Handle hTrace = TR_TraceRayFilterEx(fStart, fEnd, MASK_SOLID_BRUSHONLY,
-                RayType_EndPoint, TraceFilter_DropHatSentry, iBase);
-
-            if (TR_DidHit(hTrace))
-            {
-                float fGround[3], fAng[3];
-                TR_GetEndPosition(fGround, hTrace);
-                GetEntPropVector(iBase, Prop_Data, "m_angRotation", fAng);
-                fGround[2] += 4.0;   // 抬一点, 免得塔陷进地面
-                TeleportEntity(iBase, fGround, fAng, NULL_VECTOR);
-            }
-            // 射线没打到地面 (塔飘在地图外/虚空上) 就只取消头顶状态, 不强移
-
-            delete hTrace;
-        }
-    }
-
-    ClearHatState(listIdx, data, iBase);
-}
-
-// 头顶塔落地用的射线过滤器: 忽略这座塔自己 (它是 SOLID 实体, 否则射线一出发就撞到自己)
-public bool TraceFilter_DropHatSentry(int entity, int contentsMask, any data)
-{
-    return (entity != data);
 }
 
 // ============================================================================
@@ -1531,14 +1457,6 @@ public Action Command_SentryHat(int client, int args)
         return Plugin_Handled;
     }
 
-    // 头顶塔数量上限: 每个玩家最多 hat_max 座 (0=不限制)
-    int iHatMax = g_cvHatMax.IntValue;
-    if (iHatMax > 0 && CountPlayerHatSentries(GetClientUserId(client)) >= iHatMax)
-    {
-        ReplyToCommand(client, "头顶哨戒塔已达上限(%d 座), 请先用 sm_hat_off 取消", iHatMax);
-        return Plugin_Handled;
-    }
-
     // 可选参数: 塔的朝向偏移 (度数)
     float fYawOffset = 0.0;
     if (args >= 1)
@@ -1824,30 +1742,6 @@ public Action Command_SentryDropPublic(int client, int args)
         return Plugin_Handled;
     }
     return Command_SentryDrop(client, args);
-}
-
-// ============================================================================
-//  统计某玩家当前头顶上的哨戒塔数量 (按 userid 区分)
-// ============================================================================
-int CountPlayerHatSentries(int iUserId)
-{
-    if (iUserId <= 0)
-        return 0;
-
-    int count = 0;
-    SentryData data;
-    for (int i = 0; i < g_hSentries.Length; i++)
-    {
-        g_hSentries.GetArray(i, data);
-        if (data.hatUserId != iUserId)
-            continue;
-
-        int iBase = EntRefToEntIndex(data.baseRef);
-        if (iBase == INVALID_ENT_REFERENCE || !IsValidEntity(iBase))
-            continue;
-        count++;
-    }
-    return count;
 }
 
 // ============================================================================
