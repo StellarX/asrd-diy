@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 积分机制 (Points)
- *  版本 1.12.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.13.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  引入一套全队共享的积分经济:
@@ -66,9 +66,9 @@
  *   sm_asrd_points_enabled    总开关 (0=关 1=开, 默认 1)
  *   sm_asrd_points_start      每局初始积分 (默认 1000; 开局/换图时重置)
  *   sm_asrd_points_hp_scale   击杀积分 = 虫族最大血量 x 倍率 (默认 0.05, 最少 1 分)
- *   sm_asrd_points_nuke_cost  核弹价格 (默认 100, 0=不设门槛)
+ *   sm_asrd_points_nuke_cost  核弹价格 (默认 300, 0=不设门槛)
  *   sm_asrd_points_betray_cost 叛变虫群价格 (默认 100, 0=不设门槛)
- *   sm_asrd_points_power_cost 强化等级价格 (默认 200, 0=不设门槛)
+ *   sm_asrd_points_power_cost 强化等级价格 (默认 400, 0=不设门槛)
  *   sm_asrd_points_sentry_cost 强化哨戒塔价格 (默认 300, 0=不设门槛)
  *   sm_asrd_points_refill_cost 全场哨戒塔满配价格 (默认 500, 0=不设门槛)
  *   sm_asrd_points_hud        积分显示开关 (0=关 1=开, 默认 1)
@@ -93,7 +93,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Points"
-#define PLUGIN_VERSION "1.12.0"
+#define PLUGIN_VERSION "1.13.0"
 
 // ─── /buy 4 强化哨戒塔可选编号 (哨戒塔插件 sm_sentrydrop 的塔类型; 2喷火/3冰冻暂不支持) ─
 #define BUY_SENTRY_VARIANTS_MAX 1   // 当前支持的最高塔编号 (0=机枪 1=炮塔)
@@ -230,7 +230,7 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 0.001, true, 100.0
     );
     g_cvNukeCost = CreateConVar(
-        "sm_asrd_points_nuke_cost", "100",
+        "sm_asrd_points_nuke_cost", "300",
         "核弹(sm_nukepub)积分价格 (0=不设积分门槛)",
         FCVAR_NOTIFY, true, 0.0
     );
@@ -240,7 +240,7 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 0.0
     );
     g_cvPowerCost = CreateConVar(
-        "sm_asrd_points_power_cost", "200",
+        "sm_asrd_points_power_cost", "400",
         "强化等级(sm_power_up/sm_power_down)积分价格 (0=不设积分门槛; sm_power_reset 免费)",
         FCVAR_NOTIFY, true, 0.0
     );

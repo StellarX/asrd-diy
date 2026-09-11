@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 哨戒塔增强 + 头顶哨戒塔 + 信息 HUD
- *  版本 6.5.4  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 6.5.5  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ─────────────────────────────────────
  *  1. 增强地图里的哨戒塔: 生命/射速/射程/弹药/伤害 乘以倍率,
@@ -35,9 +35,9 @@
  *  ── 常用 ConVar (自动生成 cfg/sourcemod/asrd_sentry_enhancer.cfg) ─
  *   sm_asrd_sentry_enabled            总开关 (0=关 1=开)
  *   sm_asrd_sentry_health_mult        生命倍率 (默认 5.0)
- *   sm_asrd_sentry_firerate_mult      射速倍率 (默认 35)
+ *   sm_asrd_sentry_firerate_mult      射速倍率 (默认 10)
  *   sm_asrd_sentry_range_mult         射程倍率 (默认 1.0)
- *   sm_asrd_sentry_ammo_mult          弹药倍率 (默认 25)
+ *   sm_asrd_sentry_ammo_mult          弹药倍率 (默认 10)
  *   sm_asrd_sentry_damage_mult        子弹伤害倍率 (默认 1.0, 基于机枪10/炮60/喷火4)
  *   sm_asrd_sentry_invulnerable       无敌 (默认 0)
  *   sm_asrd_sentry_no_player_damage   关闭误伤队友 (默认 1)
@@ -66,7 +66,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Sentry Enhancer + Sentry Hat"
-#define PLUGIN_VERSION "6.5.4"
+#define PLUGIN_VERSION "6.5.5"
 
 // 每个玩家头顶哨戒塔的数量上限 (写死, 不提供 ConVar 让挑战/玩家随意调整)
 #define SENTRY_HAT_LIMIT 3
@@ -211,8 +211,8 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 1.0
     );
     g_cvFireRateMult = CreateConVar(
-        "sm_asrd_sentry_firerate_mult", "35",
-        "哨戒塔射速倍率 (1.0=默认, 35=35倍射速)",
+        "sm_asrd_sentry_firerate_mult", "10",
+        "哨戒塔射速倍率 (1.0=默认, 10=10倍射速)",
         FCVAR_NOTIFY, true, 1.0
     );
     g_cvRangeMult = CreateConVar(
@@ -221,8 +221,8 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 1.0
     );
     g_cvAmmoMult = CreateConVar(
-        "sm_asrd_sentry_ammo_mult", "25",
-        "哨戒塔弹药倍率 (1.0=默认, 25=25 倍弹药)",
+        "sm_asrd_sentry_ammo_mult", "10",
+        "哨戒塔弹药倍率 (1.0=默认, 10=10 倍弹药)",
         FCVAR_NOTIFY, true, 1.0
     );
     g_cvDamageMult = CreateConVar(
