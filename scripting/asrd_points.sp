@@ -1,14 +1,15 @@
 /**
  * ============================================================================
  *  [AS:RD] 积分机制 (Points)
- *  版本 1.9.4  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.11.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  引入一套全队共享的积分经济:
  *    1. 击杀计分: 玩家击杀虫族获得积分, 按被杀虫族的实际最大血量计算
  *       (血量越高积分越多, 倍率见 sm_asrd_points_hp_scale, 最少 1 分)
  *    2. 积分购买: 玩家使用 sm_nukepub / sm_betraypub / sm_power_up|down 时,
- *       先扣除积分再放行给原插件执行功能
+ *       先扣除积分再放行给原插件执行功能; 聊天框用 /buy 4 <编号> 购买强化
+ *       哨戒塔 (0机枪 1炮塔, 喷火/冰冻暂不支持), /buy 5 一键满配全场哨戒塔
  *    3. 积分显示: 屏幕左上方常驻显示总积分, 每 0.5 秒刷新, 击杀/消费即时更新
  *
  *  ── 积分池规则 ─────────────────────────────────────────
@@ -24,8 +25,10 @@
  *      sm_power_up   → 扣 sm_asrd_points_power_cost  (需原插件 sm_asrd_power_public 1)
  *      sm_power_down → 扣 sm_asrd_points_power_cost  (同上)
  *      sm_power_reset→ 免费 (只恢复默认, 不收积分)
+ *      sm_sentrydrop → 扣 sm_asrd_points_sentry_cost (需哨戒塔插件 sm_asrd_sentry_drop_public 1)
+ *      sm_sentry_refill → 扣 sm_asrd_points_refill_cost (需 sm_asrd_sentry_refill_public 1)
  *    价格设为 0 = 该功能不设积分门槛, 维持原插件自己的开关行为。
- *    管理员命令 (sm_nuke / sm_betray / sm_power_set) 不拦截, 不受积分影响。
+ *    管理员命令 (sm_nuke / sm_betray / sm_power_set / sm_sentry_*) 不拦截, 不受积分影响。
  *
  *    注意事项:
  *    - 玩家命令能否真正生效仍由原插件的 public 开关决定, 购买前会先检查
@@ -47,9 +50,14 @@
  *                        (/buy 2 无选项=drone×10); /buy 3=强化+1
  *                        (强化已满级时 /buy 3 转为加血: 血量<800 花
  *                        power_cost 恢复 200 血, 封顶最大血量)
+ *                        /buy 4 <编号>=强化哨戒塔箱 (0机枪 1炮塔,
+ *                        喷火/冰冻暂不支持); /buy 5=一键满配全场哨戒塔
+ *                        (地图上没有哨戒塔时不允许购买, 不扣分)
  *   /1 /2 /3          玩家: 聊天框快捷购买 核弹 / 叛变虫群(默认drone) / 强化等级
  *   /nukepub /betraypub /power_up /power_down
  *                     玩家: 聊天框直接调用原功能命令同样扣积分
+ *   !hat / !hat_off   玩家: 头顶塔由哨戒塔插件提供 (每人最多 4 座),
+ *                     聊天提示见 OnClientPutInServer 与使用说明公告
  *   注: 无任何 sm_points* 控制台命令; 控制台调用原功能命令不扣积分
  *
  *  ── 常用 ConVar (自动生成 cfg/sourcemod/asrd_points.cfg) ──
@@ -59,6 +67,8 @@
  *   sm_asrd_points_nuke_cost  核弹价格 (默认 100, 0=不设门槛)
  *   sm_asrd_points_betray_cost 叛变虫群价格 (默认 100, 0=不设门槛)
  *   sm_asrd_points_power_cost 强化等级价格 (默认 200, 0=不设门槛)
+ *   sm_asrd_points_sentry_cost 强化哨戒塔价格 (默认 300, 0=不设门槛)
+ *   sm_asrd_points_refill_cost 全场哨戒塔满配价格 (默认 500, 0=不设门槛)
  *   sm_asrd_points_hud        积分显示开关 (0=关 1=开, 默认 1)
  *   sm_asrd_points_hud_channel HUD 通道 (默认 6, 避开 4=哨戒塔/X-33, 5=核弹)
  *   sm_asrd_points_hud_x      横向位置 (默认 0.01 左上角; -1=居中)
@@ -81,7 +91,10 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Points"
-#define PLUGIN_VERSION "1.9.4"
+#define PLUGIN_VERSION "1.11.0"
+
+// ─── /buy 4 强化哨戒塔可选编号 (哨戒塔插件 sm_sentrydrop 的塔类型; 2喷火/3冰冻暂不支持) ─
+#define BUY_SENTRY_VARIANTS_MAX 1   // 当前支持的最高塔编号 (0=机枪 1=炮塔)
 
 // ─── HUD 显示 (左上角, 与 4=哨戒塔/X-33、5=核弹 错开) ─────
 #define HUD_CHANNEL     6
@@ -163,6 +176,8 @@ ConVar g_cvHpScale;
 ConVar g_cvNukeCost;
 ConVar g_cvBetrayCost;
 ConVar g_cvPowerCost;
+ConVar g_cvSentryCost;
+ConVar g_cvRefillCost;
 ConVar g_cvHud;
 ConVar g_cvHudChannel;
 ConVar g_cvHudX;
@@ -225,6 +240,16 @@ public void OnPluginStart()
     g_cvPowerCost = CreateConVar(
         "sm_asrd_points_power_cost", "200",
         "强化等级(sm_power_up/sm_power_down)积分价格 (0=不设积分门槛; sm_power_reset 免费)",
+        FCVAR_NOTIFY, true, 0.0
+    );
+    g_cvSentryCost = CreateConVar(
+        "sm_asrd_points_sentry_cost", "300",
+        "强化哨戒塔(/buy 4)积分价格 (0=不设积分门槛)",
+        FCVAR_NOTIFY, true, 0.0
+    );
+    g_cvRefillCost = CreateConVar(
+        "sm_asrd_points_refill_cost", "500",
+        "全场哨戒塔满配(/buy 5)积分价格 (0=不设积分门槛)",
         FCVAR_NOTIFY, true, 0.0
     );
     g_cvHud = CreateConVar(
@@ -570,6 +595,44 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
             }
             case 3:
                 BuyPowerFromChat(client, true);
+            case 4:
+            {
+                // /buy 4 <编号>: 购买强化哨戒塔箱 (0=机枪 1=炮塔; 喷火/冰冻暂不支持)
+                char sType[16];
+                int iType = -1;
+                if (GetArgFromString(sText, 2, sType, sizeof(sType)))
+                    iType = StringToInt(sType);
+
+                if (iType < 0 || iType > BUY_SENTRY_VARIANTS_MAX)
+                {
+                    PrintToChat(client, "\x04[积分]\x01 /buy 4 编号无效: 0=机枪 1=炮塔 (喷火/冰冻暂不支持)");
+                }
+                else
+                {
+                    char sTypeArg[8];
+                    IntToString(iType, sTypeArg, sizeof(sTypeArg));
+
+                    char sFeature[32];
+                    Format(sFeature, sizeof(sFeature), "强化哨戒塔(%s)", iType == 0 ? "机枪" : "炮塔");
+
+                    PurchaseFromChat(client, "sm_sentrydrop", sTypeArg, g_cvSentryCost,
+                        sFeature, "sm_asrd_sentry_enabled", "sm_asrd_sentry_drop_public");
+                }
+            }
+            case 5:
+            {
+                // /buy 5: 一键满配全场哨戒塔 (补满生命与弹药)
+                // 先查地图上有没有塔: 一座都没有就别让玩家白扣 500 分
+                int iSentries = CountMapSentries();
+                if (iSentries <= 0)
+                {
+                    PrintToChat(client, "\x04[积分]\x01 地图上目前没有任何哨戒塔, 不能购买【%s】", "全场哨戒塔满配");
+                    return Plugin_Handled;
+                }
+
+                PurchaseFromChat(client, "sm_sentry_refill", "", g_cvRefillCost,
+                    "全场哨戒塔满配", "sm_asrd_sentry_enabled", "sm_asrd_sentry_refill_public");
+            }
             default:
             {
                 PrintToChat(client, "\x04[积分]\x01 /buy 编号无效, 输入 \x05/buy\x01 查看格式");
@@ -809,6 +872,20 @@ int GetPowerShrinkMax()
 //  购买核心 (仅聊天框入口): 校验 → 扣分 → 转发给原插件执行
 //  返回 true = 已放行 (扣分成功或该功能无门槛), false = 阻止 (已提示原因)
 // ============================================================================
+// ============================================================================
+//  统计地图上现有的哨戒塔数量 (底座实体 asw_sentry_base)
+//  仅用于 /buy 5 的前置检查: 一座塔都没有时不允许购买满配, 免得白扣积分
+// ============================================================================
+int CountMapSentries()
+{
+    int count = 0;
+    int entity = -1;
+    while ((entity = FindEntityByClassname(entity, "asw_sentry_base")) != -1)
+        count++;
+
+    return count;
+}
+
 bool PurchaseFromChat(int client, const char[] sFullCommand, const char[] sArgs,
     ConVar costCv, const char[] sFeature,
     const char[] sEnabledCv, const char[] sPublicCv)
@@ -932,8 +1009,10 @@ public void OnGameFrame()
 // ============================================================================
 void AdvertiseUsage()
 {
-    PrintToChatAll("\x04[积分]\x01 快捷购买: \x05/buy 1\x01核弹(%d)  \x05/buy 2\x01虫群(%d)  \x05/buy 3\x01强化(%d) | 击杀虫族获取积分, 输入 \x05/buy\x01 查看格式",
-        g_cvNukeCost.IntValue, g_cvBetrayCost.IntValue, g_cvPowerCost.IntValue);
+    PrintToChatAll("\x04[积分]\x01 快捷购买: \x05/buy 1\x01核弹(%d) \x05/buy 2\x01虫群(%d) \x05/buy 3\x01强化(%d) \x05/buy 4\x01哨戒塔(%d) \x05/buy 5\x01满配(%d)",
+        g_cvNukeCost.IntValue, g_cvBetrayCost.IntValue, g_cvPowerCost.IntValue,
+        g_cvSentryCost.IntValue, g_cvRefillCost.IntValue);
+    PrintToChatAll("\x04[积分]\x01 头顶塔: \x05!hat\x01 放到头顶 (每人最多 4 座), \x05!hat_off\x01 取消 | 输入 \x05/buy\x01 查看完整格式");
 }
 
 void RefreshHud()

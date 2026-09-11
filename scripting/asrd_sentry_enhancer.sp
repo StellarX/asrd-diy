@@ -1,19 +1,22 @@
 /**
  * ============================================================================
  *  [AS:RD] 哨戒塔增强 + 头顶哨戒塔 + 信息 HUD
- *  版本 6.3.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 6.5.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ─────────────────────────────────────
  *  1. 增强地图里的哨戒塔: 生命/射速/射程/弹药/伤害 乘以倍率,
  *     可选无敌、可选关闭对队友的误伤
- *  2. 把哨戒塔放到角色头顶, 当"随行炮台" (sm_sentryhat)
+ *  2. 把哨戒塔放到角色头顶, 当"随行炮台" (sm_sentryhat), 每人最多 hat_max 座 (默认 4)
+ *     玩家阵亡 / 掉线时, 他头顶的塔会自动落回地面 (不会停在半空)
  *  3. 在画面右上角显示哨戒塔信息 HUD (sm_sentryhud)
+ *  4. 一键补满地图上所有哨戒塔的生命与弹药 (sm_sentry_refill, 供积分插件 /buy 5 调用)
  *
  *  ── 玩家命令 (控制台输入, 或在聊天栏加 ! 前缀) ───────────
  *   sm_sentryhud      开关右上角信息 HUD (默认关)
- *   sm_hat            把最近的塔放到自己头顶 (需管理员开启该功能)
+ *   sm_hat            把最近的塔放到自己头顶 (需管理员开启该功能; 每人最多 hat_max 座)
  *   sm_hat_off        取消自己的头顶塔
- *   sm_sentrydrop     在身边掉落一座哨戒炮塔拾取箱 (需管理员开启该功能)
+ *   sm_sentrydrop [0-3]  在身边掉落一座哨戒塔拾取箱 (0机枪 1炮 2喷火 3冰冻; 需管理员开启该功能)
+ *   sm_sentry_refill  一键补满地图上所有哨戒塔的生命与弹药 (需管理员开启该功能)
  *
  *  ── 管理员命令 ─────────────────────────────────────────
  *   sm_sentry_refresh     重新增强所有哨戒塔并补满弹药
@@ -28,20 +31,22 @@
  *
  *  ── 常用 ConVar (自动生成 cfg/sourcemod/asrd_sentry_enhancer.cfg) ─
  *   sm_asrd_sentry_enabled            总开关 (0=关 1=开)
- *   sm_asrd_sentry_health_mult        生命倍率 (默认 2.0)
+ *   sm_asrd_sentry_health_mult        生命倍率 (默认 5.0)
  *   sm_asrd_sentry_firerate_mult      射速倍率 (默认 35)
- *   sm_asrd_sentry_range_mult         射程倍率 (默认 1.5)
+ *   sm_asrd_sentry_range_mult         射程倍率 (默认 1.0)
  *   sm_asrd_sentry_ammo_mult          弹药倍率 (默认 100)
  *   sm_asrd_sentry_damage_mult        子弹伤害倍率 (默认 1.0, 基于机枪10/炮60/喷火4)
  *   sm_asrd_sentry_invulnerable       无敌 (默认 0)
  *   sm_asrd_sentry_no_player_damage   关闭误伤队友 (默认 1)
  *   sm_asrd_sentry_hat_public         允许所有玩家用头顶塔命令 (默认 1)
+ *   sm_asrd_sentry_hat_max            每个玩家头顶塔数量上限 (默认 4, 0=不限制)
  *   sm_asrd_sentry_hat_turnspeed      头顶塔转向速度 度/秒 (默认 360)
  *   sm_asrd_sentry_hat_maxdist        头顶塔命令允许的最大距离 (默认 100, 0=不限制)
  *   sm_asrd_sentry_hat_layerspace     头顶多座塔的层间距 (默认 60, 20~200)
  *   sm_asrd_sentry_hud_default        新玩家默认开启 HUD (默认 0)
  *   sm_asrd_sentry_drop_limit         场上最多可同时存在的拾取箱数量 (默认 20, 0=不限制)
- *   sm_asrd_sentry_drop_public        允许所有玩家使用掉落命令 (默认 0)
+ *   sm_asrd_sentry_drop_public        允许所有玩家使用掉落命令 (默认 1)
+ *   sm_asrd_sentry_refill_public      允许所有玩家使用一键满配命令 (默认 1)
  *   sm_asrd_sentry_debug              调试输出 (默认 0)
  *
  *  依赖: SourceMod 1.11+ (不依赖任何扩展)
@@ -55,7 +60,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Sentry Enhancer + Sentry Hat"
-#define PLUGIN_VERSION "6.3.0"
+#define PLUGIN_VERSION "6.5.0"
 
 // 子弹伤害倍率的基础伤害值 (来自官方源码 asw_sentry_top*.cpp 的默认伤害):
 //   机枪 GetSentryDamage=10*m_fDamageScale, 炮 fBaseGrenadeDamage=60, 喷火 GetSentryDamage=4*m_fDamageScale
@@ -83,6 +88,7 @@ ConVar g_cvInvulnerable;
 ConVar g_cvNoPlayerDamage;
 ConVar g_cvHatTurnSpeed;
 ConVar g_cvHatPublic;
+ConVar g_cvHatMax;       // 每个玩家头顶塔数量上限 (0=不限制)
 ConVar g_cvHatMaxDist;
 ConVar g_cvHatLayerSpace;   // 头顶多座塔的层间距 (世界单位)
 ConVar g_cvTurnRate;     // 哨戒塔顶转向速度 (度/秒, 0=瞬间转向)
@@ -90,6 +96,7 @@ ConVar g_cvDebug;
 ConVar g_cvHudDefault;   // 新玩家进服时 HUD 的默认开关
 ConVar g_cvDropLimit;    // 场上最多可同时存在的哨戒炮塔拾取箱数量 (0=不限制)
 ConVar g_cvDropPublic;   // 允许所有玩家使用掉落命令 (0=仅管理员, 1=所有玩家)
+ConVar g_cvRefillPublic; // 允许所有玩家使用一键满配命令 (0=仅管理员, 1=所有玩家)
 
 // ============================================================================
 //  属性偏移缓存
@@ -183,8 +190,8 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
     g_cvHealthMult = CreateConVar(
-        "sm_asrd_sentry_health_mult", "2.0",
-        "哨戒塔生命值倍率 (1.0=默认, 2.0=双倍)",
+        "sm_asrd_sentry_health_mult", "5.0",
+        "哨戒塔生命值倍率 (1.0=默认, 5.0=五倍)",
         FCVAR_NOTIFY, true, 1.0
     );
     g_cvFireRateMult = CreateConVar(
@@ -193,8 +200,8 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 1.0
     );
     g_cvRangeMult = CreateConVar(
-        "sm_asrd_sentry_range_mult", "1.5",
-        "哨戒塔射程倍率 (1.0=默认, 1.5=1.5倍射程)",
+        "sm_asrd_sentry_range_mult", "1.0",
+        "哨戒塔射程倍率 (1.0=默认)",
         FCVAR_NOTIFY, true, 1.0
     );
     g_cvAmmoMult = CreateConVar(
@@ -242,6 +249,11 @@ public void OnPluginStart()
         "允许所有玩家使用头顶哨戒塔命令 (0=仅管理员, 1=所有玩家)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
+    g_cvHatMax = CreateConVar(
+        "sm_asrd_sentry_hat_max", "4",
+        "每个玩家头顶哨戒塔数量上限 (0=不限制)",
+        FCVAR_NOTIFY, true, 0.0
+    );
     g_cvDebug = CreateConVar(
         "sm_asrd_sentry_debug", "0",
         "调试模式",
@@ -258,8 +270,13 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 0.0
     );
     g_cvDropPublic = CreateConVar(
-        "sm_asrd_sentry_drop_public", "0",
+        "sm_asrd_sentry_drop_public", "1",
         "允许所有玩家使用掉落哨戒炮塔命令 (0=仅管理员, 1=所有玩家)",
+        FCVAR_NOTIFY, true, 0.0, true, 1.0
+    );
+    g_cvRefillPublic = CreateConVar(
+        "sm_asrd_sentry_refill_public", "1",
+        "允许所有玩家使用一键满配命令 (0=仅管理员, 1=所有玩家)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
 
@@ -277,6 +294,7 @@ public void OnPluginStart()
     RegAdminCmd("sm_sentry_unboost",   Command_SentryUnboost,   ADMFLAG_GENERIC, "一键还原哨戒塔增强倍率(默认档)");
     RegAdminCmd("sm_sentry_drop",      Command_SentryDrop,      ADMFLAG_GENERIC, "在身边掉落一座哨戒塔(默认炮)");
     RegConsoleCmd("sm_sentrydrop",    Command_SentryDropPublic, "在身边掉落一座哨戒炮塔拾取箱 (需管理员开启)");
+    RegConsoleCmd("sm_sentry_refill", Command_SentryRefillPublic, "一键补满所有哨戒塔的生命与弹药 (需管理员开启)");
     RegConsoleCmd("sm_hat",            Command_HatPublic,       "把最近的哨戒塔放到自己头顶 (需管理员开启)");
     RegConsoleCmd("sm_hat_off",        Command_HatOffPublic,    "取消自己的头顶哨戒塔 (需管理员开启)");
     RegConsoleCmd("sm_sentryhud",      Command_SentryHudToggle, "切换哨戒塔信息HUD显示 (默认不显示)");
@@ -318,6 +336,19 @@ public void OnClientPutInServer(int client)
     g_bHudEnabled[client] = g_cvHudDefault.BoolValue;
     g_iHudMode[client]    = 0;   // 还没试过用哪种方式显示
     g_iHudTextEnt[client] = 0;
+
+    // 聊天提示头顶塔命令 (积分插件 /buy 帮助与公告里也会提示)
+    if (g_cvHatPublic.BoolValue)
+    {
+        char sLimit[24];
+        if (g_cvHatMax.IntValue > 0)
+            Format(sLimit, sizeof(sLimit), "每人最多 %d 座", g_cvHatMax.IntValue);
+        else
+            strcopy(sLimit, sizeof(sLimit), "数量不限");
+
+        PrintToChat(client, "\x04[哨戒塔]\x01 输入 \x05!hat\x01 把最近的塔放到头顶 (%s), \x05!hat_off\x01 取消",
+            sLimit);
+    }
 }
 
 // ============================================================================
@@ -1042,7 +1073,14 @@ void UpdateHatSentry(int listIdx, int iBase, float fTurnSpeed, float fTickInterv
     int iClient = GetClientOfUserId(data.hatUserId);
     if (iClient <= 0 || !IsClientInGame(iClient))
     {
-        ClearHatState(listIdx, data, iBase);   // 玩家不在了, 取消头顶塔
+        DropHatSentryToGround(listIdx, data, iBase);   // 玩家不在了: 塔落回地面
+        return;
+    }
+
+    // 玩家阵亡: 头顶的塔立即落回地面 (需求: 人死了塔不能挂在半空)
+    if (!IsPlayerAlive(iClient))
+    {
+        DropHatSentryToGround(listIdx, data, iBase);
         return;
     }
 
@@ -1061,10 +1099,10 @@ void UpdateHatSentry(int listIdx, int iBase, float fTurnSpeed, float fTickInterv
     if (iMarine <= 0 || !IsValidEntity(iMarine))
         return;   // 角色还没部署, 本帧不动
 
-    // 角色死亡则取消头顶塔
+    // 角色本体血量归零 (IsPlayerAlive 没覆盖到的情形) 同样落下塔
     if (GetEntProp(iMarine, Prop_Data, "m_iHealth") <= 0)
     {
-        ClearHatState(listIdx, data, iBase);
+        DropHatSentryToGround(listIdx, data, iBase);
         return;
     }
 
@@ -1130,6 +1168,52 @@ void ClearHatState(int listIdx, SentryData data, int iBase)
     data.hatMarineRef = 0;
     data.hatYawOffset = 0.0;
     g_hSentries.SetArray(listIdx, data);
+}
+
+// ============================================================================
+//  头顶塔落地: 玩家阵亡/掉线时, 把塔从半空挪到脚下的地面, 再取消头顶归属
+//  只向下打一条射线找地面, 只认世界固体 (忽略塔自己/玛丽/虫族), 一次性开销
+// ============================================================================
+void DropHatSentryToGround(int listIdx, SentryData data, int iBase)
+{
+    if (IsValidEntity(iBase))
+    {
+        // 世界坐标: 优先读网络属性 m_vecOrigin, 读到 (0,0) 占位值再退回 Data
+        float fPos[3];
+        GetEntPropVector(iBase, Prop_Send, "m_vecOrigin", fPos);
+        if (fPos[0] == 0.0 && fPos[1] == 0.0)
+            GetEntPropVector(iBase, Prop_Data, "m_vecOrigin", fPos);
+
+        if (fPos[0] != 0.0 || fPos[1] != 0.0)
+        {
+            float fStart[3], fEnd[3];
+            fStart[0] = fPos[0];  fStart[1] = fPos[1];  fStart[2] = fPos[2] + 4.0;
+            fEnd[0]   = fPos[0];  fEnd[1]   = fPos[1];  fEnd[2]   = fPos[2] - 4096.0;
+
+            Handle hTrace = TR_TraceRayFilterEx(fStart, fEnd, MASK_SOLID_BRUSHONLY,
+                RayType_EndPoint, TraceFilter_DropHatSentry, iBase);
+
+            if (TR_DidHit(hTrace))
+            {
+                float fGround[3], fAng[3];
+                TR_GetEndPosition(fGround, hTrace);
+                GetEntPropVector(iBase, Prop_Data, "m_angRotation", fAng);
+                fGround[2] += 4.0;   // 抬一点, 免得塔陷进地面
+                TeleportEntity(iBase, fGround, fAng, NULL_VECTOR);
+            }
+            // 射线没打到地面 (塔飘在地图外/虚空上) 就只取消头顶状态, 不强移
+
+            delete hTrace;
+        }
+    }
+
+    ClearHatState(listIdx, data, iBase);
+}
+
+// 头顶塔落地用的射线过滤器: 忽略这座塔自己 (它是 SOLID 实体, 否则射线一出发就撞到自己)
+public bool TraceFilter_DropHatSentry(int entity, int contentsMask, any data)
+{
+    return (entity != data);
 }
 
 // ============================================================================
@@ -1447,6 +1531,14 @@ public Action Command_SentryHat(int client, int args)
         return Plugin_Handled;
     }
 
+    // 头顶塔数量上限: 每个玩家最多 hat_max 座 (0=不限制)
+    int iHatMax = g_cvHatMax.IntValue;
+    if (iHatMax > 0 && CountPlayerHatSentries(GetClientUserId(client)) >= iHatMax)
+    {
+        ReplyToCommand(client, "头顶哨戒塔已达上限(%d 座), 请先用 sm_hat_off 取消", iHatMax);
+        return Plugin_Handled;
+    }
+
     // 可选参数: 塔的朝向偏移 (度数)
     float fYawOffset = 0.0;
     if (args >= 1)
@@ -1732,6 +1824,112 @@ public Action Command_SentryDropPublic(int client, int args)
         return Plugin_Handled;
     }
     return Command_SentryDrop(client, args);
+}
+
+// ============================================================================
+//  统计某玩家当前头顶上的哨戒塔数量 (按 userid 区分)
+// ============================================================================
+int CountPlayerHatSentries(int iUserId)
+{
+    if (iUserId <= 0)
+        return 0;
+
+    int count = 0;
+    SentryData data;
+    for (int i = 0; i < g_hSentries.Length; i++)
+    {
+        g_hSentries.GetArray(i, data);
+        if (data.hatUserId != iUserId)
+            continue;
+
+        int iBase = EntRefToEntIndex(data.baseRef);
+        if (iBase == INVALID_ENT_REFERENCE || !IsValidEntity(iBase))
+            continue;
+        count++;
+    }
+    return count;
+}
+
+// ============================================================================
+//  一键满配: 补满地图上所有哨戒塔的生命值与弹药 (不改倍率)
+//  生命: 直接补到当前最大生命 (m_iHealth = m_iMaxHealth)
+//  弹药: 有记录用 记录基准 x 弹药倍率, 无记录用该型自然满弹药 x 弹药倍率;
+//        同时同步最大弹药, 保证 HUD 弹药条显示正确
+// ============================================================================
+int RefillAllSentries()
+{
+    float fAmmoMult = g_cvAmmoMult.FloatValue;
+
+    int count = 0;
+    int entity = -1;
+    while ((entity = FindEntityByClassname(entity, "asw_sentry_base")) != -1)
+    {
+        CacheBasePropOffsets(entity);   // 确保 GunType / MaxAmmo 偏移可用
+
+        // 有增强记录就取记录基准, 保证补的量和增强后上限一致
+        SentryData data;
+        int idx = FindSentryByEntIndex(entity);
+        if (idx >= 0)
+            g_hSentries.GetArray(idx, data);
+
+        // 生命补满
+        int iMaxHp = GetEntProp(entity, Prop_Data, "m_iMaxHealth");
+        if (iMaxHp > 0)
+            SetEntProp(entity, Prop_Data, "m_iHealth", iMaxHp);
+
+        // 弹药补满
+        int iFullAmmo = 0;
+        if (idx >= 0 && data.origAmmo > 0)
+        {
+            iFullAmmo = RoundToFloor(float(data.origAmmo) * fAmmoMult);
+        }
+        else if (g_offBaseGunType >= 0)
+        {
+            int iGunType = GetEntProp(entity, Prop_Data, "m_nGunType");
+            iFullAmmo = RoundToFloor(float(GetSentryMaxAmmo(iGunType)) * fAmmoMult);
+        }
+
+        if (iFullAmmo > 0)
+        {
+            SetEntProp(entity, Prop_Data, "m_iAmmo", iFullAmmo);
+            if (g_offBaseMaxAmmo >= 0)
+                SetEntData(entity, g_offBaseMaxAmmo, iFullAmmo);
+        }
+
+        count++;
+    }
+    return count;
+}
+
+// ============================================================================
+//  命令 (玩家): 一键补满所有哨戒塔的生命与弹药 (需管理员开启该功能)
+//  供积分插件 /buy 5 (500 分) 转发调用
+// ============================================================================
+public Action Command_SentryRefillPublic(int client, int args)
+{
+    // 玩家命令需管理员开启; 管理员本人(游戏内或控制台)不受该开关限制
+    bool bAdmin = (client <= 0) || ((GetUserFlagBits(client) & ADMFLAG_GENERIC) != 0);
+    if (!bAdmin && !g_cvRefillPublic.BoolValue)
+    {
+        ReplyToCommand(client, "一键满配功能未对玩家开放");
+        return Plugin_Handled;
+    }
+    if (!g_cvEnabled.BoolValue)
+    {
+        ReplyToCommand(client, "哨戒塔增强功能已禁用");
+        return Plugin_Handled;
+    }
+
+    int count = RefillAllSentries();
+    if (count <= 0)
+    {
+        // 地图上没有任何哨戒塔: 说明无法满配 (积分插件侧也会先查再扣分)
+        ReplyToCommand(client, "地图上目前没有任何哨戒塔, 无法进行一键满配");
+        return Plugin_Handled;
+    }
+
+    ReplyToCommand(client, "已一键补满 %d 座哨戒塔的生命与弹药", count);
+    return Plugin_Handled;
 }
 
 // ============================================================================
