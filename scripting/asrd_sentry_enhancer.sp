@@ -1,14 +1,16 @@
 /**
  * ============================================================================
  *  [AS:RD] 哨戒塔增强 + 头顶哨戒塔 + 信息 HUD
- *  版本 6.5.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 6.5.2  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ─────────────────────────────────────
  *  1. 增强地图里的哨戒塔: 生命/射速/射程/弹药/伤害 乘以倍率,
  *     可选无敌、可选关闭对队友的误伤
- *  2. 把哨戒塔放到角色头顶, 当"随行炮台" (sm_sentryhat)
+ *  2. 把哨戒塔放到角色头顶, 当"随行炮台" (sm_sentryhat, 每人最多 3 座)
  *  3. 在画面右上角显示哨戒塔信息 HUD (sm_sentryhud)
  *  4. 一键补满地图上所有哨戒塔的生命与弹药 (sm_sentry_refill, 供积分插件 /buy 5 调用)
+ *  5. 强制关闭无限弹药: 持续把引擎的 asw_sentry_infinite_ammo 压成 0,
+ *     覆盖挑战(甚至其它插件)设置的"哨戒塔无线弹药", 保证弹药正常消耗
  *
  *  ── 玩家命令 (控制台输入, 或在聊天栏加 ! 前缀) ───────────
  *   sm_sentryhud      开关右上角信息 HUD (默认关)
@@ -45,6 +47,8 @@
  *   sm_asrd_sentry_drop_limit         场上最多可同时存在的拾取箱数量 (默认 20, 0=不限制)
  *   sm_asrd_sentry_drop_public        允许所有玩家使用掉落命令 (默认 1)
  *   sm_asrd_sentry_refill_public      允许所有玩家使用一键满配命令 (默认 1)
+ *   sm_asrd_sentry_no_infinite_ammo   强制 asw_sentry_infinite_ammo=0 (默认 1;
+ *                                     独立于总开关, 0=不干预, 1=持续压制)
  *   sm_asrd_sentry_debug              调试输出 (默认 0)
  *
  *  依赖: SourceMod 1.11+ (不依赖任何扩展)
@@ -58,7 +62,10 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Sentry Enhancer + Sentry Hat"
-#define PLUGIN_VERSION "6.5.0"
+#define PLUGIN_VERSION "6.5.2"
+
+// 每个玩家头顶哨戒塔的数量上限 (写死, 不提供 ConVar 让挑战/玩家随意调整)
+#define SENTRY_HAT_LIMIT 3
 
 // 子弹伤害倍率的基础伤害值 (来自官方源码 asw_sentry_top*.cpp 的默认伤害):
 //   机枪 GetSentryDamage=10*m_fDamageScale, 炮 fBaseGrenadeDamage=60, 喷火 GetSentryDamage=4*m_fDamageScale
@@ -94,6 +101,10 @@ ConVar g_cvHudDefault;   // 新玩家进服时 HUD 的默认开关
 ConVar g_cvDropLimit;    // 场上最多可同时存在的哨戒炮塔拾取箱数量 (0=不限制)
 ConVar g_cvDropPublic;   // 允许所有玩家使用掉落命令 (0=仅管理员, 1=所有玩家)
 ConVar g_cvRefillPublic; // 允许所有玩家使用一键满配命令 (0=仅管理员, 1=所有玩家)
+ConVar g_cvNoInfiniteAmmo;      // 强制关闭无限弹药 (asw_sentry_infinite_ammo=0) 开关
+ConVar g_cvEngineInfiniteAmmo;  // 引擎/挑战定义的 asw_sentry_infinite_ammo (找到后缓存)
+bool   g_bFixingInfiniteAmmo;   // 正在压制无限弹药 (防止与变更钩子互相递归)
+bool   g_bAmmoGuardWarned;      // 找不到引擎 ConVar 时只报错一次
 
 // ============================================================================
 //  属性偏移缓存
@@ -272,6 +283,12 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
 
+    g_cvNoInfiniteAmmo = CreateConVar(
+        "sm_asrd_sentry_no_infinite_ammo", "1",
+        "强制关闭哨戒塔无限弹药 (asw_sentry_infinite_ammo=0), 覆盖挑战设置 (0=不干预, 1=持续压制)",
+        FCVAR_NOTIFY, true, 0.0, true, 1.0
+    );
+
     // 把以上 ConVar 的设置自动保存/读取到配置文件
     AutoExecConfig(true, "asrd_sentry_enhancer");
 
@@ -299,8 +316,12 @@ public void OnPluginStart()
     g_cvDamageMult.AddChangeHook(OnDamageMultCvarChanged);
     g_cvInvulnerable.AddChangeHook(OnInvulnCvarChanged);
     g_cvNoPlayerDamage.AddChangeHook(OnNoDamageCvarChanged);
+    g_cvNoInfiniteAmmo.AddChangeHook(OnAmmoGuardCvarChanged);   // 开关被打开时立即压制一次
 
     g_hSentries = new ArrayList(sizeof(SentryData));
+
+    // 无限弹药压制: 找到引擎的 asw_sentry_infinite_ammo 并挂上变更钩子
+    SetupInfiniteAmmoGuard();
 
     // 若插件是在游戏进行中才被加载, 把地图里已存在的哨戒塔也增强一遍
     // (正常启动时此时还没有塔, 这个循环什么都不会找到)
@@ -318,6 +339,10 @@ public void OnPluginStart()
 public void OnConfigsExecuted()
 {
     ApplyDamageOverrides();
+
+    // 服务器/挑战的 cfg 都在此之前执行完, 这里再压一次无限弹药
+    SetupInfiniteAmmoGuard();
+    ForceNoInfiniteAmmo();
 }
 
 // ============================================================================
@@ -515,6 +540,10 @@ public void OnMapStart()
 
     // 预缓存拾取箱模型: 运行时 spawn 的哨戒枪箱 (sm_sentry_drop) 客户端才能显示
     PrecacheModel("models/items/ItemBox/ItemBoxLarge.mdl", true);
+
+    // 换图后挑战可能重新设过无限弹药, 这里压回 0
+    SetupInfiniteAmmoGuard();
+    ForceNoInfiniteAmmo();
 }
 
 // ============================================================================
@@ -883,11 +912,96 @@ void EnhanceSentry(int iBase, bool bForce)
 }
 
 // ============================================================================
+//  无限弹药压制 (强制 asw_sentry_infinite_ammo = 0)
+//
+//  背景: 某些挑战会把引擎的 asw_sentry_infinite_ammo 设成 1 (让哨戒塔无限子弹),
+//        甚至周期性重设; 在"不允许无限弹药"的正规挑战里它应当是 0。
+//        本插件把它持续压回 0, 保证弹药正常消耗。
+//
+//  依据: 引擎 `ConVar::SetValue / InternalSetValue` (source-sdk-2013 tier1/convar.cpp)
+//        里**没有**任何 FCVAR_CHEAT / sv_cheats 判断——该限制只存在于控制台命令
+//        分发层。所以 SourceMod 的 `ConVar.SetInt()` 在 sv_cheats=0 时照样能写入。
+//        万一某个引擎版本仍拒绝写入, 下面复核后会临时清掉 FCVAR_CHEAT 再写一次兜底,
+//        保证 0 一定落地 (清标志属兜底路径, 正常情况下不会执行)。
+//
+//  覆盖范围: 独立于插件总开关 sm_asrd_sentry_enabled, 只要插件加载即生效;
+//            不想被干预时把 sm_asrd_sentry_no_infinite_ammo 设为 0。
+// ============================================================================
+void SetupInfiniteAmmoGuard()
+{
+    if (g_cvEngineInfiniteAmmo != null)
+        return;   // 已经拿到引用并挂好钩子
+
+    g_cvEngineInfiniteAmmo = FindConVar("asw_sentry_infinite_ammo");
+    if (g_cvEngineInfiniteAmmo == null)
+    {
+        if (!g_bAmmoGuardWarned)
+        {
+            g_bAmmoGuardWarned = true;
+            LogError("[AS:RD] 未找到引擎 ConVar asw_sentry_infinite_ammo, 无法强制关闭哨戒塔无限弹药");
+        }
+        return;
+    }
+
+    g_cvEngineInfiniteAmmo.AddChangeHook(OnInfiniteAmmoChanged);
+    ForceNoInfiniteAmmo();
+}
+
+void ForceNoInfiniteAmmo()
+{
+    if (!g_cvNoInfiniteAmmo.BoolValue)
+        return;                       // 开关关着, 不干预
+    if (g_cvEngineInfiniteAmmo == null)
+        return;                       // 还没拿到引擎 ConVar
+    if (g_bFixingInfiniteAmmo)
+        return;                       // 正在压制, 避免递归
+    if (g_cvEngineInfiniteAmmo.IntValue == 0)
+        return;                       // 已经是 0, 什么都不用做
+
+    g_bFixingInfiniteAmmo = true;
+    g_cvEngineInfiniteAmmo.SetInt(0);
+
+    // 兜底: 若引擎因 FCVAR_CHEAT 拒绝写入 (值仍非 0), 去掉该标志后再写一次
+    if (g_cvEngineInfiniteAmmo.IntValue != 0)
+    {
+        int iFlags = g_cvEngineInfiniteAmmo.Flags;
+        if ((iFlags & FCVAR_CHEAT) != 0)
+        {
+            g_cvEngineInfiniteAmmo.Flags = iFlags & ~FCVAR_CHEAT;
+            g_cvEngineInfiniteAmmo.SetInt(0);
+        }
+    }
+    g_bFixingInfiniteAmmo = false;
+}
+
+// 有人 (挑战/其它插件/控制台) 把 asw_sentry_infinite_ammo 改成非 0 时立刻压回去
+public void OnInfiniteAmmoChanged(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+    if (!g_cvNoInfiniteAmmo.BoolValue || convar.IntValue == 0)
+        return;
+
+    if (g_cvDebug.BoolValue)
+        PrintToServer("[哨戒塔][debug] asw_sentry_infinite_ammo 被外部设为 %s, 已强制改回 0", newValue);
+
+    ForceNoInfiniteAmmo();
+}
+
+// 本插件自己的开关被改动: 打开时立即压制一次
+public void OnAmmoGuardCvarChanged(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+    if (convar.BoolValue)
+        ForceNoInfiniteAmmo();
+}
+
+// ============================================================================
 //  每游戏帧执行: 补采炮口、射速加速、无敌维持、头顶塔跟随
 //  只遍历有记录的塔 (通常不到 20 个), 不扫描全部实体
 // ============================================================================
 public void OnGameFrame()
 {
+    // 无限弹药压制必须每帧跑, 且不能受总开关/哨戒塔列表为空影响 (见 ForceNoInfiniteAmmo)
+    ForceNoInfiniteAmmo();
+
     if (!g_cvEnabled.BoolValue)
         return;
     if (g_hSentries.Length == 0)
@@ -1447,6 +1561,30 @@ void ReapplyEnhance(int iBase, SentryData data)
 }
 
 // ============================================================================
+//  统计某玩家当前头顶上的哨戒塔数量 (按 userid 区分)
+// ============================================================================
+int CountPlayerHatSentries(int iUserId)
+{
+    if (iUserId <= 0)
+        return 0;
+
+    int count = 0;
+    SentryData data;
+    for (int i = 0; i < g_hSentries.Length; i++)
+    {
+        g_hSentries.GetArray(i, data);
+        if (data.hatUserId != iUserId)
+            continue;
+
+        int iBase = EntRefToEntIndex(data.baseRef);
+        if (iBase == INVALID_ENT_REFERENCE || !IsValidEntity(iBase))
+            continue;
+        count++;
+    }
+    return count;
+}
+
+// ============================================================================
 //  命令: 把最近的哨戒塔放到自己头顶
 // ============================================================================
 public Action Command_SentryHat(int client, int args)
@@ -1454,6 +1592,13 @@ public Action Command_SentryHat(int client, int args)
     if (client <= 0 || !IsClientInGame(client) || !IsPlayerAlive(client))
     {
         ReplyToCommand(client, "你必须存活才能使用此命令");
+        return Plugin_Handled;
+    }
+
+    // 头顶塔数量上限: 每个玩家最多 SENTRY_HAT_LIMIT 座 (写死, 不给 ConVar)
+    if (CountPlayerHatSentries(GetClientUserId(client)) >= SENTRY_HAT_LIMIT)
+    {
+        ReplyToCommand(client, "头顶哨戒塔已达上限(%d 座), 请先用 sm_hat_off 取消", SENTRY_HAT_LIMIT);
         return Plugin_Handled;
     }
 
