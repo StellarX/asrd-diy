@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 电锯高速旋转 (Chainsaw Turbo)
- *  版本 1.3.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.4.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ─────────────────────────────────────
  *  玩家手持电锯 (asw_weapon_chainsaw) 且【按住攻击键】时, 让锯片转得更快:
@@ -16,6 +16,9 @@
  *  ── 管理员命令 ─────────────────────────────────────────
  *   sm_chainsaw_status   在控制台查看当前谁手持电锯、是否正在开火等状态
  *   sm_chainsaw_drop [玩家]  给指定玩家(或自己)在身边掉一把增强电锯
+ *   sm_chainsaw_color <R> <G> <B> [A]  设置掉落电锯的染色 (例: sm_chainsaw_color 255 0 0)
+ *   sm_chainsaw_color <预设名>         用预设配色 (white/gold/red/orange/yellow/green/cyan/blue/purple/pink)
+ *   sm_chainsaw_color                  不带参数 = 查看当前配色和可用预设
  *
  *  ── 玩家命令 ───────────────────────────────────────────
  *   sm_chainsawdrop      在自己身边掉一把增强电锯 (受 sm_asrd_chainsaw_drop_public 限制)
@@ -30,6 +33,11 @@
  *   sm_asrd_chainsaw_dmg_mult  增强电锯伤害倍率 (默认 10.0, 1.0=原伤害)
  *                              仅本插件掉落的增强电锯享受, 玩家自带电锯不受影响
  *   sm_asrd_chainsaw_drop_public 允许玩家用 sm_chainsawdrop 自己掉电锯 (默认 1)
+ *   ── 增强电锯染色 (默认纯白, 见下) ─────────────────────
+ *   sm_asrd_chainsaw_color_r/g/b  掉落电锯的染色 RGB (各 0~255, 默认 255 255 255 = 纯白)
+ *   sm_asrd_chainsaw_color_a      染色透明度 (0~255, 默认 255 = 不透明; 调低有通透发光感)
+ *   sm_asrd_chainsaw_rainbow      彩虹循环染色 (0=关 1=开, 默认 0; 开启时忽略上面的 RGB)
+ *   sm_asrd_chainsaw_rainbow_speed 彩虹变色速度 (0.05~10.0, 默认 1.0)
  *   sm_asrd_chainsaw_debug     调试输出 (默认 0)
  *
  *  ── 实现原理 ───────────────────────────────────────────
@@ -53,18 +61,19 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Chainsaw Turbo"
-#define PLUGIN_VERSION "1.3.0"
+#define PLUGIN_VERSION "1.4.0"
 
 // 电锯实体类名 (游戏源码: asw_weapon_chainsaw_shared.cpp)
 #define CHAINSAW_CLASSNAME "asw_weapon_chainsaw"
 
-// 增强电锯的视觉标记颜色 (纯白) —— 仅作用于本插件掉落的增强电锯, 玩家自带不变
-// 格式: RGB, 直接给电锯模型染色 (m_clrRender); AS:RD 武器每帧会复位该属性,
-// 故插件在 OnGameFrame 里对增强电锯持续重涂, 保证地上/手里都稳定是白色。
-// 纯白与原版生锈橙棕对比最强, 一眼可辨 (金色/青色都不如纯白跳)。
+// 增强电锯的视觉标记颜色 —— 默认纯白, 运行时可用 ConVar 或 sm_chainsaw_color 命令自定义。
+// 格式: RGBA, 直接给电锯模型染色 (m_clrRender); AS:RD 武器每帧会复位该属性,
+// 故插件在 OnGameFrame 里对增强电锯持续重涂, 保证地上/手里都稳定是设定色。
+// 纯白与原版生锈橙棕对比最强, 一眼可辨; 想要别的话金色/青色/红色都不错。
 #define ENHANCED_COLOR_R 255
 #define ENHANCED_COLOR_G 255
 #define ENHANCED_COLOR_B 255
+#define ENHANCED_COLOR_A 255
 
 // 电锯的三种开火状态 (CHAINSAW_FIRE_STATE 枚举)
 // 0 = 关闭  1 = 启动中(蓄力约1秒)  2 = 全速运转
@@ -87,6 +96,12 @@ ConVar g_cvPublic;
 ConVar g_cvDebug;
 ConVar g_cvDmgMult;     // 增强电锯伤害倍率 (仅本插件掉落的电锯享受; 玩家自带电锯保持原伤害)
 ConVar g_cvDropPublic;  // 普通玩家能否用 sm_chainsawdrop 自己掉电锯
+ConVar g_cvColorR;      // 增强电锯染色 R (0~255)
+ConVar g_cvColorG;      // 增强电锯染色 G (0~255)
+ConVar g_cvColorB;      // 增强电锯染色 B (0~255)
+ConVar g_cvColorA;      // 增强电锯染色透明度 (0~255, 255=不透明)
+ConVar g_cvRainbow;     // 彩虹循环染色开关
+ConVar g_cvRainbowSpeed;// 彩虹变色速度
 
 // ============================================================================
 //  每个玩家一条状态: 当前手持电锯的实体引用 (0 = 没拿电锯)
@@ -147,6 +162,38 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
 
+    // ── 增强电锯染色 (可用 sm_chainsaw_color 命令一键改) ────────────────
+    g_cvColorR = CreateConVar(
+        "sm_asrd_chainsaw_color_r", "255",
+        "增强电锯染色 - 红 (0~255)",
+        FCVAR_NOTIFY, true, 0.0, true, 255.0
+    );
+    g_cvColorG = CreateConVar(
+        "sm_asrd_chainsaw_color_g", "255",
+        "增强电锯染色 - 绿 (0~255)",
+        FCVAR_NOTIFY, true, 0.0, true, 255.0
+    );
+    g_cvColorB = CreateConVar(
+        "sm_asrd_chainsaw_color_b", "255",
+        "增强电锯染色 - 蓝 (0~255)",
+        FCVAR_NOTIFY, true, 0.0, true, 255.0
+    );
+    g_cvColorA = CreateConVar(
+        "sm_asrd_chainsaw_color_a", "255",
+        "增强电锯染色 - 透明度 (0~255, 255=完全不透明, 调低有通透发光感)",
+        FCVAR_NOTIFY, true, 0.0, true, 255.0
+    );
+    g_cvRainbow = CreateConVar(
+        "sm_asrd_chainsaw_rainbow", "0",
+        "增强电锯彩虹循环染色 (0=关 1=开; 开启时忽略 color_r/g/b, 颜色随时间自动循环)",
+        FCVAR_NOTIFY, true, 0.0, true, 1.0
+    );
+    g_cvRainbowSpeed = CreateConVar(
+        "sm_asrd_chainsaw_rainbow_speed", "1.0",
+        "彩虹循环速度倍率 (1.0=默认, 越大变越快)",
+        FCVAR_NOTIFY, true, 0.05, true, 10.0
+    );
+
     RegAdminCmd("sm_chainsaw_drop",     Command_ChainsawDrop,     ADMFLAG_GENERIC, "管理员给指定玩家(或自己)在身边掉一把增强电锯");
     RegConsoleCmd("sm_chainsawdrop",    Command_ChainsawDropPublic, "在自己身边掉一把增强电锯 (受 sm_asrd_chainsaw_drop_public 限制)");
 
@@ -156,6 +203,8 @@ public void OnPluginStart()
     AutoExecConfig(true, "asrd_chainsaw_turbo");
 
     RegAdminCmd("sm_chainsaw_status", Command_ChainsawStatus, ADMFLAG_GENERIC, "查看电锯高速旋转状态");
+    RegAdminCmd("sm_chainsaw_color",  Command_ChainsawColor,  ADMFLAG_GENERIC,
+        "设置掉落增强电锯的染色: sm_chainsaw_color <R> <G> <B> [A] 或 <预设名>");
 }
 
 // ============================================================================
@@ -244,11 +293,15 @@ public void OnGameFrame()
         g_bLastAttack[i]  = bAttack;
     }
 
-    // 增强电锯: 每帧重涂金色染色 (AS:RD 武器会复位 m_clrRender, 只设一次会被刷掉)
+    // 增强电锯: 每帧重新染色 (AS:RD 武器会复位 m_clrRender, 只设一次会被刷掉)
+    // 颜色取自 ConVar (或彩虹模式按时间循环), 每帧只算一次再套用到所有增强电锯
+    int iR, iG, iB, iA;
+    GetEnhancedColor(fGameTime, iR, iG, iB, iA);
+
     for (int w = MaxClients + 1; w < sizeof(g_bEnhancedChainsaw); w++)
     {
         if (g_bEnhancedChainsaw[w])
-            ApplyEnhancedColor(w);
+            ApplyEnhancedColor(w, iR, iG, iB, iA);
     }
 }
 
@@ -337,6 +390,11 @@ public Action Command_ChainsawStatus(int client, int args)
     PrintToConsole(client, "========== 电锯高速旋转状态 (v%s) ==========", PLUGIN_VERSION);
     PrintToConsole(client, "启用: %s | 转速倍率: x%.1f",
         g_cvEnabled.BoolValue ? "开" : "关", g_cvSpeed.FloatValue);
+
+    int cR, cG, cB, cA;
+    GetEnhancedColor(GetGameTime(), cR, cG, cB, cA);
+    PrintToConsole(client, "增强电锯染色: %d %d %d (透明度 %d) | 彩虹模式: %s (x%.1f)",
+        cR, cG, cB, cA, g_cvRainbow.BoolValue ? "开" : "关", g_cvRainbowSpeed.FloatValue);
     PrintToConsole(client, "------------------------------");
 
     int iCount = 0;
@@ -492,7 +550,7 @@ int SpawnChainsawNear(int client)
     if (iWeapon >= 0 && iWeapon < sizeof(g_bEnhancedChainsaw))
         g_bEnhancedChainsaw[iWeapon] = true;
 
-    // 视觉标记: 金色描边光晕 + 金色染色, 让掉落的增强电锯一眼可辨
+    // 视觉标记: 按当前配色给电锯染色, 让掉落的增强电锯一眼可辨
     if (iWeapon >= 0)
         MakeEnhancedVisual(iWeapon);
 
@@ -540,28 +598,72 @@ public Action Command_ChainsawDropPublic(int client, int args)
 
 // ============================================================================
 //  增强电锯视觉标记: 仅作用于本插件掉落的增强电锯
-//  - 直接给电锯模型染金色 (m_clrRender + RENDER_TRANSCOLOR); 这是电锯自身属性,
+//  - 直接给电锯模型染色 (m_clrRender + RENDER_TRANSCOLOR); 这是电锯自身属性,
 //    天然跟着电锯走 —— 在地上、被捡起、被持有时都显示, 不会和电锯分离。
-//  - AS:RD 武器每帧会把 m_clrRender 复位成默认, 所以 OnGameFrame 里持续重涂
-//    (见 ApplyEnhancedColor), 单设一次会被刷掉。
+//  - 颜色来源 (优先级): 彩虹模式 > ConVar sm_asrd_chainsaw_color_r/g/b/a,
+//    可用 sm_chainsaw_color 命令实时改; AS:RD 武器每帧会把 m_clrRender 复位成默认,
+//    所以 OnGameFrame 里持续重涂 (见 ApplyEnhancedColor), 单设一次会被刷掉。
 //  - 同时给持有者的第一人称视图模型 (m_hViewModel) 上同色, 让持锯者自己也能看出不同。
 //  不影响拾取/伤害逻辑; 玩家自带电锯不经过 SpawnChainsawNear, 不会有此染色。
 // ============================================================================
 void MakeEnhancedVisual(int iWeapon)
 {
-    ApplyEnhancedColor(iWeapon);
+    int iR, iG, iB, iA;
+    GetEnhancedColor(GetGameTime(), iR, iG, iB, iA);
+    ApplyEnhancedColor(iWeapon, iR, iG, iB, iA);
+}
+
+// ---------------------------------------------------------------------------
+//  取当前应使用的增强电锯染色 (彩虹模式按时循环, 否则读 ConVar)
+// ---------------------------------------------------------------------------
+void GetEnhancedColor(float fGameTime, int &iR, int &iG, int &iB, int &iA)
+{
+    iA = g_cvColorA.IntValue;
+
+    if (g_cvRainbow.BoolValue)
+    {
+        // 色相随时间循环: 1.0 倍速约 6 秒转完一整圈
+        float fHue = fGameTime * 60.0 * g_cvRainbowSpeed.FloatValue;
+        fHue = fHue - 360.0 * FloatFraction(fHue / 360.0);   // 取模到 0~360
+        HSVtoRGB(fHue, 1.0, 1.0, iR, iG, iB);
+        return;
+    }
+
+    iR = g_cvColorR.IntValue;
+    iG = g_cvColorG.IntValue;
+    iB = g_cvColorB.IntValue;
+}
+
+// HSV -> RGB (H: 0~360, S/V: 0~1, 输出 0~255)
+void HSVtoRGB(float fH, float fS, float fV, int &iR, int &iG, int &iB)
+{
+    float fC = fV * fS;
+    float fX = fC * (1.0 - FloatAbs(FloatFraction(fH / 60.0) * 2.0 - 1.0));
+    float fM = fV - fC;
+
+    float r = 0.0, g = 0.0, b = 0.0;
+    if (fH < 60.0)       { r = fC; g = fX; }
+    else if (fH < 120.0) { r = fX; g = fC; }
+    else if (fH < 180.0) { g = fC; b = fX; }
+    else if (fH < 240.0) { g = fX; b = fC; }
+    else if (fH < 300.0) { r = fX; b = fC; }
+    else                 { r = fC; b = fX; }
+
+    iR = RoundToNearest((r + fM) * 255.0);
+    iG = RoundToNearest((g + fM) * 255.0);
+    iB = RoundToNearest((b + fM) * 255.0);
 }
 
 // 给增强电锯及其持有者的视图模型染上标记色 (每帧调用以对抗引擎复位)
-void ApplyEnhancedColor(int iWeapon)
+void ApplyEnhancedColor(int iWeapon, int iR, int iG, int iB, int iA)
 {
     if (!IsValidEntity(iWeapon))
         return;
 
     SetEntityRenderMode(iWeapon, RENDER_TRANSCOLOR);
-    SetEntityRenderColor(iWeapon, ENHANCED_COLOR_R, ENHANCED_COLOR_G, ENHANCED_COLOR_B, 255);
+    SetEntityRenderColor(iWeapon, iR, iG, iB, iA);
 
-    // 持有者的第一人称视图模型也上色, 持锯者自己视角里同样是金色
+    // 持有者的第一人称视图模型也上色, 持锯者自己视角里同样是标记色
     // (AS:RD 里武器由 marine 持有, 视图模型挂在持有者实体上)
     int iOwner = GetEntPropEnt(iWeapon, Prop_Send, "m_hOwnerEntity");
     if (iOwner > 0 && IsValidEntity(iOwner))
@@ -570,7 +672,117 @@ void ApplyEnhancedColor(int iWeapon)
         if (iVM > 0 && IsValidEntity(iVM))
         {
             SetEntityRenderMode(iVM, RENDER_TRANSCOLOR);
-            SetEntityRenderColor(iVM, ENHANCED_COLOR_R, ENHANCED_COLOR_G, ENHANCED_COLOR_B, 255);
+            SetEntityRenderColor(iVM, iR, iG, iB, iA);
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+//  预设配色表: sm_chainsaw_color <预设名> 直接套用
+// ---------------------------------------------------------------------------
+char g_sColorPresets[][] = {
+    "white", "gold", "red", "orange", "yellow",
+    "green", "cyan", "blue", "purple", "pink"
+};
+int  g_iColorPresets[][] = {
+    {255, 255, 255},   // white  纯白 (默认, 与原版锈色对比最强)
+    {255, 215, 0},     // gold   金色
+    {255, 0, 0},       // red    红色
+    {255, 128, 0},     // orange 橙色
+    {255, 255, 0},     // yellow 黄色
+    {0, 255, 0},       // green  绿色
+    {0, 255, 255},     // cyan   青色
+    {0, 128, 255},     // blue   蓝色
+    {160, 32, 240},    // purple 紫色
+    {255, 105, 180}    // pink   粉色
+};
+
+// 命令(管理员): 设置/查看增强电锯的染色
+public Action Command_ChainsawColor(int client, int args)
+{
+    if (args == 0)
+    {
+        int iR, iG, iB, iA;
+        GetEnhancedColor(GetGameTime(), iR, iG, iB, iA);
+        ReplyToCommand(client, "当前增强电锯染色: %d %d %d (透明度 %d)%s",
+            iR, iG, iB, iA, g_cvRainbow.BoolValue ? " [彩虹模式开启]" : "");
+        ReplyToCommand(client, "用法: sm_chainsaw_color <R> <G> <B> [A]   例: sm_chainsaw_color 255 0 0");
+        ReplyToCommand(client, "或:   sm_chainsaw_color <预设名>          可选: white gold red orange yellow green cyan blue purple pink");
+        return Plugin_Handled;
+    }
+
+    char sArg[32];
+    GetCmdArg(1, sArg, sizeof(sArg));
+
+    // 预设名 (英文/中文都收)
+    int iPreset = FindColorPreset(sArg);
+    if (iPreset >= 0)
+    {
+        g_cvColorR.IntValue = g_iColorPresets[iPreset][0];
+        g_cvColorG.IntValue = g_iColorPresets[iPreset][1];
+        g_cvColorB.IntValue = g_iColorPresets[iPreset][2];
+        if (g_cvRainbow.BoolValue)
+            g_cvRainbow.IntValue = 0;   // 预设优先, 顺手关掉彩虹
+        ReplyToCommand(client, "增强电锯染色已设为 %s (%d %d %d)",
+            g_sColorPresets[iPreset], g_iColorPresets[iPreset][0],
+            g_iColorPresets[iPreset][1], g_iColorPresets[iPreset][2]);
+        return Plugin_Handled;
+    }
+
+    // 自定义 RGB(A)
+    if (args < 3)
+    {
+        ReplyToCommand(client, "参数不足: 需要 <R> <G> <B> [A], 或给一个预设名 (如 gold)");
+        return Plugin_Handled;
+    }
+
+    char sG[16], sB[16], sA[16];
+    GetCmdArg(2, sG, sizeof(sG));
+    GetCmdArg(3, sB, sizeof(sB));
+    sA = "255";
+    if (args >= 4)
+        GetCmdArg(4, sA, sizeof(sA));
+
+    int iR = Clamp255(StringToInt(sArg));
+    int iG = Clamp255(StringToInt(sG));
+    int iB = Clamp255(StringToInt(sB));
+    int iA = Clamp255(StringToInt(sA));
+
+    g_cvColorR.IntValue = iR;
+    g_cvColorG.IntValue = iG;
+    g_cvColorB.IntValue = iB;
+    g_cvColorA.IntValue = iA;
+    if (g_cvRainbow.BoolValue)
+        g_cvRainbow.IntValue = 0;
+
+    ReplyToCommand(client, "增强电锯染色已设为 %d %d %d (透明度 %d)", iR, iG, iB, iA);
+    return Plugin_Handled;
+}
+
+int FindColorPreset(const char[] sName)
+{
+    for (int i = 0; i < sizeof(g_sColorPresets); i++)
+    {
+        if (StrEqual(sName, g_sColorPresets[i], false))
+            return i;
+    }
+    // 中文别名
+    if (StrEqual(sName, "白色", false)) return 0;
+    if (StrEqual(sName, "金色", false)) return 1;
+    if (StrEqual(sName, "红色", false)) return 2;
+    if (StrEqual(sName, "橙色", false)) return 3;
+    if (StrEqual(sName, "黄色", false)) return 4;
+    if (StrEqual(sName, "绿色", false)) return 5;
+    if (StrEqual(sName, "青色", false)) return 6;
+    if (StrEqual(sName, "蓝色", false)) return 7;
+    if (StrEqual(sName, "紫色", false)) return 8;
+    if (StrEqual(sName, "粉色", false)) return 9;
+    return -1;
+}
+
+int Clamp255(int iValue)
+{
+    if (iValue < 0)   return 0;
+    if (iValue > 255) return 255;
+    return iValue;
 }

@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 范围击退 (Repulse)
- *  版本 1.8.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.10.1  |  (1.10.1: cfg 描述改 ASCII 英文, 修复中文在 AutoExecConfig 下编码损坏导致打不开)  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  1. 手动击退: 按绑定键以自己为中心, 把周围虫族沿径向往外推开。
@@ -24,6 +24,14 @@
  *     向外扩散的范围; 护盾期间把它放大即可让波纹变大 (视觉最大约 1.55 倍值)。
  *     服务器只在信标落地时按 GetEffectRadius()==m_flRadius 生成一次 AOE 触发盒,
  *     因此只在落地(m_bSettled)之后再改 — 只改视觉, 不会扩大伤害增益的判定范围。
+ *     想真的扩大"伤害增益给谁"的范围, 用 sm_asrd_repulse_x33_buff_radius: 它在信标
+ *     落地前写入, 落地那一瞬生成的触发盒就是大圈 (只对下一次扔出的信标生效)。
+ *     光晕强度 m_flScale / 颜色 (镜像客户端 cvar asw_buffgrenade) 同理可改。
+ *     护盾期间可把信标附着到 marine 身上跟着走 (sm_asrd_repulse_x33_follow, 默认开):
+ *     复刻 VPK 挑战里 X33 的"电弧跟随"观感 — 信标模型隐形, 只剩涟漪+连向附近队友的
+ *     电弧, 且随人移动; 落地的 AOE 触发盒一并跟到 marine, 增益/电弧判定照常工作。
+ *     原生实现靠客户端 cvar attach_sw / attach_sw_auto (仅重武兵能捡起携带, 且是
+ *     每客户端 USERINFO 服务器改无效), 这里直接服务端复刻 AttachToMarine, 不受职业限制。
  *
  *  ── 投射物(炮弹) ───────────────────────────────────────
  *   已内置:
@@ -62,15 +70,22 @@
  *   sm_asrd_repulse_cooldown       两次触发最小间隔秒 (默认 0=无冷却可连按)
  *
  *   sm_asrd_repulse_aura           管理员指定护盾总开关 (默认 1) — 配合 sm_repulseaura
- *   sm_asrd_repulse_aura_radius    护盾半径/游戏单位 (默认 260)
+ *   sm_asrd_repulse_aura_radius    护盾半径/游戏单位 (默认 300)
  *   sm_asrd_repulse_aura_mode      护盾模式 (默认 0: 0=斥力击退平滑弹开; 1=直接阻挡钉在圈外)
- *   sm_asrd_repulse_aura_push_speed 护盾斥力弹开怪的速度/单位每秒 (默认 900; 持续速度外推, 顺滑不卡)
+ *   sm_asrd_repulse_aura_push_speed 护盾斥力弹开怪的速度/单位每秒 (默认 1000; 持续速度外推, 顺滑不卡)
  *
  *   sm_asrd_repulse_x33            X-33 威力增强器护盾 (默认 1): 仅 Wildcat/Wolfe (重武兵)
  *                                  使用 X-33 时获得限时护盾; 不依赖 sm_asrd_repulse_aura,
  *                                  护盾方式(斥力/阻挡)仍由 sm_asrd_repulse_aura_mode 决定
+ *   sm_asrd_repulse_x33_buff_radius X-33 伤害增益范围/游戏单位 (默认 0=不改, 保持原版 120)
+ *   sm_asrd_repulse_x33_fx_scale   X-33 信标光晕强度 (默认 1.0=原版; 0=关掉光晕)
+ *   sm_asrd_repulse_x33_fx_color   X-33 信标颜色 "R G B" (默认空=不改, 原版 98 34 16)
  *   sm_asrd_repulse_x33_fx_radius  X-33 护盾特效(水面涟漪那圈光波)的扩散半径/游戏单位
- *                                  (默认 260; 0=不改, 保持原版的 120; 见下方"特效放大原理")
+ *                                  (默认 200; 0=不改, 保持原版的 120; 见下方"特效放大原理")
+ *   sm_asrd_repulse_x33_follow    X-33 信标附着到 marine 身上跟着走 (默认 1=开; 0=不附着,
+ *                                  信标固定地面; 复刻 VPK 挑战 X33 的"电弧跟随"观感: 信标模型
+ *                                  隐形, 只剩涟漪+连向附近队友的电弧, 随人移动; 落地的 AOE 触发盒
+ *                                  一并跟到 marine, 增益/电弧判定照常工作; 不受原生 attach_sw 职业限制)
  *   sm_asrd_repulse_x33_duration   每使用一次 X-33 的护盾秒数 (默认 15; 只叠时间不叠强度;
  *                                  信标特效燃烧截止时间每帧同步为护盾结束时间,
  *                                  抵消携带消耗; >30 时等效延长原版增益信标)
@@ -93,8 +108,8 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_NAME    "[AS:RD] 范围击退"
-#define PLUGIN_VERSION "1.7.4"
+#define PLUGIN_NAME    "[AS:RD] Area Repulse"
+#define PLUGIN_VERSION "1.10.1"
 
 // ─── 平滑推进动画池 (手动击退用) ──
 #define MAX_PUSH 512
@@ -180,6 +195,11 @@ ConVar g_cvAuraMode;
 ConVar g_cvX33;
 ConVar g_cvX33Duration;
 ConVar g_cvX33FxRadius;
+ConVar g_cvX33BuffRadius;
+ConVar g_cvX33FxScale;
+ConVar g_cvX33Color;
+ConVar g_cvBuffColor;
+ConVar g_cvX33Follow;
 ConVar g_cvClasses;
 ConVar g_cvProjectiles;
 ConVar g_cvProjSpeed;
@@ -212,6 +232,10 @@ bool   g_bAnyX33Active;                // 是否有任一玩家处于 X-33 护�
 int    g_iX33HudMode[MAXPLAYERS + 1];  // 倒计时显示模式: 0=未检测 1=内置HudText 2=game_text兜底
 int    g_iX33TextEnt[MAXPLAYERS + 1];  // game_text 兜底实体引用 (模式2)
 float  g_fX33FxOrig[MAXPLAYERS + 1];   // 放大前信标原版特效半径 (0=未记录; 护盾结束后还原)
+float  g_fX33ScaleOrig[MAXPLAYERS + 1];// 放大前信标原版光晕强度 (0=未记录; 护盾结束后还原)
+bool   g_bX33Attached[MAXPLAYERS + 1]; // 本帧护盾是否已把信标附着到 marine (避免每帧重复 SetParent)
+int    g_iX33BeaconEnt[MAXPLAYERS + 1];// 已附着的信标实体引用 (护盾结束时据此解除附着, 不依赖 marine 是否还活着)
+float  g_fX33AttachOrig[MAXPLAYERS + 1][3]; // 附着前信标的地面世界坐标 (护盾结束/阵亡时还原为"掉落的信标")
 
 float g_fLastUse[MAXPLAYERS + 1];   // 手动击退冷却用
 
@@ -232,58 +256,77 @@ public Plugin myinfo = {
 public void OnPluginStart()
 {
     g_cvEnabled = CreateConVar("sm_asrd_repulse_enabled", "1",
-        "启用/禁用范围击退 (0=关 1=开)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+        "Enable/disable area repulse (0=off 1=on)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_cvPublic = CreateConVar("sm_asrd_repulse_public", "1",
-        "允许普通玩家使用 sm_repulse (1=所有人 0=仅管理员)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+        "Allow normal players to use sm_repulse (1=everyone 0=admins only)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_cvRadius = CreateConVar("sm_asrd_repulse_radius", "400",
-        "手动击退作用半径 (游戏单位)", FCVAR_NOTIFY, true, 50.0, true, 3000.0);
+        "Manual repulse radius (game units)", FCVAR_NOTIFY, true, 50.0, true, 3000.0);
     g_cvForce = CreateConVar("sm_asrd_repulse_force", "160",
-        "单次击退向外的总位移 (游戏单位)", FCVAR_NOTIFY, true, 0.0, true, 2000.0);
+        "Total outward displacement per repulse (game units)", FCVAR_NOTIFY, true, 0.0, true, 2000.0);
     g_cvLift = CreateConVar("sm_asrd_repulse_lift", "80",
-        "单次击退向上挑飞高度 (游戏单位)", FCVAR_NOTIFY, true, 0.0, true, 500.0);
+        "Upward lift height per repulse (game units)", FCVAR_NOTIFY, true, 0.0, true, 500.0);
     g_cvPullTime = CreateConVar("sm_asrd_repulse_pull_time", "0.35",
-        "单次击退推进时长/秒 (越大越慢越平滑)", FCVAR_NOTIFY, true, 0.05, true, 3.0);
+        "Repulse push duration in seconds (higher=slower, smoother)", FCVAR_NOTIFY, true, 0.05, true, 3.0);
     g_cvCooldown = CreateConVar("sm_asrd_repulse_cooldown", "0",
-        "手动触发最小间隔秒 (0=无冷却可连按)", FCVAR_NOTIFY, true, 0.0, true, 60.0);
+        "Min interval seconds between manual triggers (0=no cooldown)", FCVAR_NOTIFY, true, 0.0, true, 60.0);
     g_cvAura = CreateConVar("sm_asrd_repulse_aura", "1",
-        "持续斥力护盾 (1=开 0=关)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
-    g_cvAuraRadius = CreateConVar("sm_asrd_repulse_aura_radius", "260",
-        "护盾半径 (游戏单位)", FCVAR_NOTIFY, true, 50.0, true, 3000.0);
+        "Persistent repulsion shield (1=on 0=off)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_cvAuraRadius = CreateConVar("sm_asrd_repulse_aura_radius", "300",
+        "Shield radius (game units)", FCVAR_NOTIFY, true, 50.0, true, 3000.0);
     g_cvAuraMode = CreateConVar("sm_asrd_repulse_aura_mode", "0",
-        "护盾模式 (0=斥力击退 平滑弹开; 1=直接阻挡 钉在圈外)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
-    g_cvAuraPushSpeed = CreateConVar("sm_asrd_repulse_aura_push_speed", "900",
-        "护盾斥力弹开把怪推出界外的速度/单位每秒 (作用于 sm_asrd_repulse_aura_mode 0 的斥力模式), 持续速度外推比分段动画更顺滑", FCVAR_NOTIFY, true, 50.0, true, 2000.0);
+        "Shield mode (0=repel smoothly; 1=block, pin outside)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_cvAuraPushSpeed = CreateConVar("sm_asrd_repulse_aura_push_speed", "1000",
+        "Shield repel speed (units/sec) for mode 0; continuous push is smoother than stepped anim", FCVAR_NOTIFY, true, 50.0, true, 2000.0);
     g_cvX33 = CreateConVar("sm_asrd_repulse_x33", "1",
-        "X-33 威力增强器护盾 (1=开 0=关), 开启后仅 Wildcat/Wolfe (重武兵) 使用 X-33 (asw_weapon_buff_grenade) 时获得限时护盾, 不依赖 sm_asrd_repulse_aura, 护盾方式由 sm_asrd_repulse_aura_mode 决定",
+        "X-33 amplifies shield (1=on 0=off); only Wildcat/Wolfe get timed shield when using X-33, independent of aura; mode set by sm_asrd_repulse_aura_mode",
         FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_cvX33Duration = CreateConVar("sm_asrd_repulse_x33_duration", "15",
-        "每使用一次 X-33 的护盾秒数 (默认 15; 叠加规则: 结束时间以最后一次使用为基准刷新, 只叠时间不叠强度; 增益信标特效的燃烧截止时间每帧同步为护盾结束时间 — 顺带抵消携带信标移动的额外消耗, 并在时长>30 时等效延长信标)",
+        "X-33 shield duration in seconds per use (default 15); refresh end time on each use, stacks time only; beacon FX burn cutoff synced each frame",
         FCVAR_NOTIFY, true, 1.0, true, 600.0);
-    g_cvX33FxRadius = CreateConVar("sm_asrd_repulse_x33_fx_radius", "260",
-        "X-33 护盾特效(水面涟漪那圈光波)的扩散半径/游戏单位 (默认 260; 0=不改, 保持原版 120; 客户端每帧把信标的 m_flRadius 写进粒子控制点 CP1 决定波纹范围, 视觉上最大约扩散到该值的 1.55 倍; 想让波纹边缘正好贴住护盾圈就把这个值设为 护盾半径/1.55)",
+    g_cvX33FxRadius = CreateConVar("sm_asrd_repulse_x33_fx_radius", "200",
+        "X-33 shield FX ripple radius (game units, default 200; 0=keep vanilla 120); client writes m_flRadius to particle CP1 each frame; visual reaches ~1.55x; set to shield_radius/1.55 to align edge",
         FCVAR_NOTIFY, true, 0.0, true, 2000.0);
+    g_cvX33BuffRadius = CreateConVar("sm_asrd_repulse_x33_buff_radius", "0",
+        "X-33 damage buff radius (game units, default 0=keep vanilla 120); server spawns AOE trigger at beacon land using m_flRadius; affects next thrown beacon only",
+        FCVAR_NOTIFY, true, 0.0, true, 3000.0);
+    g_cvX33FxScale = CreateConVar("sm_asrd_repulse_x33_fx_scale", "1.0",
+        "X-33 beacon glow intensity (default 1.0=vanilla; dynamic light radius = value*120*(light/32), ~375*value max; 0=off, FX stops at value<0.01)",
+        FCVAR_NOTIFY, true, 0.0, true, 10.0);
+    g_cvX33Follow = CreateConVar("sm_asrd_repulse_x33_follow", "1",
+        "X-33 beacon attaches to marine and follows (default 1=on; 0=stays on ground); replicates VPK 'arc follow' look: invisible model, only ripple+arcs to nearby teammates; AOE trigger follows too; server-side AttachToMarine, no class limit",
+        FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_cvX33Color = CreateConVar("sm_asrd_repulse_x33_fx_color", "",
+        "X-33 beacon color as 'R G B' (e.g. '0 128 255'); empty=keep vanilla 98 34 16; mirrored to client cvar asw_buffgrenade for glow/dynamic light color",
+        FCVAR_NOTIFY);
+    // 镜像客户端 cvar: 服务器上本来没有 asw_buffgrenade (它定义在 client.dll),
+    // 这里建一个同名 + FCVAR_REPLICATED 的"影子", 改它的值即可把颜色推给客户端
+    g_cvBuffColor = CreateConVar("asw_buffgrenade", "98 34 16",
+        "[mirror of client cvar] X-33 beacon color, driven by sm_asrd_repulse_x33_fx_color; do not edit manually",
+        FCVAR_REPLICATED);
     g_cvX33HudChannel = CreateConVar("sm_asrd_repulse_x33_hud_channel", "4",
-        "X-33 护盾倒计时 HUD 通道 (需避开核弹插件的 5; 若倒计时不显示可换 2/6/7 等通道试验, 无需重编译)",
+        "X-33 shield countdown HUD channel (avoid nuke plugin's 5; try 2/6/7 if hidden; no recompile)",
         FCVAR_NOTIFY, true, 0.0, true, 15.0);
     g_cvX33HudX = CreateConVar("sm_asrd_repulse_x33_hud_x", "-1.0",
-        "X-33 倒计时横向位置 (-1=居中 0=最左 0.9=近最右, 文字从该点向右绘制; 默认 -1 与核弹插件同位置 — 经测试该游戏 x=0.75 右侧位置的 HudText 不渲染, 居中可正常显示; 改完无需重编译)",
+        "X-33 countdown X position (-1=center 0=left 0.9=right); default -1 matches nuke plugin; x=0.75 right side may not render, use center; no recompile",
         FCVAR_NOTIFY, true, -1.0, true, 0.95);
     g_cvX33HudY = CreateConVar("sm_asrd_repulse_x33_hud_y", "0.30",
-        "X-33 倒计时纵向位置 (0=最上 1=最下; 与核弹插件同默认值, 避免重叠可改 0.22 等)",
+        "X-33 countdown Y position (0=top 1=bottom); same default as nuke plugin, change e.g. 0.22 to avoid overlap",
         FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_cvClasses = CreateConVar("sm_asrd_repulse_classes", "",
-        "追加要击退的实体类名 (空格分隔, 空=不追加)", FCVAR_NOTIFY);
+        "Extra entity classes to repulse (space separated, empty=none)", FCVAR_NOTIFY);
     g_cvProjectiles = CreateConVar("sm_asrd_repulse_projectiles", "1",
-        "是否弹开敌方投射物(炮弹), 如 mortarbug 的炮弹 (0=关 1=开)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+        "Repel enemy projectiles like mortar bug shells (0=off 1=on)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_cvProjSpeed = CreateConVar("sm_asrd_repulse_projectile_speed", "400",
-        "弹开投射物的速度 (游戏单位/秒)", FCVAR_NOTIFY, true, 50.0, true, 3000.0);
+        "Projectile repel speed (game units/sec)", FCVAR_NOTIFY, true, 50.0, true, 3000.0);
     g_cvProjClasses = CreateConVar("sm_asrd_repulse_projectile_classes", "",
-        "追加要弹开的敌方投射物类名 (空格分隔, 空=不追加)", FCVAR_NOTIFY);
+        "Extra enemy projectile classes to repel (space separated, empty=none)", FCVAR_NOTIFY);
     g_cvDebug = CreateConVar("sm_asrd_repulse_debug", "0",
-        "调试输出 (0=关 1=开; 1还列出半径内所有实体的真实类名, 便于抓投射物/漏网虫种)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
+        "Debug output (0=off 1=on; lists real class names in radius to catch projectiles/missed aliens)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 
     HookConVarChange(g_cvClasses, OnClassesChanged);
     HookConVarChange(g_cvProjClasses, OnProjClassesChanged);
+    // 颜色改动即时下发客户端 (改 sm_asrd_repulse_x33_fx_color 不用重编译/换图)
+    HookConVarChange(g_cvX33Color, OnX33ColorChanged);
 
     // X-33 使用事件 (游戏原生): 武器源码在创建信标后、扣减 m_iClip1 前触发,
     // 携带 entindex=信标实体 与 marine=marine 实体索引
@@ -433,24 +476,32 @@ void SyncX33Beacons(int marine, float fEnd)
     }
 }
 
-// 放大 / 还原 X-33 信标的特效范围 (那圈像水面涟漪一样向外扩散的光波):
-//   客户端 C_ASW_AOEGrenade_Projectile::UpdatePingEffects 每帧把网络属性
-//   m_flRadius 写进脉冲粒子 buffgrenade_pulse 的控制点 CP1 — 它就是波纹扩散的
-//   半径; 原版值由武器创建信标时传入 (asw_weapon_buff_grenade: flRadius = 120)。
-//   服务器只在信标落地时用 GetEffectRadius() (返回 m_flRadius) 生成一次 AOE
-//   触发盒, 那才是"伤害增益给谁"的判定范围; 所以这里只在 m_bSettled 之后再改:
-//   纯视觉放大, 不会让更远的队友也蹭到伤害加成。
-// fRadius > 0 = 放大 (第一次改写前把原版值记到 g_fX33FxOrig[client]);
-// bRestore   = 还原 (写回 g_fX33FxOrig[client] 后清空记录)。
-void ApplyX33BeaconFxRadius(int marine, int client, float fRadius, bool bRestore)
+// 放大 / 还原 X-33 信标的视觉与范围 (三件事一起做, 只遍历一次信标列表):
+//
+//   ① 涟漪范围 m_flRadius (视觉) — 客户端 C_ASW_AOEGrenade_Projectile 每帧把网络
+//      属性 m_flRadius 写进脉冲粒子 buffgrenade_pulse 的控制点 CP1, 它就是那圈
+//      "水面涟漪"扩散的半径; 原版由武器传入 (asw_weapon_buff_grenade: 120)。
+//   ② 伤害增益范围 (逻辑) — 服务器 AOEGrenadeTouch() 在信标落地那一瞬执行
+//      radius = GetEffectRadius() (返回 m_flRadius) 后 UTIL_SetSize 生成 AOE 触发盒,
+//      此后不再重算。所以"落地前改半径"= 改增益范围, "落地后改半径"= 只改视觉。
+//      两者因此可以同时拥有不同的值 (落地前写 buff_radius, 落地后写 fx_radius)。
+//   ③ 光晕强度 m_flScale — 客户端 ClientThink 里 baseScale = m_flScale,
+//      动态光半径 = baseScale × 120 × (m_fLightRadius / 32); 小于 0.01 时整个
+//      信标特效停摆 (函数直接 return), 因此 0 可当作"关掉光晕"用。
+//
+// 第一次改写前把原版值记到 g_fX33FxOrig / g_fX33ScaleOrig, bRestore 时写回并清空。
+void ApplyX33BeaconFx(int marine, int client, bool bRestore)
 {
     if (marine <= 0 || client <= 0)
         return;
-    if (bRestore && g_fX33FxOrig[client] <= 0.0)
-        return;                       // 从没放大过, 无需还原
 
-    float fTarget = bRestore ? g_fX33FxOrig[client] : fRadius;
-    if (fTarget <= 0.0)
+    float fFxRadius   = g_cvX33FxRadius.FloatValue;     // 0=不改
+    float fBuffRadius = g_cvX33BuffRadius.FloatValue;   // 0=不改
+    float fFxScale    = g_cvX33FxScale.FloatValue;      // <0 表示不改 (当前最小值为 0)
+
+    // 从没改过就无需还原; 放大时直接往下走, 每一项各自判断 (没配的项保持原版,
+    // 且写入前有 != 判断, 值没变就不写, 不会白白改动网络属性)
+    if (bRestore && g_fX33FxOrig[client] <= 0.0 && g_fX33ScaleOrig[client] <= 0.0)
         return;
 
     int ent = -1;
@@ -461,23 +512,183 @@ void ApplyX33BeaconFxRadius(int marine, int client, float fRadius, bool bRestore
         if (!HasEntProp(ent, Prop_Send, "m_hOwnerEntity")
             || GetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity") != marine)
             continue;
-        if (!HasEntProp(ent, Prop_Send, "m_flRadius"))
-            continue;
-        // 还没落地(settle)的信标尚未生成 AOE 触发盒,
-        // 此时改半径会连带扩大伤害增益范围 — 跳过, 等落地后再放大
-        if (HasEntProp(ent, Prop_Send, "m_bSettled")
-            && GetEntProp(ent, Prop_Send, "m_bSettled") == 0)
-            continue;
 
-        float fCur = GetEntPropFloat(ent, Prop_Send, "m_flRadius");
-        if (!bRestore && g_fX33FxOrig[client] <= 0.0)
-            g_fX33FxOrig[client] = fCur;            // 记下原版值, 护盾结束后还原
-        if (fCur != fTarget)
-            SetEntPropFloat(ent, Prop_Send, "m_flRadius", fTarget);
+        bool bHasRadius = HasEntProp(ent, Prop_Send, "m_flRadius");
+        bool bHasScale  = HasEntProp(ent, Prop_Send, "m_flScale");
+
+        // 记下原版值 (只在第一次改写前记, 之后一直用它还原)
+        if (!bRestore)
+        {
+            if (bHasRadius && g_fX33FxOrig[client] <= 0.0)
+                g_fX33FxOrig[client] = GetEntPropFloat(ent, Prop_Send, "m_flRadius");
+            if (bHasScale && g_fX33ScaleOrig[client] <= 0.0)
+                g_fX33ScaleOrig[client] = GetEntPropFloat(ent, Prop_Send, "m_flScale");
+        }
+
+        // ① + ② 半径
+        if (bHasRadius)
+        {
+            bool bSettled = !HasEntProp(ent, Prop_Send, "m_bSettled")
+                || GetEntProp(ent, Prop_Send, "m_bSettled") != 0;
+
+            float fTarget;
+            if (bRestore)
+                fTarget = g_fX33FxOrig[client];                    // 还原原版值
+            else if (!bSettled && fBuffRadius > 0.0)
+                fTarget = fBuffRadius;                             // 落地前 → 决定增益范围
+            else
+                fTarget = fFxRadius;                               // 落地后 → 只改视觉
+
+            if (fTarget > 0.0 && GetEntPropFloat(ent, Prop_Send, "m_flRadius") != fTarget)
+                SetEntPropFloat(ent, Prop_Send, "m_flRadius", fTarget);
+        }
+
+        // ③ 光晕强度
+        if (bHasScale)
+        {
+            float fTarget = bRestore ? g_fX33ScaleOrig[client] : fFxScale;
+            if (fTarget >= 0.0 && GetEntPropFloat(ent, Prop_Send, "m_flScale") != fTarget)
+                SetEntPropFloat(ent, Prop_Send, "m_flScale", fTarget);
+        }
     }
 
     if (bRestore)
+    {
         g_fX33FxOrig[client] = 0.0;
+        g_fX33ScaleOrig[client] = 0.0;
+    }
+}
+
+// 把该 marine 名下已落地的 X-33 信标附着到 marine 身上跟着走 — 复刻 VPK 挑战里
+// X-33 的"电弧跟随"观感 (原生 CASW_BuffGrenade_Projectile::AttachToMarine):
+//   SetParent(marine, "manhack") 让信标跟随移动; 同时把它的 AOE 触发盒
+//   (asw_aoegrenade_touch_trigger, 原生 AttachToMarine 也一起 SetParent) 也挂上,
+//   所以跟随过程中依旧给附近队友加增益、画电弧; 信标模型 SetRenderMode(kRenderNone)
+//   隐形, 只剩涟漪+电弧。
+//   只在 m_bSettled (已落地生成触发盒) 之后做一次; 护盾结束(bAttach=false)时还原:
+//   解除父子关系并把信标放回记录的原位置 (阵亡时变回"掉落的信标"继续增益队友)。
+//   原生实现靠客户端 cvar attach_sw / attach_sw_auto (仅重武兵能捡起携带, 且是
+//   每客户端 USERINFO 服务器改无效) — 这里直接服务端复刻, 不受职业限制, 任何 marine
+//   的护盾都能获得跟随效果。
+void ApplyX33BeaconFollow(int marine, int client, bool bAttach)
+{
+    if (client <= 0)
+        return;
+
+    // ── 护盾结束: 解除附着, 还原信标 ──
+    if (!bAttach)
+    {
+        if (g_bX33Attached[client]
+            && g_iX33BeaconEnt[client] > 0
+            && IsValidEntity(g_iX33BeaconEnt[client]))
+        {
+            int ent = g_iX33BeaconEnt[client];
+
+            // 解除信标本身
+            AcceptEntityInput(ent, "ClearParent");
+            SetEntityRenderMode(ent, RENDER_NORMAL);
+            // 放回附着前的地面位置 (阵亡时即是"掉落的信标")
+            if (g_fX33AttachOrig[client][0] != 0.0
+                || g_fX33AttachOrig[client][1] != 0.0
+                || g_fX33AttachOrig[client][2] != 0.0)
+            {
+                TeleportEntity(ent, g_fX33AttachOrig[client], NULL_VECTOR, NULL_VECTOR);
+            }
+
+            // 解除 AOE 触发盒的父子关系 (它原本是信标子实体, 附着时被一并挂到 marine)
+            int trig = -1;
+            while ((trig = FindEntityByClassname(trig, "asw_aoegrenade_touch_trigger")) != -1)
+            {
+                if (!IsValidEntity(trig))
+                    continue;
+                if (HasEntProp(trig, Prop_Data, "m_pMoveParent")
+                    && GetEntPropEnt(trig, Prop_Data, "m_pMoveParent") == ent)
+                {
+                    AcceptEntityInput(trig, "ClearParent");
+                }
+            }
+        }
+        g_bX33Attached[client] = false;
+        g_iX33BeaconEnt[client] = 0;
+        g_fX33AttachOrig[client][0] = 0.0;
+        g_fX33AttachOrig[client][1] = 0.0;
+        g_fX33AttachOrig[client][2] = 0.0;
+        return;
+    }
+
+    // ── 护盾生效: 仅在开启且尚未附着时做一次 ──
+    if (!g_cvX33Follow.BoolValue || g_bX33Attached[client] || marine <= 0)
+        return;
+
+    int ent = -1;
+    while ((ent = FindEntityByClassname(ent, X33_BEACON_CLASS)) != -1)
+    {
+        if (!IsValidEntity(ent))
+            continue;
+        if (!HasEntProp(ent, Prop_Send, "m_hOwnerEntity")
+            || GetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity") != marine)
+            continue;
+
+        // 必须已落地 (否则还没生成 AOE 触发盒, 附着了也不会给队友加增益/画电弧)
+        bool bSettled = !HasEntProp(ent, Prop_Send, "m_bSettled")
+            || GetEntProp(ent, Prop_Send, "m_bSettled") != 0;
+        if (!bSettled)
+            continue;
+
+        // 记录当前(地面)位置, 护盾结束/阵亡时还原
+        GetEntPropVector(ent, Prop_Send, "m_vecOrigin", g_fX33AttachOrig[client]);
+
+        // 信标 → marine (manhack 挂点), 归零本地原点让特效贴在挂载点
+        SetVariantString("!activator");
+        AcceptEntityInput(ent, "SetParent", marine);
+        SetVariantString("manhack");
+        AcceptEntityInput(ent, "SetParentAttachment", marine);
+        float vZero[3];
+        vZero[0] = vZero[1] = vZero[2] = 0.0;
+        SetEntPropVector(ent, Prop_Data, "m_vecOrigin", vZero);
+        SetEntityRenderMode(ent, RENDER_NONE);   // 信标模型隐形, 只剩涟漪+电弧 (原生 AttachToMarine)
+
+        // AOE 触发盒一并跟到 marine (原生 AttachToMarine 也这么做, 增益/电弧判定照常)
+        int trig = -1;
+        while ((trig = FindEntityByClassname(trig, "asw_aoegrenade_touch_trigger")) != -1)
+        {
+            if (!IsValidEntity(trig))
+                continue;
+            if (HasEntProp(trig, Prop_Data, "m_pMoveParent")
+                && GetEntPropEnt(trig, Prop_Data, "m_pMoveParent") == ent)
+            {
+                SetVariantString("!activator");
+                AcceptEntityInput(trig, "SetParent", marine);
+                SetVariantString("manhack");
+                AcceptEntityInput(trig, "SetParentAttachment", marine);
+                SetEntPropVector(trig, Prop_Data, "m_vecOrigin", vZero);
+            }
+        }
+
+        g_bX33Attached[client] = true;
+        g_iX33BeaconEnt[client] = ent;
+        break;   // 一个 marine 通常只有一个 X-33 信标
+    }
+}
+
+// 下发 X-33 信标颜色: 设置镜像 cvar asw_buffgrenade 的值 (FCVAR_REPLICATED 会自己
+// 同步给客户端), 再对每个在线玩家补一次 SendConVarValue 双保险。
+// 客户端 C_ASW_BuffGrenade_Projectile::GetGrenadeColor() 读的就是这个 cvar。
+void ApplyX33BeaconColor()
+{
+    char sColor[32];
+    g_cvX33Color.GetString(sColor, sizeof(sColor));
+    if (sColor[0] == '\0')
+        return;                        // 空=不改, 保持原版
+
+    g_cvBuffColor.SetString(sColor);
+
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsClientInGame(i) || IsFakeClient(i))
+            continue;
+        SendConVarValue(i, g_cvBuffColor, sColor);
+    }
 }
 
 // ============================================================================
@@ -592,6 +803,10 @@ public void OnMapStart()
         g_iX33HudMode[c] = 0;    // game_text 实体随切图销毁, 重新做模式检测
         g_iX33TextEnt[c] = 0;
         g_fX33FxOrig[c] = 0.0;   // 信标随切图消失, 放大记录一并清掉
+        g_fX33ScaleOrig[c] = 0.0;
+        g_bX33Attached[c] = false;   // 信标随切图消失, 附着状态一并清掉
+        g_iX33BeaconEnt[c] = 0;
+        g_fX33AttachOrig[c][0] = g_fX33AttachOrig[c][1] = g_fX33AttachOrig[c][2] = 0.0;
     }
 
     ParseCustomClasses();
@@ -631,6 +846,26 @@ void ParseCustomClasses()
 public void OnProjClassesChanged(ConVar convar, const char[] oldValue, const char[] newValue)
 {
     ParseProjClasses();
+}
+
+public void OnX33ColorChanged(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+    ApplyX33BeaconColor();
+}
+
+// cfg 全部执行完 (此时 sm_asrd_repulse_x33_fx_color 才是最终值) 再下发一次颜色,
+// 晚进服的玩家在 OnClientPutInServer 里补发
+public void OnConfigsExecuted()
+{
+    ApplyX33BeaconColor();
+}
+
+public void OnClientPutInServer(int client)
+{
+    char sColor[32];
+    g_cvX33Color.GetString(sColor, sizeof(sColor));
+    if (sColor[0] != '\0' && IsClientInGame(client) && !IsFakeClient(client))
+        SendConVarValue(client, g_cvBuffColor, sColor);
 }
 
 void ParseProjClasses()
@@ -1031,11 +1266,11 @@ void ThinkAura()
                 // 保证特效与倒计时同时结束 (Wildcat/Wolfe 才能携带信标, 故尤其明显)
                 SyncX33Beacons(marine, g_fX33End[client]);
 
-                // 特效放大: 把信标的 m_flRadius 调到设定值, 让那圈涟漪扩得更大
-                // (0 = 不动, 保持原版 120)
-                float fFxRadius = g_cvX33FxRadius.FloatValue;
-                if (fFxRadius > 0.0)
-                    ApplyX33BeaconFxRadius(marine, client, fFxRadius, false);
+                // 特效自定义: 涟漪范围 / 增益范围 / 光晕强度 (未配的项保持原版)
+                ApplyX33BeaconFx(marine, client, false);
+
+                // 把信标附着到 marine 身上跟着走 (复刻 VPK 挑战的"电弧跟随"观感)
+                ApplyX33BeaconFollow(marine, client, true);
 
                 // 倒计时显示由 Timer_X33Hud 定时器负责 (与核弹插件一致的发送方式)
             }
@@ -1053,8 +1288,11 @@ void ThinkAura()
                     if (bAlive)
                         SyncX33Beacons(marine, now - 0.1);
 
-                    // 还原信标的原版特效范围 (阵亡时信标掉落按原版继续燃烧, 同样还原)
-                    ApplyX33BeaconFxRadius(marine, client, 0.0, true);
+                    // 还原信标的原版特效参数 (阵亡时信标掉落按原版继续燃烧, 同样还原)
+                    ApplyX33BeaconFx(marine, client, true);
+
+                    // 解除信标附着, 还原为"掉落的信标" (阵亡时变回地面继续增益队友)
+                    ApplyX33BeaconFollow(marine, client, false);
 
                     PrintToChat(client, "\x04[击退]\x01 X-33 力场护盾已失效");
                 }
@@ -1401,6 +1639,10 @@ public void OnClientDisconnect(int client)
     g_fX33End[client] = 0.0;
     g_bX33Active[client] = false;
     g_fX33FxOrig[client] = 0.0;
+    g_fX33ScaleOrig[client] = 0.0;
+    g_bX33Attached[client] = false;
+    g_iX33BeaconEnt[client] = 0;
+    g_fX33AttachOrig[client][0] = g_fX33AttachOrig[client][1] = g_fX33AttachOrig[client][2] = 0.0;
 
     // 清理 game_text 兜底实体: 只有确实创建过(模式2)才清理。
     // 警告: EntRefToEntIndex(0) 返回 0 = worldspawn(世界实体) 且 IsValidEntity(0)

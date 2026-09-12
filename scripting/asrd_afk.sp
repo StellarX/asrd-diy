@@ -1,11 +1,15 @@
 /**
  * ============================================================================
  *  [AS:RD] 挂机检测与踢出 (Auto-AFK Kicker)
- *  版本 1.0.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.1.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ─────────────────────────────────────
  *  检测长时间无任何操作(键盘/鼠标)的玩家, 超时后自动踢出, 并支持
  *  服务器通过 ConVar 动态调整超时时间。
+ *
+ *  踢出后会向全服发送一条全局聊天通知:
+ *    "[挂机检测] 某某玩家因长时间挂机被系统自动踢出"
+ *  可用 sm_asrd_afk_notify 关闭。
  *
  *  判定"操作"的依据:
  *    - 主线: 每游戏帧(OnGameFrame)比较每个玩家的 视角角度(GetClientEyeAngles)
@@ -29,7 +33,8 @@
  *   sm_asrd_afk_warn       踢出前提前多少秒进入警告窗口, 窗口内每秒
  *                          提醒 (0=不提醒), 默认 20
  *   sm_asrd_afk_adm_exempt 是否豁免管理员 (0=不豁免 1=豁免, 默认 0)
- *   sm_asrd_afk_version    插件版本号(只读)
+ *   sm_asrd_afk_notify    踢出后是否向全服发送聊天通知 (0=关 1=开, 默认 1)
+ *   sm_asrd_afk_version   插件版本号(只读)
  *
  *  命令: sm_afk  查看当前超时设置
  *
@@ -45,13 +50,14 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Auto-AFK"
-#define PLUGIN_VERSION "1.0.0"
+#define PLUGIN_VERSION "1.1.0"
 
 ConVar g_cvEnabled;
 ConVar g_cvTimeout;
 ConVar g_cvInterval;
 ConVar g_cvWarn;
 ConVar g_cvAdmExempt;
+ConVar g_cvNotify;
 
 float g_fLastActive[MAXPLAYERS + 1]; // 玩家最后活动时间(游戏时间)
 float g_fLastAng[MAXPLAYERS + 1][3]; // 玩家上帧视角角度
@@ -90,6 +96,8 @@ public void OnPluginStart()
         "[AS:RD] 踢出前提前多少秒进入警告窗口, 窗口内每秒提醒 (0=不提醒), 默认 20");
     g_cvAdmExempt = CreateConVar("sm_asrd_afk_adm_exempt", "0",
         "[AS:RD] 是否豁免管理员 (0=不豁免 1=豁免, 默认 0)");
+    g_cvNotify = CreateConVar("sm_asrd_afk_notify", "1",
+        "[AS:RD] 玩家因挂机被踢出后是否向全服发送聊天通知 (0=关 1=开)");
     CreateConVar("sm_asrd_afk_version", PLUGIN_VERSION,
         "[AS:RD] 挂机检测 插件版本号", FCVAR_NOTIFY);
 
@@ -224,6 +232,21 @@ public void OnGameFrame()
 }
 
 // ============================================================================
+//  全局通知: 玩家因挂机被踢出时向全服广播(受 sm_asrd_afk_notify 控制)
+//  在被踢玩家的客户端断开前调用, 因此他自己也能看到这条消息
+// ============================================================================
+void NotifyAFKKick(const char[] name, float idle, float timeout)
+{
+    if (!g_cvNotify.BoolValue)
+        return;
+
+    PrintToChatAll("\x04[挂机检测]\x01 %s 因长时间挂机(%.0f 秒无操作)被系统自动踢出",
+        name, idle);
+    PrintToServer("[挂机检测] 已踢出挂机玩家 %s (idle %.0fs / %.0fs)",
+        name, idle, timeout);
+}
+
+// ============================================================================
 //  核心: 每一玩家帧回调, 检测键盘/鼠标/使用操作
 //  mouse[2] = 本帧鼠标移动量(两轴), 只要动鼠标即为活动状态
 // ============================================================================
@@ -267,10 +290,10 @@ public Action Timer_AFKCheck(Handle timer)
             {
                 char name[64];
                 GetClientName(client, name, sizeof(name));
+                // 先广播全服通知(此时该玩家尚未断开, 他自己也能收到)
+                NotifyAFKKick(name, diff, timeout);
                 KickClient(client,
                     "长时间未操作(%.0f 秒)被判定挂机, 已被自动踢出, 欢迎重连", timeout);
-                PrintToServer("[挂机检测] 已踢出挂机玩家 %s (idle %.0fs / %.0fs)",
-                    name, diff, timeout);
             }
             else if (g_cvWarn.FloatValue > 0.0 &&
                      (timeout - diff) <= g_cvWarn.FloatValue)
@@ -292,8 +315,10 @@ public Action Timer_AFKCheck(Handle timer)
 public Action Command_AFKStatus(int client, int args)
 {
     ReplyToCommand(client,
-        "[挂机检测] 超时: %.0f 秒 (%.1f 分钟) | 警告提前: %.0f 秒 | 启用: %s",
+        "[挂机检测] 超时: %.0f 秒 (%.1f 分钟) | 警告提前: %.0f 秒 | 全服通知: %s | 启用: %s",
         g_cvTimeout.FloatValue, g_cvTimeout.FloatValue / 60.0,
-        g_cvWarn.FloatValue, g_cvEnabled.BoolValue ? "是" : "否");
+        g_cvWarn.FloatValue,
+        g_cvNotify.BoolValue ? "开" : "关",
+        g_cvEnabled.BoolValue ? "是" : "否");
     return Plugin_Handled;
 }
