@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 积分机制 (Points)
- *  版本 1.15.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.19.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  引入一套全队共享的积分经济:
@@ -61,11 +61,12 @@
  *                        无选项默认 0=机枪; 喷火/冰冻暂不支持);
  *                        /buy 5=补充全部哨戒塔弹药
  *                        (地图上没有哨戒塔时不允许购买, 不扣分)
- *                        /buy 6=增强电锯 (在身边掉落一把, 伤害由
- *                        asrd_chainsaw_turbo 插件的 sm_asrd_chainsaw_dmg_mult 决定)
+ *                        /buy 6 [1|2]=武器箱 (第 6 类):
+ *                          6 1=增强电锯 (伤害由 asrd_chainsaw_turbo 的 sm_asrd_chainsaw_dmg_mult 决定)
+ *                          6 2=守望者脉冲步枪 (由 asrd_watcher_pulse_rifle 掉落, 击杀计积分)
  *   /1 ../5           玩家: 聊天框快捷购买, 与 /buy <编号> **完全等价**且同样能带选项:
  *                        /1 强化等级  /2 核弹  /3 [1-6] 叛变虫群(默认 drone×10)
- *                        /4 [0/1] 哨戒塔箱  /5 补充全部哨戒塔弹药  /6 增强电锯
+ *                        /4 [0/1] 哨戒塔箱  /5 补充全部哨戒塔弹药  /6 [1|2] 武器箱(1=电锯 2=脉冲步枪)
  *                        例: /3 2 = /buy 3 2 (游侠); /4 1 = /buy 4 1 (炮塔)
  *   /nukepub /betraypub /power_up /power_down
  *                     玩家: 聊天框直接调用原功能命令同样扣积分
@@ -81,6 +82,7 @@
  *   sm_asrd_points_sentry_cost 强化哨戒塔价格 (默认 300, 0=不设门槛)
  *   sm_asrd_points_refill_cost 补充全部哨戒塔弹药价格 (默认 500, 0=不设门槛)
  *   sm_asrd_points_chainsaw_cost 增强电锯价格 (默认 300, 0=不设门槛)
+ *   sm_asrd_points_rifle_cost  守望者脉冲步枪价格 (默认 300, 0=不设门槛)
  *   sm_asrd_points_hud        积分显示开关 (0=关 1=开, 默认 1)
  *   sm_asrd_points_hud_channel HUD 通道 (默认 6, 避开 4=哨戒塔/X-33, 5=核弹)
  *   sm_asrd_points_hud_x      横向位置 (默认 0.01 左上角; -1=居中)
@@ -102,7 +104,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Points"
-#define PLUGIN_VERSION "1.18.3"
+#define PLUGIN_VERSION "1.19.0"
 
 // ─── /buy 4 强化哨戒塔可选编号 (哨戒塔插件 sm_sentrydrop 的塔类型; 2喷火/3冰冻暂不支持) ─
 #define BUY_SENTRY_VARIANTS_MAX 1   // 当前支持的最高塔编号 (0=机枪 1=炮塔)
@@ -195,7 +197,8 @@ ConVar g_cvBetrayCost;
 ConVar g_cvPowerCost;
 ConVar g_cvSentryCost;
 ConVar g_cvRefillCost;
-ConVar g_cvChainsawCost;  // /buy 6 增强电锯的积分价格
+ConVar g_cvChainsawCost;  // 第 6 类 武器箱 6 1: 增强电锯的积分价格
+ConVar g_cvRifleCost;     // 第 6 类 武器箱 6 2: 守望者脉冲步枪的积分价格
 ConVar g_cvHud;
 ConVar g_cvHudChannel;
 ConVar g_cvHudX;
@@ -216,7 +219,7 @@ float  g_fJoinHelpAt[MAXPLAYERS + 1];    // 进服购买说明的待发时刻 (G
 public Plugin myinfo = {
     name        = PLUGIN_NAME,
     author      = "jack",
-    description = "AS:RD 全队共享积分: 击杀虫族得分, 积分购买核弹/叛变虫群/强化等级",
+    description = "AS:RD 全队共享积分: 击杀虫族得分, 积分购买核弹/叛变虫群/强化等级/武器箱",
     version     = PLUGIN_VERSION,
     url         = ""
 };
@@ -272,6 +275,11 @@ public void OnPluginStart()
     g_cvChainsawCost = CreateConVar(
         "sm_asrd_points_chainsaw_cost", "300",
         "增强电锯(sm_chainsawdrop)积分价格 (0=不设积分门槛)",
+        FCVAR_NOTIFY, true, 0.0
+    );
+    g_cvRifleCost = CreateConVar(
+        "sm_asrd_points_rifle_cost", "300",
+        "守望者脉冲步枪(sm_watcherdrop)积分价格 (0=不设积分门槛)",
         FCVAR_NOTIFY, true, 0.0
     );
     g_cvHud = CreateConVar(
@@ -464,10 +472,68 @@ int ResolveKillerClient(int attacker)
     if (IsSentryTopClass(cls))
         return GetSentryTopDeployerClient(attacker);
 
+    // 守望者脉冲步枪 (asw_weapon_ar2) 与副武器能量球 (prop_combine_ball):
+    // 这类非常规武器的伤害 attacker 通常是武器/球实体而非 marine, 需先取持有者
+    // (marine) 再解析操控它的玩家, 否则用这把步枪造成的击杀不计分。
+    if (StrEqual(cls, "asw_weapon_ar2", false) || StrEqual(cls, "prop_combine_ball", false))
+        return GetRifleOwnerClient(attacker);
+
     if (!StrEqual(cls, "asw_marine", false) && !IsAlienClass(cls))
         return 0;
 
     return GetCommanderClient(attacker);
+}
+
+// ============================================================================
+//  守望者脉冲步枪 / 能量球的归属解析: 把武器或球实体解析为操控它的玩家
+//   (仅在 ResolveKillerClient 判定 attacker 是 asw_weapon_ar2 / prop_combine_ball 时调用)
+//   归属字段沿用本仓库 asrd_watcher_pulse_rifle 已验证的读法:
+//     m_hOwnerEntity (Send) -> m_hOwner (Data) -> m_hOwnerEntity (Data)
+//   持有者可能是 marine 实体 / 玩家 client / 武器本体(能量球归属直接是武器), 逐个归一化
+// ============================================================================
+int GetRifleOwnerClient(int ent)
+{
+    int owner = -1;
+    if (HasEntProp(ent, Prop_Send, "m_hOwnerEntity"))
+    {
+        owner = GetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity");
+        if (owner > 0 && IsValidEntity(owner))
+            return NormalizeRifleOwner(owner);
+    }
+    if (HasEntProp(ent, Prop_Data, "m_hOwner"))
+    {
+        owner = GetEntPropEnt(ent, Prop_Data, "m_hOwner");
+        if (owner > 0 && IsValidEntity(owner))
+            return NormalizeRifleOwner(owner);
+    }
+    if (HasEntProp(ent, Prop_Data, "m_hOwnerEntity"))
+    {
+        owner = GetEntPropEnt(ent, Prop_Data, "m_hOwnerEntity");
+        if (owner > 0 && IsValidEntity(owner))
+            return NormalizeRifleOwner(owner);
+    }
+    return 0;
+}
+
+// 把持有者实体 (marine / 玩家 client / 武器本体) 归一化为玩家 client (0=无归属)
+int NormalizeRifleOwner(int owner)
+{
+    if (owner <= 0 || !IsValidEntity(owner))
+        return 0;
+
+    if (owner <= MaxClients)
+        return IsUsableClient(owner) ? owner : 0;
+
+    char cls[64];
+    GetEntityClassname(owner, cls, sizeof(cls));
+
+    if (StrEqual(cls, "asw_marine", false))
+        return GetCommanderClient(owner);   // marine -> 操控它的玩家
+
+    if (StrEqual(cls, "asw_weapon_ar2", false))
+        return GetRifleOwnerClient(owner);  // 能量球归属直接是武器本体, 再取武器的持有者
+
+    return 0;
 }
 
 // ============================================================================
@@ -836,9 +902,39 @@ void HandleBuyItem(int client, int iItem, const char[] sOpt)
 
         case 6:
         {
-            // /buy 6 与 /6: 增强电锯 (掉落在身边)
-            PurchaseFromChat(client, "sm_chainsawdrop", "", g_cvChainsawCost,
-                "增强电锯", "sm_asrd_chainsaw_enabled", "sm_asrd_chainsaw_drop_public");
+            // /buy 6 [1|2] 与 /6 [1|2]: 第 6 类 = 武器箱
+            //   6 1 = 增强电锯 (sm_chainsawdrop)
+            //   6 2 = 守望者脉冲步枪 (sm_watcherdrop)
+            int iSub = -1;
+            if (sOpt[0] != '\0')
+            {
+                if (!IsNumericArg(sOpt))
+                {
+                    PrintToChat(client, "\x04[积分]\x01 选项必须是数字: /buy 6 <1|2> (1=增强电锯 2=守望者脉冲步枪)");
+                    return;
+                }
+                iSub = StringToInt(sOpt);
+            }
+
+            switch (iSub)
+            {
+                case 1:
+                {
+                    PurchaseFromChat(client, "sm_chainsawdrop", "", g_cvChainsawCost,
+                        "增强电锯", "sm_asrd_chainsaw_enabled", "sm_asrd_chainsaw_drop_public");
+                }
+                case 2:
+                {
+                    PurchaseFromChat(client, "sm_watcherdrop", "", g_cvRifleCost,
+                        "守望者脉冲步枪", "sm_asrd_watcher_enabled", "sm_asrd_watcher_drop_public");
+                }
+                default:
+                {
+                    PrintToChat(client, "\x04[积分]\x01 第 6 类 武器箱: \x05/buy 6 1\x01 增强电锯 (%d 分)   \x05/buy 6 2\x01 守望者脉冲步枪 (%d 分)",
+                        g_cvChainsawCost.IntValue, g_cvRifleCost.IntValue);
+                    PrintToChat(client, "\x04[积分]\x01 快捷指令: \x05/6 1\x01 电锯   \x05/6 2\x01 脉冲步枪");
+                }
+            }
             return;
         }
 
@@ -1008,9 +1104,10 @@ void ShowBuyHelp(int client)
     PrintToChat(client, "  \x05/buy 3 [1-6]\x01  友军虫群 (%d 分): 1=工蜂 2=蜂群 3=游侠 4=盾甲虫 5=迫击炮虫 6=治疗虫", g_cvBetrayCost.IntValue);
     PrintToChat(client, "  \x05/buy 4 <0/1>\x01  强化哨戒塔箱 (%d 分): 0=机枪 1=炮塔", g_cvSentryCost.IntValue);
     PrintToChat(client, "  \x05/buy 5\x01  补充全部哨戒塔弹药 (%d 分)", g_cvRefillCost.IntValue);
-    PrintToChat(client, "  \x05/buy 6\x01  增强电锯 (%d 分, 掉落在身边)", g_cvChainsawCost.IntValue);
-    PrintToChat(client, "  快捷指令: \x05/1\x01 强化   \x05/2\x01 核弹   \x05/3 [1-6]\x01 虫群   \x05/4 [0/1]\x01 哨戒塔箱   \x05/5\x01 补弹药   \x05/6\x01 增强电锯");
-    PrintToChat(client, "  例: \x05/3 2\x01 = /buy 3 2 (游侠)   \x05/4 1\x01 = /buy 4 1 (炮塔)   \x05/2\x01 = /buy 2 (核弹)");
+    PrintToChat(client, "  \x05/buy 6 1\x01  增强电锯 (%d 分, 掉落在身边)", g_cvChainsawCost.IntValue);
+    PrintToChat(client, "  \x05/buy 6 2\x01  守望者脉冲步枪 (%d 分, 掉落在身边, 击杀计积分)", g_cvRifleCost.IntValue);
+    PrintToChat(client, "  快捷指令: \x05/1\x01 强化   \x05/2\x01 核弹   \x05/3 [1-6]\x01 虫群   \x05/4 [0/1]\x01 哨戒塔箱   \x05/5\x01 补弹药   \x05/6 [1|2]\x01 武器箱(1=电锯 2=脉冲步枪)");
+    PrintToChat(client, "  例: \x05/3 2\x01 = /buy 3 2 (游侠)   \x05/4 1\x01 = /buy 4 1 (炮塔)   \x05/6 2\x01 = /buy 6 2 (脉冲步枪)");
     PrintToChat(client, "  积分: \x05通过击杀虫族获取\x01");
 }
 

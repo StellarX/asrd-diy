@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 陆战队员强化 (Marine Power)
- *  版本 1.3.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.4.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ─────────────────────────────────────
  *  玩家按键实时调大/调小自己的 血量 / 体型 / 近战 / 移速:
@@ -9,6 +9,8 @@
  *                      + 体型 +0.1/级 + 移速同步(随等级) + 近战加成(逐人)
  *    - 缩小(等级 -1~-3): 仅模型变小(0.8/0.6/0.4倍), 血量/近战/移速等属性不变
  *    - 等级0 = 恢复默认(100血 / 1.0倍体型 / 1.0倍移速)
+ *    - **视角高度**: 放大等级每级把玩家相机距离调高 cam_step (默认 150, 世界单位),
+ *      看到的地图更高更远; 缩小等级/0级不变(基准视野, 与游戏原生一致)
  *
  *  近战加成只作用于**普通近战**(徒手/踢击那套, 引擎伤害类型 DMG_CLUB),
  *  按**攻击者本人**的等级取倍率, 逐次命中时叠加。
@@ -42,6 +44,9 @@
  *   sm_asrd_power_melee_enabled  是否启用近战加成 (0/1, 默认 1; 只加成普通近战)
  *   近战倍率(固定): 等级1~5 = x2 / x4 / x8 / x16 / x32 (逐人, 按攻击者本人等级)
  *   sm_asrd_power_debug          调试输出 (默认 0)
+ *   sm_asrd_power_cam_base       视角高度基准相机距离 (默认 412, 与游戏原生一致; 放大等级在此基础上每级 +cam_step)
+ *   sm_asrd_power_cam_step       每放大 1 级增加的相机距离(默认 150, 即视角抬升量; 越大越高越远)
+ *   sm_asrd_power_cam_pitch      相机俯仰角 (默认 60, 30~89; 越小越接近正俯视, 90=正俯视)
  *
  *  ── 实现原理 ───────────────────────────────────────
  *   - 玩家控制的是"指挥官"实体, 真正带血量/模型/移速的是其 m_hInhabiting
@@ -55,6 +60,9 @@
  *   - **绝不改写任何引擎 ConVar**: v1.3.0 起不再触碰 asw_skill_melee_dmg_base/_step
  *     (旧版按全场最高等级全局放大这两个 cvar, 会连带把电锯伤害放大 x32, 故废弃)
  *   - 定时器(1s)重新断言血量/体型/移速, 应对换人/复活, 但不会持续回血
+ *   - 视角高度: 用 SendConVarValue 把 asw_cam_marine_dist 强制下发到客户端(无视
+ *     客户端 sv_cheats, 与 asrd_camheight 同机制); 由放大等级驱动(每级 +cam_step),
+ *     故单独的俯视高度插件无需再加载 —— 两者同时加载会抢写同一 ConVar 互抢。
  *
  *  依赖: SourceMod 1.11+ (核心 API + sdktools + SDKHooks)
  * ============================================================================
@@ -68,7 +76,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Marine Power"
-#define PLUGIN_VERSION "1.3.0"
+#define PLUGIN_VERSION "1.4.0"
 
 // 重新断言周期(秒): 换陆战队员/复活后仍生效, 不回血
 #define REAPPLY_INTERVAL 1.0
@@ -99,6 +107,13 @@ ConVar g_cvShrinkStep;
 ConVar g_cvSpeedEnabled;
 ConVar g_cvSpeedStep;
 ConVar g_cvDebug;
+
+// 视角高度(与俯视高度插件合并): 放大等级每级把相机距离调高 cam_step
+ConVar g_cvCamBase;
+ConVar g_cvCamStep;
+ConVar g_cvCamPitch;
+ConVar g_hCamDist = null;   // 引擎相机 ConVar (AS:RD 海军陆战队相机)
+ConVar g_hCamPitch = null;
 
 // ─── 每玩家状态 ───────────────────────────────────────
 int  g_iLevel[MAXPLAYERS + 1];          // 当前强化等级 0..maxLevel
@@ -204,6 +219,29 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
 
+    // 视角高度(与俯视高度插件合并): 放大等级每级把相机距离调高 cam_step
+    g_cvCamBase = CreateConVar(
+        "sm_asrd_power_cam_base", "412",
+        "视角高度基准相机距离 (游戏原生默认 412; 放大等级在此基础上每级 +cam_step)",
+        FCVAR_NOTIFY, true, 100.0, true, 3000.0
+    );
+    g_cvCamStep = CreateConVar(
+        "sm_asrd_power_cam_step", "150",
+        "每放大 1 级增加的相机距离 (视角抬升量, 世界单位)",
+        FCVAR_NOTIFY, true, 0.0, true, 1000.0
+    );
+    g_cvCamPitch = CreateConVar(
+        "sm_asrd_power_cam_pitch", "60",
+        "相机俯仰角 (30~89; 越小越接近正俯视, 90=正俯视)",
+        FCVAR_NOTIFY, true, 30.0, true, 89.0
+    );
+
+    // 缓存引擎相机 ConVar (AS:RD 海军陆战队相机, 带 cheat+rep 标志)
+    g_hCamDist = FindConVar("asw_cam_marine_dist");
+    g_hCamPitch = FindConVar("asw_cam_marine_pitch");
+    if (g_hCamDist == null || g_hCamPitch == null)
+        LogError("[强化] 未找到引擎相机 ConVar (asw_cam_marine_dist/_pitch), 视角抬升功能不可用; 确认运行在 AS:RD");
+
     // 不生成 cfg: 参数统一使用代码默认值, 避免旧 cfg 覆盖新默认值
 
     // 玩家命令
@@ -253,6 +291,8 @@ public void OnPluginEnd()
         if (IsClientInGame(i) && g_iLevel[i] > 0)
             RestoreMarine(i);
         ResetPlayer(i);
+        if (IsClientInGame(i) && !IsFakeClient(i))
+            ApplyCamera(i);   // 还原视角到基准
     }
     if (g_hReapplyTimer != null)
     {
@@ -271,6 +311,13 @@ public void OnMapStart()
         ResetPlayer(i);
     }
 
+    // 换图后引擎可能把相机 ConVar 重置, 重新下发各玩家基准视角
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (IsClientInGame(i) && !IsFakeClient(i))
+            ApplyCamera(i);
+    }
+
     // 新地图的虫族都要重新挂伤害回调
     HookExistingAliens();
 }
@@ -280,6 +327,13 @@ public void OnClientDisconnect(int client)
     if (g_iLevel[client] > 0)
         RestoreMarine(client);
     ResetPlayer(client);
+}
+
+public void OnClientPutInServer(int client)
+{
+    // 玩家(重)进入服务器时下发其(基准)视角高度; 之后由强化等级驱动抬升
+    if (IsClientInGame(client) && !IsFakeClient(client))
+        ApplyCamera(client);
 }
 
 // ============================================================================
@@ -466,6 +520,35 @@ public Action Cmd_PowerStatus(int client, int args)
 }
 
 // ============================================================================
+//  视角高度: 把某玩家的相机距离强制下发到其客户端
+//    放大等级每级 +cam_step; 缩小/0级回到 base (基准视野, 与游戏原生一致)。
+//    使用 SendConVarValue 走复制通道, 无视客户端 sv_cheats (与 asrd_camheight 同机制)。
+// ============================================================================
+void ApplyCamera(int client)
+{
+    if (g_hCamDist == null || g_hCamPitch == null)
+        return;
+    if (!IsClientInGame(client) || IsFakeClient(client))
+        return;
+
+    int level = g_iLevel[client];
+    if (level < 0)
+        level = 0;   // 缩小等级不抬升视野
+    float fDist = g_cvCamBase.FloatValue + float(level) * g_cvCamStep.FloatValue;
+    float fPitch = g_cvCamPitch.FloatValue;
+
+    char sDist[16], sPitch[16];
+    FormatEx(sDist, sizeof(sDist), "%.0f", fDist);
+    FormatEx(sPitch, sizeof(sPitch), "%.0f", fPitch);
+    SendConVarValue(client, g_hCamDist, sDist);
+    SendConVarValue(client, g_hCamPitch, sPitch);
+
+    if (g_cvDebug.BoolValue)
+        PrintToServer("[强化] %N 视角距离=%.0f (等级 %d, base %.0f + step %.0f x%d)",
+            client, fDist, g_iLevel[client], g_cvCamBase.FloatValue, g_cvCamStep.FloatValue, level);
+}
+
+// ============================================================================
 //  强化应用: 把某玩家的等级写入其 marine 实体
 // ============================================================================
 void ApplyPower(int client, bool refill)
@@ -504,6 +587,9 @@ void ApplyPower(int client, bool refill)
         if (refill || curHp > newMax)
             SetEntProp(marine, Prop_Data, "m_iHealth", newMax);
     }
+
+    // 视角高度: 放大等级每级调高 cam_step, 缩小/0级回到基准
+    ApplyCamera(client);
 
     if (g_cvDebug.BoolValue)
         PrintToServer("[强化] %N L%d: 体型=x%.2f 移速=x%.2f 近战=x%.2f",
@@ -761,9 +847,11 @@ public Action Timer_Reapply(Handle timer)
     {
         for (int i = 1; i <= MaxClients; i++)
         {
-            if (!IsClientInGame(i) || IsFakeClient(i) || g_iLevel[i] == 0)
+            if (!IsClientInGame(i) || IsFakeClient(i))
                 continue;
-            ApplyPower(i, false);
+            if (g_iLevel[i] != 0)
+                ApplyPower(i, false);
+            ApplyCamera(i);   // 视角高度定期重断言(换人/复活/地图重置后仍生效)
         }
     }
     return Plugin_Continue;
