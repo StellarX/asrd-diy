@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 电锯高速旋转 (Chainsaw Turbo)
- *  版本 1.4.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.4.1  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ─────────────────────────────────────
  *  玩家手持电锯 (asw_weapon_chainsaw) 且【按住攻击键】时, 让锯片转得更快:
@@ -32,6 +32,9 @@
  *                              1 = 所有玩家生效
  *   sm_asrd_chainsaw_dmg_mult  增强电锯伤害倍率 (默认 10.0, 1.0=原伤害)
  *                              仅本插件掉落的增强电锯享受, 玩家自带电锯不受影响
+ *   sm_asrd_chainsaw_dmg_entities  倍率生效范围 (默认 1)
+ *                              1 = 所有实体 (门/箱子/可破坏场景物都能被锯)
+ *                              0 = 仅虫族 (缩小挂钩面, 减少回调开销)
  *   sm_asrd_chainsaw_drop_public 允许玩家用 sm_chainsawdrop 自己掉电锯 (默认 1)
  *   ── 增强电锯染色 (默认纯白, 见下) ─────────────────────
  *   sm_asrd_chainsaw_color_r/g/b  掉落电锯的染色 RGB (各 0~255, 默认 255 255 255 = 纯白)
@@ -46,8 +49,9 @@
  *   - OnGameFrame 里检测玩家是否按住攻击键 (GetClientButtons & IN_ATTACK):
  *       按住 → 每帧改写 m_flPlaybackRate 加速锯片动画
  *       松开 → 恢复 m_flPlaybackRate = 1.0 (默认速度)
- *   - 旋转+开火+音效由游戏原生接管; 仅对"本插件掉落的增强电锯"额外挂
- *     OnTakeDamage 放大其 DMG_SLASH 伤害, 玩家自带的电锯不挂此逻辑, 伤害与属性完全不变
+ *   - 旋转+开火+音效由游戏原生接管; 仅对"本插件掉落的增强电锯"额外放大其 DMG_SLASH 伤害,
+ *     玩家自带的电锯不享受此逻辑, 伤害与属性完全不变。伤害倍率默认对所有实体生效
+ *     (门/箱子/可破坏场景物也能被锯穿, 见 sm_asrd_chainsaw_dmg_entities), 设 0 则缩回仅虫族。
  *
  *  依赖: SourceMod 1.11+ (不依赖任何扩展, 只用核心 API + sdktools)
  * ============================================================================
@@ -61,7 +65,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Chainsaw Turbo"
-#define PLUGIN_VERSION "1.4.0"
+#define PLUGIN_VERSION "1.4.1"
 
 // 电锯实体类名 (游戏源码: asw_weapon_chainsaw_shared.cpp)
 #define CHAINSAW_CLASSNAME "asw_weapon_chainsaw"
@@ -95,6 +99,7 @@ ConVar g_cvSpeed;
 ConVar g_cvPublic;
 ConVar g_cvDebug;
 ConVar g_cvDmgMult;     // 增强电锯伤害倍率 (仅本插件掉落的电锯享受; 玩家自带电锯保持原伤害)
+ConVar g_cvDmgEntities; // 对哪些实体生效: 0=仅虫族 1=所有实体(门/箱子/场景物等, 默认)
 ConVar g_cvDropPublic;  // 普通玩家能否用 sm_chainsawdrop 自己掉电锯
 ConVar g_cvColorR;      // 增强电锯染色 R (0~255)
 ConVar g_cvColorG;      // 增强电锯染色 G (0~255)
@@ -115,6 +120,9 @@ bool  g_bLastAttack[MAXPLAYERS + 1];    // 上一次的开火状态 (调试用)
 // 玩家自己携带进入的电锯永远为 false, 保持原伤害与属性。索引即实体编号。
 bool  g_bEnhancedChainsaw[2049];
 
+// 已对 OnTakeDamage 挂钩的实体索引 (去重, 避免重复挂钩 / 换图后重复扫)
+bool  g_bDmgHooked[2049];
+
 // ============================================================================
 //  插件信息
 // ============================================================================
@@ -133,71 +141,76 @@ public void OnPluginStart()
 {
     g_cvEnabled = CreateConVar(
         "sm_asrd_chainsaw_enabled", "1",
-        "启用/禁用电锯高速旋转 (0=关 1=开)",
+        "Enable/disable chainsaw turbo (0=off 1=on)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
     g_cvSpeed = CreateConVar(
         "sm_asrd_chainsaw_speed", "3.0",
-        "锯片旋转速度倍率 (1.0=默认, 3.0=快3倍; 上限 12.0 是引擎网络同步上限)",
+        "Blade spin speed multiplier (1.0=default, 3.0=3x; 12.0 is net-sync cap)",
         FCVAR_NOTIFY, true, 1.0, true, 12.0
     );
     g_cvPublic = CreateConVar(
         "sm_asrd_chainsaw_public", "0",
-        "是否对普通玩家生效 (0=仅管理员生效 1=所有玩家生效)",
+        "Apply to normal players (0=admins only 1=everyone)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
     g_cvDebug = CreateConVar(
         "sm_asrd_chainsaw_debug", "0",
-        "调试模式 (向服务器控制台输出检测日志)",
+        "Debug mode (log detection to server console)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
     g_cvDmgMult = CreateConVar(
         "sm_asrd_chainsaw_dmg_mult", "10.0",
-        "增强电锯伤害倍率 (1.0=原始伤害; 仅本插件掉落的增强电锯享受, 只放大其 DMG_SLASH 伤害; 玩家自带电锯不受影响)",
+        "Enhanced chainsaw damage multiplier (1.0=normal; only this plugin's dropped chainsaws, only DMG_SLASH; player-brought ones unaffected)",
         FCVAR_NOTIFY, true, 0.01, true, 100.0
     );
     g_cvDropPublic = CreateConVar(
         "sm_asrd_chainsaw_drop_public", "1",
-        "普通玩家能否用 sm_chainsawdrop 自己掉一把电锯在身边 (0=仅管理员 sm_chainsaw_drop)",
+        "Allow players to drop an enhanced chainsaw on themselves (0=admins only via sm_chainsaw_drop)",
+        FCVAR_NOTIFY, true, 0.0, true, 1.0
+    );
+    g_cvDmgEntities = CreateConVar(
+        "sm_asrd_chainsaw_dmg_entities", "1",
+        "Entities that take the damage multiplier (0=aliens only 1=all: doors/crates/breakables too)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
 
     // ── 增强电锯染色 (可用 sm_chainsaw_color 命令一键改) ────────────────
     g_cvColorR = CreateConVar(
         "sm_asrd_chainsaw_color_r", "255",
-        "增强电锯染色 - 红 (0~255)",
+        "Enhanced chainsaw tint - Red (0~255)",
         FCVAR_NOTIFY, true, 0.0, true, 255.0
     );
     g_cvColorG = CreateConVar(
         "sm_asrd_chainsaw_color_g", "255",
-        "增强电锯染色 - 绿 (0~255)",
+        "Enhanced chainsaw tint - Green (0~255)",
         FCVAR_NOTIFY, true, 0.0, true, 255.0
     );
     g_cvColorB = CreateConVar(
         "sm_asrd_chainsaw_color_b", "255",
-        "增强电锯染色 - 蓝 (0~255)",
+        "Enhanced chainsaw tint - Blue (0~255)",
         FCVAR_NOTIFY, true, 0.0, true, 255.0
     );
     g_cvColorA = CreateConVar(
         "sm_asrd_chainsaw_color_a", "255",
-        "增强电锯染色 - 透明度 (0~255, 255=完全不透明, 调低有通透发光感)",
+        "Enhanced chainsaw tint - Alpha (0~255, 255=opaque, lower=translucent glow)",
         FCVAR_NOTIFY, true, 0.0, true, 255.0
     );
     g_cvRainbow = CreateConVar(
         "sm_asrd_chainsaw_rainbow", "0",
-        "增强电锯彩虹循环染色 (0=关 1=开; 开启时忽略 color_r/g/b, 颜色随时间自动循环)",
+        "Rainbow cycling tint (0=off 1=on; ignores color_r/g/b while on)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
     g_cvRainbowSpeed = CreateConVar(
         "sm_asrd_chainsaw_rainbow_speed", "1.0",
-        "彩虹循环速度倍率 (1.0=默认, 越大变越快)",
+        "Rainbow cycle speed multiplier (1.0=default)",
         FCVAR_NOTIFY, true, 0.05, true, 10.0
     );
 
     RegAdminCmd("sm_chainsaw_drop",     Command_ChainsawDrop,     ADMFLAG_GENERIC, "管理员给指定玩家(或自己)在身边掉一把增强电锯");
     RegConsoleCmd("sm_chainsawdrop",    Command_ChainsawDropPublic, "在自己身边掉一把增强电锯 (受 sm_asrd_chainsaw_drop_public 限制)");
 
-    HookExistingAliens();
+    HookExistingEntities();
 
     // 自动保存/读取配置到 cfg/sourcemod/asrd_chainsaw_turbo.cfg
     AutoExecConfig(true, "asrd_chainsaw_turbo");
@@ -219,6 +232,11 @@ public void OnMapStart()
         g_bLastHolding[i] = false;
         g_bLastAttack[i]  = false;
     }
+
+    // 换图后实体索引可能复用, 先清挂钩标记, 再横扫已存在的实体 (门/箱子等地图静态物)
+    for (int i = 0; i < sizeof(g_bDmgHooked); i++)
+        g_bDmgHooked[i] = false;
+    HookExistingEntities();
 }
 
 public void OnClientDisconnected(int client)
@@ -391,6 +409,10 @@ public Action Command_ChainsawStatus(int client, int args)
     PrintToConsole(client, "启用: %s | 转速倍率: x%.1f",
         g_cvEnabled.BoolValue ? "开" : "关", g_cvSpeed.FloatValue);
 
+    PrintToConsole(client, "增强电锯伤害倍率: x%.1f | 生效范围: %s",
+        g_cvDmgMult.FloatValue,
+        g_cvDmgEntities.BoolValue ? "所有实体(含门/箱/场景物)" : "仅虫族");
+
     int cR, cG, cB, cA;
     GetEnhancedColor(GetGameTime(), cR, cG, cB, cA);
     PrintToConsole(client, "增强电锯染色: %d %d %d (透明度 %d) | 彩虹模式: %s (x%.1f)",
@@ -446,7 +468,8 @@ char g_sAlienClasses[][] =
 };
 
 // ============================================================================
-//  电锯伤害倍率 (管理员可调): 挂在虫族 victim 侧, 只对电锯(DMG_SLASH)生效
+//  电锯伤害倍率 (管理员可调): 挂在任意被害实体侧, 只对电锯(DMG_SLASH)生效
+//  (默认对所有实体挂钩, 门/箱子/可破坏场景物都能被锯; sm_asrd_chainsaw_dmg_entities=0 缩回仅虫族)
 // ============================================================================
 public Action OnChainsawDamaged(int victim, int &attacker, int &inflictor,
     float &damage, int &damagetype, int &weapon,
@@ -484,19 +507,38 @@ public Action OnChainsawDamaged(int victim, int &attacker, int &inflictor,
 }
 
 // ============================================================================
-//  虫族伤害回调挂钩: 新虫族生成时补挂 + 地图开始时横扫已有虫族
+//  电锯伤害回调挂钩
+//  - 默认对所有实体挂钩 (含门/箱子/可破坏场景物), 让增强电锯的 DMG_SLASH 也能锯它们;
+//    sm_asrd_chainsaw_dmg_entities=0 时回退为"仅虫族", 缩小挂钩面以减少回调开销。
+//  - 玩家(客户端 1~MaxClients)不挂: 团队友军友伤一般关闭, 且避免把电锯用于友军。
 // ============================================================================
 public void OnEntityCreated(int entity, const char[] classname)
 {
-    if (IsAlienClass(classname))
-        SDKHookEx(entity, SDKHook_OnTakeDamage, OnChainsawDamaged);
+    if (entity <= MaxClients)
+        return;
+
+    if (g_cvDmgEntities.BoolValue || IsAlienClass(classname))
+        TryHookDamage(entity);
 }
 
-// 实体销毁时清除增强标记, 避免索引复用把玩家自带电锯误判为增强电锯
+// 实体销毁时清除增强标记与挂钩标记, 避免索引复用把玩家自带电锯误判为增强电锯
 public void OnEntityDestroyed(int entity)
 {
     if (entity >= 0 && entity < sizeof(g_bEnhancedChainsaw))
         g_bEnhancedChainsaw[entity] = false;
+    if (entity >= 0 && entity < sizeof(g_bDmgHooked))
+        g_bDmgHooked[entity] = false;
+}
+
+// 对实体挂 OnTakeDamage, 用 g_bDmgHooked 去重 (实体复用同一索引时不会重复挂)
+void TryHookDamage(int entity)
+{
+    if (entity <= MaxClients || entity >= sizeof(g_bDmgHooked))
+        return;
+    if (g_bDmgHooked[entity] || !IsValidEntity(entity))
+        return;
+    g_bDmgHooked[entity] = true;
+    SDKHookEx(entity, SDKHook_OnTakeDamage, OnChainsawDamaged);
 }
 
 bool IsAlienClass(const char[] classname)
@@ -509,13 +551,22 @@ bool IsAlienClass(const char[] classname)
     return false;
 }
 
-void HookExistingAliens()
+// 地图开始时横扫已存在的实体并补挂 (门等地图静态实体在插件加载前就生成了, 必须扫一次)
+void HookExistingEntities()
 {
-    for (int c = 0; c < sizeof(g_sAlienClasses); c++)
+    if (g_cvDmgEntities.BoolValue)
     {
-        int ent = -1;
-        while ((ent = FindEntityByClassname(ent, g_sAlienClasses[c])) != -1)
-            SDKHookEx(ent, SDKHook_OnTakeDamage, OnChainsawDamaged);
+        for (int i = MaxClients + 1; i < GetMaxEntities(); i++)
+            TryHookDamage(i);
+    }
+    else
+    {
+        for (int c = 0; c < sizeof(g_sAlienClasses); c++)
+        {
+            int ent = -1;
+            while ((ent = FindEntityByClassname(ent, g_sAlienClasses[c])) != -1)
+                TryHookDamage(ent);
+        }
     }
 }
 
