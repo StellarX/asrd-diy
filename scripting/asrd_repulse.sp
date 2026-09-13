@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 范围击退 (Repulse)
- *  版本 1.14.0  |  (1.14.0: ① 玩家翻滚不再能钻入护盾(位置硬钳制); ② 新增"挡子弹"开关 — 护盾期间免疫他人枪械子弹; ③ 自己打出的炮弹永不被自己的盾影响)  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.14.1  |  (1.14.1: 挡子弹补齐 AS:RD 全部枪械弹药类型 — 修复导轨步枪(DMG_SONIC)等打穿护盾)  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  1. 手动击退: 按绑定键以自己为中心, 把周围虫族沿径向往外推开。
@@ -95,8 +95,11 @@
  *   sm_asrd_repulse_prop_speed     扩展实体中"地图道具"的推出速度 (默认 400 单位/秒)
  *   sm_asrd_repulse_prop_classes   额外要推动的地图道具类名 (空格分隔, 空=只用内置清单)
  *   sm_asrd_repulse_block_bullets  护盾挡子弹 (默认 0=关闭; 1=护盾期间该 marine 免疫
- *                                  他人打来的枪械子弹(瞬发射线 DMG_BULLET/BUCKSHOT);
- *                                  自己射出的子弹不受影响; 实体弹药(榴弹/火箭)另有炮弹逻辑处理)
+ *                                  他人打来的"枪械类"伤害 — 覆盖 AS:RD 全部枪械弹药:
+ *                                  实弹(BULLET/BUCKSHOT)/导轨步枪(SONIC)/采矿激光(ENERGYBEAM)/
+ *                                  电枪(SHOCK)/飞镖枪(DISSOLVE)/冷冻(COLD);
+ *                                  不挡近战(锯)、火焰、爆炸(爆炸走炮弹逻辑);
+ *                                  自己射出的子弹不受影响)
  *
  *   sm_asrd_repulse_x33            X-33 威力增强器护盾 (默认 1): 仅 Wildcat/Wolfe (重武兵)
  *                                  使用 X-33 时获得限时护盾; 不依赖 sm_asrd_repulse_aura,
@@ -134,7 +137,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Area Repulse"
-#define PLUGIN_VERSION "1.14.0"
+#define PLUGIN_VERSION "1.14.1"
 
 // ─── 平滑推进动画池 (手动击退用) ──
 #define MAX_PUSH 512
@@ -358,7 +361,7 @@ public void OnPluginStart()
     g_cvPropClasses = CreateConVar("sm_asrd_repulse_prop_classes", "",
         "Extra map prop classes to push in extended mode (space separated, empty=none)", FCVAR_NOTIFY);
     g_cvBlockBullets = CreateConVar("sm_asrd_repulse_block_bullets", "0",
-        "Shield blocks incoming gunfire (0=off 1=on, default 0): while a player's shield (aura or X-33) is active, that marine takes no bullet/buckshot damage from anyone but itself; hitscan only, own outgoing shots unaffected; toggle at runtime with sm_repulseblock",
+        "Shield blocks incoming gunfire (0=off 1=on, default 0): while a player's shield (aura or X-33) is active, that marine takes no damage from any weapon/sentry shot - covers all AS:RD gun ammo types (BULLET/BUCKSHOT/SONIC/ENERGYBEAM/SHOCK/DISSOLVE/COLD); melee, fire and explosives are NOT blocked; own outgoing shots unaffected; toggle at runtime with sm_repulseblock",
         FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_cvX33 = CreateConVar("sm_asrd_repulse_x33", "1",
         "X-33 amplifies shield (1=on 0=off); only Wildcat/Wolfe get timed shield when using X-33, independent of aura; mode set by sm_asrd_repulse_aura_mode",
@@ -1729,8 +1732,17 @@ public Action OnTakeDamage_Marine(int victim, int &attacker, int &inflictor, flo
     if (!g_cvBlockBullets.BoolValue)
         return Plugin_Continue;
 
-    // 只挡枪械子弹类 (瞬发射线)
-    if (!(damagetype & (DMG_BULLET | DMG_BUCKSHOT)))
+    // 覆盖 AS:RD 全部"枪械类"弹药的伤害类型 (依据 asw_gamerules.cpp 的 AddAmmoType 表):
+    //   DMG_BULLET     步枪ASW_R/自动枪ASW_AG/手枪ASW_P/PDW/重步ASW_HR/医疗步枪/连发ASW_R_BURST...
+    //   DMG_BUCKSHOT   霰弹ASW_SG/突击霰弹ASW_ASG/毁灭者ASW_DEVASTATOR
+    //   DMG_SONIC      导轨步枪ASW_RG (本次修复的类型) / 重步榴弹ASW_HR_G / 信号弹
+    //   DMG_ENERGYBEAM 采矿激光ASW_ML
+    //   DMG_SHOCK      电枪ASW_TG
+    //   DMG_DISSOLVE   飞镖枪ASW_FLECHETTE
+    //   DMG_SLOWBURN   即 AS:RD 的 DMG_COLD (冷冻类, asw_shareddefs.h 别名)
+    // 不挡: 近战(锯 DMG_SLASH)、火焰(DMG_BURN/DMG_DIRECT)、爆炸(DMG_BLAST, 由炮弹逻辑处理)、毒气
+    if (!(damagetype & (DMG_BULLET | DMG_BUCKSHOT | DMG_SONIC | DMG_ENERGYBEAM
+                        | DMG_SHOCK | DMG_DISSOLVE | DMG_SLOWBURN)))
         return Plugin_Continue;
 
     // 自己打自己不管
