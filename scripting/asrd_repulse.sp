@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 范围击退 (Repulse)
- *  版本 1.10.1  |  (1.10.1: cfg 描述改 ASCII 英文, 修复中文在 AutoExecConfig 下编码损坏导致打不开)  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.14.0  |  (1.14.0: ① 玩家翻滚不再能钻入护盾(位置硬钳制); ② 新增"挡子弹"开关 — 护盾期间免疫他人枪械子弹; ③ 自己打出的炮弹永不被自己的盾影响)  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  1. 手动击退: 按绑定键以自己为中心, 把周围虫族沿径向往外推开。
@@ -59,6 +59,17 @@
  *   sm_repulseaura    [管理员] 给指定玩家永久开/关护盾 (特权):
  *                     sm_repulseaura [玩家] [on|off|1|0]
  *                     (无玩家=自己, 无状态=切换; 需 sm_asrd_repulse_aura 1)
+ *   sm_repulseplayers [管理员] 开/关"斥力/击退对玩家生效" (默认关):
+ *                     sm_repulseplayers [on|off|1|0] (无参数=切换)
+ *                     = 直接改 ConVar sm_asrd_repulse_push_players
+ *   sm_repulseextra   [管理员] 开/关"扩展实体生效" (默认关):
+ *                     sm_repulseextra [on|off|1|0] (无参数=切换)
+ *                     = 直接改 ConVar sm_asrd_repulse_extra
+ *                     (开启后护盾/击退也作用于: 任意炮弹(不分阵营) + 地图道具: 箱/桶/门等 + 载具)
+ *   sm_repulseblock   [管理员] 开/关"护盾挡子弹" (默认关):
+ *                     sm_repulseblock [on|off|1|0] (无参数=切换)
+ *                     = 直接改 ConVar sm_asrd_repulse_block_bullets
+ *                     (护盾期间免疫他人打来的枪械子弹; 自己射出的子弹不受影响)
  *
  *  ── 常用 ConVar (自动生成 cfg/sourcemod/asrd_repulse.cfg) ──
  *   sm_asrd_repulse_enabled        总开关 (默认 1)
@@ -73,6 +84,19 @@
  *   sm_asrd_repulse_aura_radius    护盾半径/游戏单位 (默认 300)
  *   sm_asrd_repulse_aura_mode      护盾模式 (默认 0: 0=斥力击退平滑弹开; 1=直接阻挡钉在圈外)
  *   sm_asrd_repulse_aura_push_speed 护盾斥力弹开怪的速度/单位每秒 (默认 1000; 持续速度外推, 顺滑不卡)
+ *   sm_asrd_repulse_push_players   斥力/击退是否对玩家也生效 (默认 0=关闭; 1=把范围内的
+ *                                  玩家陆战队员也推开; 手动击退与护盾斥力都生效; 施法者自己不会被推)
+ *   sm_asrd_repulse_extra          扩展实体总开关 (默认 0=关闭; 1=额外作用于:
+ *                                  ① 任意炮弹——不分阵营, 一律用速度弹开, 永不删除;
+ *                                  ② 地图可推动道具——箱子/油桶/门/物理块等(尽量多);
+ *                                  ③ 载具——asw_vehicle_jeep 及 prop_vehicle_* 系列
+ *                                     (asw_vehicle / prop_vehicle 前缀), 给速度推开;
+ *                                  手动击退与护盾都生效; 推速见 prop_speed, 道具可加 prop_classes)
+ *   sm_asrd_repulse_prop_speed     扩展实体中"地图道具"的推出速度 (默认 400 单位/秒)
+ *   sm_asrd_repulse_prop_classes   额外要推动的地图道具类名 (空格分隔, 空=只用内置清单)
+ *   sm_asrd_repulse_block_bullets  护盾挡子弹 (默认 0=关闭; 1=护盾期间该 marine 免疫
+ *                                  他人打来的枪械子弹(瞬发射线 DMG_BULLET/BUCKSHOT);
+ *                                  自己射出的子弹不受影响; 实体弹药(榴弹/火箭)另有炮弹逻辑处理)
  *
  *   sm_asrd_repulse_x33            X-33 威力增强器护盾 (默认 1): 仅 Wildcat/Wolfe (重武兵)
  *                                  使用 X-33 时获得限时护盾; 不依赖 sm_asrd_repulse_aura,
@@ -104,17 +128,19 @@
 #include <sourcemod>
 #include <sdktools>
 #include <sdktools_trace>
+#include <sdkhooks>
 
 #pragma semicolon 1
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Area Repulse"
-#define PLUGIN_VERSION "1.10.1"
+#define PLUGIN_VERSION "1.14.0"
 
 // ─── 平滑推进动画池 (手动击退用) ──
 #define MAX_PUSH 512
 #define MAX_CUSTOM_CLASSES 32
 #define MAX_PROJ_CLASSES 32
+#define MAX_PROP_CLASSES 32
 int    g_iPushEnt[MAX_PUSH];
 float  g_fPushSrc[MAX_PUSH][3];
 float  g_fPushDst[MAX_PUSH][3];
@@ -126,6 +152,7 @@ bool   g_bAnyPushActive;           // 是否有任意推进动画在跑, 用于�
 float  g_fLastAuraLog;            // 护盾汇总日志节流
 float  g_fLastAuraDump;           // 护盾类名点名节流
 float  g_fLastProjLog;            // 投射物 owner 日志节流
+float  g_fLastExtraSweep[MAXPLAYERS + 1]; // 扩展实体全图扫描节流 (每玩家)
 
 // ─── 敌方投射物清单 (用速度弹开, 不用 teleport) ──
 // asw_mortarbug_shell = mortarbug(迫击炮虫)的炮弹 (护盾模式下也只用速度弹开, 不删除)
@@ -144,6 +171,40 @@ char g_sBuiltinProjClasses[][] =
 };
 char g_sProjClasses[MAX_PROJ_CLASSES][64];
 int  g_iProjClassCount;
+
+// ─── 扩展实体(任意炮弹/地图道具)用的匹配清单 ──
+// 投射物类名关键字: 命中任意一个即视为"炮弹"(不分阵营)
+char g_sProjKeywords[][] =
+{
+    "grenade", "missile", "shell", "spit", "bolt", "rocket", "projectile",
+    "ball", "spike", "acid", "canister", "flare", "debris"
+};
+// 可推动地图道具的类名前缀 (命中开头即视为道具)
+char g_sPropPrefixes[][] =
+{
+    "prop_physics", "func_physbox", "prop_door", "func_door",
+    "asw_barrel", "prop_barrel", "func_movelinear", "func_rotating",
+    "prop_ragdoll"
+};
+// 载具类名前缀: AS:RD 载具 asw_vehicle_jeep (server.dll 已编译, 见 iasw_vehicle.h)
+// + HL2 系载具兜底 (prop_vehicle_jeep/airboat/apc/driveable)
+char g_sVehiclePrefixes[][] =
+{
+    "asw_vehicle",
+    "prop_vehicle"
+};
+// 扩展实体一律排除的类名前缀 (任务关键/无关/由其它逻辑处理)
+char g_sExtraDenyPrefix[][] =
+{
+    "player", "asw_marine", "npc_", "asw_drone", "asw_parasite", "asw_boomer",
+    "asw_buzzer", "asw_harvester", "asw_mortarbug", "asw_ranger", "asw_shieldbug",
+    "asw_grub", "asw_queen", "asw_mender", "asw_shaman", "asw_xenomite", "asw_antlion",
+    "asw_egg", "asw_pickup", "asw_weapon", "asw_buffgrenade", "asw_aoegrenade",
+    "asw_objective", "obj_", "trigger_", "logic_", "env_", "info_", "light",
+    "point_", "filter_", "math_", "game_", "soundent", "worldspawn", "predicted_",
+    "water_", "sky_", "shadow_", "func_brush", "func_illusionary", "func_areap",
+    "func_wall", "func_tracktrain"
+};
 
 // ─── 内置怪物实体类名清单 ──
 // asw_drone_antlion 等 asw_* 虫族 + npc_antlionguard 系列 (RD 的蚁狮用 npc_ 前缀!)
@@ -181,6 +242,10 @@ char g_sAlienClasses[][] =
 char g_sCustomClasses[MAX_CUSTOM_CLASSES][64];
 int  g_iCustomClassCount;
 
+// 扩展实体模式下, 管理员可追加的"地图道具"类名
+char g_sPropClasses[MAX_PROP_CLASSES][64];
+int  g_iPropClassCount;
+
 // ─── ConVar 句柄 ─────────────────────────────────────────
 ConVar g_cvEnabled;
 ConVar g_cvPublic;
@@ -206,6 +271,11 @@ ConVar g_cvProjSpeed;
 ConVar g_cvProjClasses;
 ConVar g_cvDebug;
 ConVar g_cvAuraPushSpeed;
+ConVar g_cvPushPlayers;
+ConVar g_cvExtra;
+ConVar g_cvPropSpeed;
+ConVar g_cvPropClasses;
+ConVar g_cvBlockBullets;
 ConVar g_cvX33HudChannel;
 ConVar g_cvX33HudX;
 ConVar g_cvX33HudY;
@@ -277,6 +347,19 @@ public void OnPluginStart()
         "Shield mode (0=repel smoothly; 1=block, pin outside)", FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_cvAuraPushSpeed = CreateConVar("sm_asrd_repulse_aura_push_speed", "1000",
         "Shield repel speed (units/sec) for mode 0; continuous push is smoother than stepped anim", FCVAR_NOTIFY, true, 50.0, true, 2000.0);
+    g_cvPushPlayers = CreateConVar("sm_asrd_repulse_push_players", "0",
+        "Also repel/knock back player-controlled marines inside the radius (0=off 1=on, default 0); applies to manual repulse and shield; caster's own marine is never pushed; toggle at runtime with sm_repulseplayers",
+        FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_cvExtra = CreateConVar("sm_asrd_repulse_extra", "0",
+        "Extend repulse/shield to more entities (0=off 1=on, default 0): also affects ALL projectiles (any faction, pushed never deleted) and map props (crates/barrels/doors/physboxes); applies to manual repulse and shield; toggle at runtime with sm_repulseextra",
+        FCVAR_NOTIFY, true, 0.0, true, 1.0);
+    g_cvPropSpeed = CreateConVar("sm_asrd_repulse_prop_speed", "400",
+        "Push speed for map props in extended mode (game units/sec)", FCVAR_NOTIFY, true, 50.0, true, 3000.0);
+    g_cvPropClasses = CreateConVar("sm_asrd_repulse_prop_classes", "",
+        "Extra map prop classes to push in extended mode (space separated, empty=none)", FCVAR_NOTIFY);
+    g_cvBlockBullets = CreateConVar("sm_asrd_repulse_block_bullets", "0",
+        "Shield blocks incoming gunfire (0=off 1=on, default 0): while a player's shield (aura or X-33) is active, that marine takes no bullet/buckshot damage from anyone but itself; hitscan only, own outgoing shots unaffected; toggle at runtime with sm_repulseblock",
+        FCVAR_NOTIFY, true, 0.0, true, 1.0);
     g_cvX33 = CreateConVar("sm_asrd_repulse_x33", "1",
         "X-33 amplifies shield (1=on 0=off); only Wildcat/Wolfe get timed shield when using X-33, independent of aura; mode set by sm_asrd_repulse_aura_mode",
         FCVAR_NOTIFY, true, 0.0, true, 1.0);
@@ -325,6 +408,7 @@ public void OnPluginStart()
 
     HookConVarChange(g_cvClasses, OnClassesChanged);
     HookConVarChange(g_cvProjClasses, OnProjClassesChanged);
+    HookConVarChange(g_cvPropClasses, OnPropClassesChanged);
     // 颜色改动即时下发客户端 (改 sm_asrd_repulse_x33_fx_color 不用重编译/换图)
     HookConVarChange(g_cvX33Color, OnX33ColorChanged);
 
@@ -341,9 +425,16 @@ public void OnPluginStart()
     RegConsoleCmd("sm_repulse", Command_Repulse, "范围击退 (可绑定按键连按)");
     RegAdminCmd("sm_repulseaura", Command_Aura, ADMFLAG_GENERIC,
         "[管理员] 给指定玩家开关护盾: sm_repulseaura [玩家] [on|off|1|0] (无玩家=自己, 无状态=切换)");
+    RegAdminCmd("sm_repulseplayers", Command_PushPlayers, ADMFLAG_GENERIC,
+        "[管理员] 开关斥力/击退对玩家生效: sm_repulseplayers [on|off|1|0] (无参数=切换)");
+    RegAdminCmd("sm_repulseextra", Command_PushExtra, ADMFLAG_GENERIC,
+        "[管理员] 开关扩展实体生效(任意炮弹+地图道具): sm_repulseextra [on|off|1|0] (无参数=切换)");
+    RegAdminCmd("sm_repulseblock", Command_BlockBullets, ADMFLAG_GENERIC,
+        "[管理员] 开关护盾挡子弹: sm_repulseblock [on|off|1|0] (无参数=切换)");
 
     ParseCustomClasses();
     ParseProjClasses();
+    ParsePropClasses();
 }
 
 // ============================================================================
@@ -742,6 +833,102 @@ public Action Command_Aura(int client, int args)
 }
 
 // ============================================================================
+//  [管理员] 开/关"斥力/击退对玩家生效": sm_repulseplayers [on|off|1|0]
+//  无参数=切换; 直接改 ConVar sm_asrd_repulse_push_players (默认 0=关)
+// ============================================================================
+public Action Command_PushPlayers(int client, int args)
+{
+    bool bNew;
+    if (args >= 1)
+    {
+        char sArg[16];
+        GetCmdArg(1, sArg, sizeof(sArg));
+        if (StrEqual(sArg, "on", false) || StrEqual(sArg, "1", false))
+            bNew = true;
+        else if (StrEqual(sArg, "off", false) || StrEqual(sArg, "0", false))
+            bNew = false;
+        else
+        {
+            ReplyToCommand(client, "[击退] 状态参数仅支持 on/off/1/0");
+            return Plugin_Handled;
+        }
+    }
+    else
+    {
+        bNew = !g_cvPushPlayers.BoolValue;
+    }
+
+    g_cvPushPlayers.IntValue = bNew ? 1 : 0;
+
+    ReplyToCommand(client, "[击退] 斥力/击退对玩家生效已%s", bNew ? "开启" : "关闭");
+    return Plugin_Handled;
+}
+
+// ============================================================================
+//  [管理员] 开/关"扩展实体生效"(任意炮弹+地图道具): sm_repulseextra [on|off|1|0]
+//  无参数=切换; 直接改 ConVar sm_asrd_repulse_extra (默认 0=关)
+// ============================================================================
+public Action Command_PushExtra(int client, int args)
+{
+    bool bNew;
+    if (args >= 1)
+    {
+        char sArg[16];
+        GetCmdArg(1, sArg, sizeof(sArg));
+        if (StrEqual(sArg, "on", false) || StrEqual(sArg, "1", false))
+            bNew = true;
+        else if (StrEqual(sArg, "off", false) || StrEqual(sArg, "0", false))
+            bNew = false;
+        else
+        {
+            ReplyToCommand(client, "[击退] 状态参数仅支持 on/off/1/0");
+            return Plugin_Handled;
+        }
+    }
+    else
+    {
+        bNew = !g_cvExtra.BoolValue;
+    }
+
+    g_cvExtra.IntValue = bNew ? 1 : 0;
+
+    ReplyToCommand(client, "[击退] 扩展实体生效(任意炮弹+地图道具)已%s", bNew ? "开启" : "关闭");
+    return Plugin_Handled;
+}
+
+// ============================================================================
+//  [管理员] 开/关"护盾挡子弹": sm_repulseblock [on|off|1|0]
+//  无参数=切换; 直接改 ConVar sm_asrd_repulse_block_bullets (默认 0=关)
+// ============================================================================
+public Action Command_BlockBullets(int client, int args)
+{
+    bool bNew;
+    if (args >= 1)
+    {
+        char sArg[16];
+        GetCmdArg(1, sArg, sizeof(sArg));
+        if (StrEqual(sArg, "on", false) || StrEqual(sArg, "1", false))
+            bNew = true;
+        else if (StrEqual(sArg, "off", false) || StrEqual(sArg, "0", false))
+            bNew = false;
+        else
+        {
+            ReplyToCommand(client, "[击退] 状态参数仅支持 on/off/1/0");
+            return Plugin_Handled;
+        }
+    }
+    else
+    {
+        bNew = !g_cvBlockBullets.BoolValue;
+    }
+
+    g_cvBlockBullets.IntValue = bNew ? 1 : 0;
+
+    ReplyToCommand(client, "[击退] 护盾挡子弹已%s", bNew ? "开启" : "关闭");
+    return Plugin_Handled;
+}
+
+// ============================================================================
 //  名字 / #userid 找在线玩家; 返回 client 或 -1 (找不到/有歧义时已提示)
 //  完整名精确匹配优先, 否则部分匹配去歧义
 // ============================================================================
@@ -793,6 +980,9 @@ public void OnMapStart()
         g_bPushActive[i] = false;
     g_bAnyPushActive = false;
 
+    for (int c = 1; c <= MaxClients; c++)
+        g_fLastExtraSweep[c] = 0.0;   // 切图后 GetGameTime 归零, 节流时间戳一并清
+
     // 切图后 GetGameTime() 从 0 重置, 必须清掉 X-33 护盾时间戳,
     // 否则上一张图残留的大时间戳会让状态机误判为"永久生效中"
     g_bAnyX33Active = false;
@@ -811,6 +1001,8 @@ public void OnMapStart()
 
     ParseCustomClasses();
     ParseProjClasses();
+    ParsePropClasses();
+    HookAllMarines();
 }
 
 // ============================================================================
@@ -848,6 +1040,12 @@ public void OnProjClassesChanged(ConVar convar, const char[] oldValue, const cha
     ParseProjClasses();
 }
 
+// 扩展实体: 管理员追加的地图道具类名变化时重新解析
+public void OnPropClassesChanged(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+    ParsePropClasses();
+}
+
 public void OnX33ColorChanged(ConVar convar, const char[] oldValue, const char[] newValue)
 {
     ApplyX33BeaconColor();
@@ -858,6 +1056,7 @@ public void OnX33ColorChanged(ConVar convar, const char[] oldValue, const char[]
 public void OnConfigsExecuted()
 {
     ApplyX33BeaconColor();
+    HookAllMarines();   // 插件热重载后给场上已存在的陆战队员补挂伤害钩子
 }
 
 public void OnClientPutInServer(int client)
@@ -891,6 +1090,26 @@ void ParseProjClasses()
         TrimString(sParts[i]);
         if (sParts[i][0] != '\0' && g_iProjClassCount < MAX_PROJ_CLASSES)
             strcopy(g_sProjClasses[g_iProjClassCount++], 64, sParts[i]);
+    }
+}
+
+// 扩展实体: 解析管理员追加的地图道具类名 (sm_asrd_repulse_prop_classes)
+void ParsePropClasses()
+{
+    g_iPropClassCount = 0;
+
+    char sBuf[1024];
+    g_cvPropClasses.GetString(sBuf, sizeof(sBuf));
+    if (sBuf[0] == '\0')
+        return;
+
+    char sParts[MAX_PROP_CLASSES][64];
+    int iCount = ExplodeString(sBuf, " ", sParts, MAX_PROP_CLASSES, 64);
+    for (int i = 0; i < iCount; i++)
+    {
+        TrimString(sParts[i]);
+        if (sParts[i][0] != '\0' && g_iPropClassCount < MAX_PROP_CLASSES)
+            strcopy(g_sPropClasses[g_iPropClassCount++], 64, sParts[i]);
     }
 }
 
@@ -957,13 +1176,28 @@ void Repulse(int client)
         iPushed += PushClassAliens(g_sCustomClasses[c], fCenter, fRadius2, true);
 
     if (g_cvProjectiles.BoolValue)
-        iPushed += PushProjectiles(fCenter, fRadius2, false);
+        iPushed += PushProjectiles(client, fCenter, fRadius2, false);
+
+    // 对玩家生效 (默认关闭): 把范围内的玩家 marine 也推开 (不含自己)
+    int iPlayers = 0;
+    if (g_cvPushPlayers.BoolValue)
+        iPlayers = PushPlayerMarines(client, fCenter, fRadius2, true);
+
+    // 扩展实体 (默认关闭): 任意炮弹(不分阵营) + 地图道具(箱/桶/门等)
+    int iExtra = 0;
+    if (g_cvExtra.BoolValue)
+        iExtra = PushExtraEntities(client, fCenter, fRadius2, true, 0.0);
 
     if (g_cvDebug.BoolValue)
-        PrintToServer("[击退][debug] %N 登记 %d 只虫/炮弹", client, iPushed);
+        PrintToServer("[击退][debug] %N 登记 %d 只虫/炮弹, %d 名玩家, %d 个扩展实体",
+            client, iPushed, iPlayers, iExtra);
 
     if (iPushed > 0)
         PrintToChat(client, "\x04[击退]\x01 震开 \x05%d\x01 只异形/炮弹", iPushed);
+    if (iPlayers > 0)
+        PrintToChat(client, "\x04[击退]\x01 推开 \x05%d\x01 名玩家", iPlayers);
+    if (iExtra > 0)
+        PrintToChat(client, "\x04[击退]\x01 推开 \x05%d\x01 个物体(炮弹/道具)", iExtra);
 }
 
 // ============================================================================
@@ -971,7 +1205,7 @@ void Repulse(int client)
 //  (投射物常带物理/高速, 逐帧 teleport 会被它的飞行速度拉回, 用速度推开才有效)
 //  返回处理的投射物数量
 // ============================================================================
-int PushProjectiles(const float fCenter[3], float fRadius2, bool bKill)
+int PushProjectiles(int sourceClient, const float fCenter[3], float fRadius2, bool bKill)
 {
     int iCount = 0;
     for (int c = 0; c < g_iProjClassCount; c++)
@@ -980,6 +1214,10 @@ int PushProjectiles(const float fCenter[3], float fRadius2, bool bKill)
         while ((entity = FindEntityByClassname(entity, g_sProjClasses[c])) != -1)
         {
             if (!IsValidEntity(entity))
+                continue;
+
+            // 自己打出的炮弹不受自己护盾影响 (否则会把自己的火箭/榴弹删掉或弹飞)
+            if (sourceClient > 0 && ProjectileOwnerClient(entity) == sourceClient)
                 continue;
 
             float fPos[3];
@@ -1140,6 +1378,411 @@ int PushClassAliens(const char[] sClass, const float fCenter[3], float fRadius2,
 }
 
 // ============================================================================
+//  斥力/击退对玩家生效: 推开范围内的玩家控制的 marine (默认关闭)
+//  与虫族同规则 — 手动模式平滑推进+挑飞; 护盾模式按 aura_mode 斥力外推/钉边;
+//  但排除施法者自己的 marine (不会把自己推飞), 只处理存活的 marine。
+//  由 sm_asrd_repulse_push_players 控制 (默认 0=关), 管理员亦可用 sm_repulseplayers 切换。
+//  返回处理的玩家数量
+// ============================================================================
+int PushPlayerMarines(int sourceClient, const float fCenter[3], float fRadius2, bool bManual)
+{
+    int iCount = 0;
+    int iSelf  = GetPlayerMarine(sourceClient);
+
+    int marine = -1;
+    while ((marine = FindEntityByClassname(marine, "asw_marine")) != -1)
+    {
+        if (!IsValidEntity(marine))
+            continue;
+
+        // 不推施法者自己
+        if (marine == iSelf)
+            continue;
+
+        // 只推活着的 marine
+        if (!HasEntProp(marine, Prop_Send, "m_iHealth")
+            || GetEntProp(marine, Prop_Send, "m_iHealth") <= 0)
+            continue;
+
+        float fPos[3];
+        if (!GetEntOrigin(marine, fPos))
+            continue;
+
+        float dx = fPos[0] - fCenter[0];
+        float dy = fPos[1] - fCenter[1];
+
+        if (bManual)
+        {
+            float dz = fPos[2] - fCenter[2];
+            if ((dx*dx + dy*dy + dz*dz) > fRadius2)
+                continue;
+
+            float fLen = SquareRoot(dx*dx + dy*dy) + 1.0;
+            float fDst[3];
+            fDst[0] = fPos[0] + (dx / fLen) * g_cvForce.FloatValue;
+            fDst[1] = fPos[1] + (dy / fLen) * g_cvForce.FloatValue;
+            fDst[2] = fPos[2] + g_cvLift.FloatValue;
+            AddPush(marine, fPos, fDst);
+            iCount++;
+        }
+        else
+        {
+            if ((dx*dx + dy*dy) > fRadius2)
+                continue;   // 护盾只看水平距离
+
+            float fLen = SquareRoot(dx*dx + dy*dy);
+            if (fLen < 1.0)
+            {
+                // 贴着中心(如翻滚穿心而过): 给个固定方向顶出去, 不再跳过
+                dx = 1.0;
+                dy = 0.0;
+                fLen = 1.0;
+            }
+
+            float fRadius = SquareRoot(fRadius2);
+            float fFrom[3];
+            fFrom[0] = fPos[0];
+            fFrom[1] = fPos[1];
+            fFrom[2] = fPos[2];
+            float fNew[3];
+            fNew[0] = fCenter[0] + (dx / fLen) * fRadius;
+            fNew[1] = fCenter[1] + (dy / fLen) * fRadius;
+            fNew[2] = fPos[2];
+
+            if (g_cvAuraMode.BoolValue)
+            {
+                // 阻挡模式: 钉回半径边界 + 清零速度
+                TraceMoveBlocked(marine, fFrom, fNew);
+                float fZero[3];
+                fZero[0] = fZero[1] = fZero[2] = 0.0;
+                TeleportEntity(marine, fNew, NULL_VECTOR, fZero);
+            }
+            else
+            {
+                // 斥力模式: 先给持续朝外的速度 (平滑)
+                float fVel[3];
+                fVel[0] = (dx / fLen) * g_cvAuraPushSpeed.FloatValue;
+                fVel[1] = (dy / fLen) * g_cvAuraPushSpeed.FloatValue;
+                fVel[2] = 90.0;
+                TeleportEntity(marine, NULL_VECTOR, NULL_VECTOR, fVel);
+
+                // 再把位置硬钳回半径边界: 翻滚等脚本位移会无视速度直接穿过护盾,
+                // 仅靠速度拦不住(一翻滚就进盾内) — 必须同时钳位置
+                TraceMoveBlocked(marine, fFrom, fNew);
+                TeleportEntity(marine, fNew, NULL_VECTOR, NULL_VECTOR);
+            }
+            iCount++;
+        }
+    }
+    return iCount;
+}
+
+// ============================================================================
+//  扩展实体 (默认关闭, sm_asrd_repulse_extra):
+//  ① 任意炮弹 —— 不分阵营, 一律用速度弹开, 永不删除 (避免误删玩家自己的炮弹)
+//  ② 地图道具 —— 箱子/油桶/门/物理块等, 尽量多; 物理刚体给速度, 门类(MOVETYPE_PUSH)
+//     速度无效故改用小步 teleport 外推
+//  ③ 载具 —— asw_vehicle_jeep 及 prop_vehicle_* (asw_vehicle/prop_vehicle 前缀);
+//     载具是物理驱动对象, 一律给速度推开 (不用 AddPush/teleport, 免得和载具自身物理打架)
+//  手动模式 = AddPush 平滑推进+挑飞; 护盾模式 = 按 aura_mode 斥力外推/钉边
+//  返回处理的实体数量
+// ============================================================================
+bool Extra_IsExcluded(const char[] sCls)
+{
+    for (int i = 0; i < sizeof(g_sExtraDenyPrefix); i++)
+        if (StrContains(sCls, g_sExtraDenyPrefix[i], false) == 0)
+            return true;
+    // 含 weapon 字样的一律交给武器逻辑, 不动它
+    if (StrContains(sCls, "weapon", false) != -1)
+        return true;
+    return false;
+}
+
+bool Extra_IsProjectile(int ent, const char[] sCls)
+{
+    for (int i = 0; i < sizeof(g_sProjKeywords); i++)
+        if (StrContains(sCls, g_sProjKeywords[i], false) != -1)
+            return true;
+
+    // 兜底: 飞行类 movetype (投射物普遍如此)
+    MoveType mt = GetEntityMoveType(ent);
+    return (mt == MOVETYPE_FLY || mt == MOVETYPE_FLYGRAVITY);
+}
+
+bool Extra_IsVehicle(const char[] sCls)
+{
+    for (int i = 0; i < sizeof(g_sVehiclePrefixes); i++)
+        if (StrContains(sCls, g_sVehiclePrefixes[i], false) == 0)
+            return true;
+    return false;
+}
+
+bool Extra_IsProp(int ent, const char[] sCls)
+{
+    for (int i = 0; i < sizeof(g_sPropPrefixes); i++)
+        if (StrContains(sCls, g_sPropPrefixes[i], false) == 0)
+            return true;
+
+    // 管理员追加的道具类名 (精确匹配)
+    for (int i = 0; i < g_iPropClassCount; i++)
+        if (StrEqual(sCls, g_sPropClasses[i], false))
+            return true;
+
+    // 兜底: 物理刚体 (油桶/箱子等通常就是 prop_physics 的 MOVETYPE_VPHYSICS)
+    return (GetEntityMoveType(ent) == MOVETYPE_VPHYSICS);
+}
+
+void PushEntBySpeed(int ent, float dx, float dy, float dz, float fSpeed, bool bLift)
+{
+    float fLen = SquareRoot(dx*dx + dy*dy + dz*dz) + 1.0;
+    float fVel[3];
+    fVel[0] = (dx / fLen) * fSpeed;
+    fVel[1] = (dy / fLen) * fSpeed;
+    fVel[2] = (dz / fLen) * fSpeed + (bLift ? 40.0 : 0.0);
+    TeleportEntity(ent, NULL_VECTOR, NULL_VECTOR, fVel);
+}
+
+int PushExtraEntities(int sourceClient, const float fCenter[3], float fRadius2, bool bManual, float fDelta)
+{
+    int iCount = 0;
+    int iEnd   = GetEntityCount();
+
+    for (int e = MaxClients + 1; e < iEnd; e++)
+    {
+        if (!IsValidEntity(e))
+            continue;
+
+        char sCls[64];
+        GetEntityClassname(e, sCls, sizeof(sCls));
+
+        // 插件自身的信标与触发盒: 永不处理
+        if (StrEqual(sCls, "asw_buffgrenade_projectile", false))
+            continue;
+        if (StrEqual(sCls, "asw_aoegrenade_touch_trigger", false))
+            continue;
+        if (StrEqual(sCls, "asw_aoegrenade_projectile", false))
+            continue;
+
+        bool bProj = Extra_IsProjectile(e, sCls);
+        bool bVeh  = false;
+        bool bProp = false;
+        if (!bProj)
+        {
+            bVeh = Extra_IsVehicle(sCls);
+            if (!bVeh)
+            {
+                if (Extra_IsExcluded(sCls))
+                    continue;
+                bProp = Extra_IsProp(e, sCls);
+            }
+        }
+        if (!bProj && !bVeh && !bProp)
+            continue;
+
+        // 自己打出的炮弹不受自己护盾影响
+        if (bProj && sourceClient > 0 && ProjectileOwnerClient(e) == sourceClient)
+            continue;
+
+        float fPos[3];
+        if (!GetEntOrigin(e, fPos))
+            continue;
+
+        float dx = fPos[0] - fCenter[0];
+        float dy = fPos[1] - fCenter[1];
+        float dz = fPos[2] - fCenter[2];
+
+        if (bManual)
+        {
+            if ((dx*dx + dy*dy + dz*dz) > fRadius2)
+                continue;
+
+            if (bProj || bVeh)
+            {
+                // 炮弹与载具一律速度推开 (载具物理驱动, teleport 会与自身物理打架)
+                PushEntBySpeed(e, dx, dy, dz,
+                    bProj ? g_cvProjSpeed.FloatValue : g_cvPropSpeed.FloatValue, true);
+            }
+            else
+            {
+                float fLen = SquareRoot(dx*dx + dy*dy) + 1.0;
+                float fDst[3];
+                fDst[0] = fPos[0] + (dx / fLen) * g_cvForce.FloatValue;
+                fDst[1] = fPos[1] + (dy / fLen) * g_cvForce.FloatValue;
+                fDst[2] = fPos[2] + g_cvLift.FloatValue;
+                AddPush(e, fPos, fDst);
+            }
+            iCount++;
+            continue;
+        }
+
+        // 护盾模式: 只看水平距离
+        if ((dx*dx + dy*dy) > fRadius2)
+            continue;
+
+        float fLen = SquareRoot(dx*dx + dy*dy);
+        if (fLen < 1.0)
+            continue;
+
+        if (bProj || bVeh)
+        {
+            PushEntBySpeed(e, dx, dy, dz,
+                bProj ? g_cvProjSpeed.FloatValue : g_cvPropSpeed.FloatValue, true);
+            iCount++;
+            continue;
+        }
+
+        // 地图道具
+        if (g_cvAuraMode.BoolValue)
+        {
+            // 阻挡: 钉回半径边界 + 清零速度
+            float fRadius = SquareRoot(fRadius2);
+            float fFrom[3];
+            fFrom[0] = fPos[0];
+            fFrom[1] = fPos[1];
+            fFrom[2] = fPos[2];
+            float fNew[3];
+            fNew[0] = fCenter[0] + (dx / fLen) * fRadius;
+            fNew[1] = fCenter[1] + (dy / fLen) * fRadius;
+            fNew[2] = fPos[2];
+            TraceMoveBlocked(e, fFrom, fNew);
+            float fZero[3];
+            fZero[0] = fZero[1] = fZero[2] = 0.0;
+            TeleportEntity(e, fNew, NULL_VECTOR, fZero);
+        }
+        else if (GetEntityMoveType(e) == MOVETYPE_VPHYSICS)
+        {
+            // 物理刚体: 给朝外速度, 交给引擎物理连续推动
+            float fVel[3];
+            fVel[0] = (dx / fLen) * g_cvPropSpeed.FloatValue;
+            fVel[1] = (dy / fLen) * g_cvPropSpeed.FloatValue;
+            fVel[2] = 60.0;
+            TeleportEntity(e, NULL_VECTOR, NULL_VECTOR, fVel);
+        }
+        else
+        {
+            // 门等 MOVETYPE_PUSH 实体: 速度无效, 用小步 teleport 外推
+            float fStep = g_cvPropSpeed.FloatValue * ((fDelta > 0.0) ? fDelta : 0.1);
+            float fFrom[3];
+            fFrom[0] = fPos[0];
+            fFrom[1] = fPos[1];
+            fFrom[2] = fPos[2];
+            float fNew[3];
+            fNew[0] = fPos[0] + (dx / fLen) * fStep;
+            fNew[1] = fPos[1] + (dy / fLen) * fStep;
+            fNew[2] = fPos[2];
+            TraceMoveBlocked(e, fFrom, fNew);
+            TeleportEntity(e, fNew, NULL_VECTOR, NULL_VECTOR);
+        }
+        iCount++;
+    }
+    return iCount;
+}
+
+// ============================================================================
+//  护盾挡子弹 (默认关闭, sm_asrd_repulse_block_bullets):
+//  AS:RD 枪械是"瞬发射线"(无子弹实体), 所以只能做伤害拦截 —— 挂每个 marine 的
+//  OnTakeDamage, 若受害者正处于护盾中(管理员 aura 或 X-33), 且伤害是枪械类
+//  (DMG_BULLET / DMG_BUCKSHOT), 且不是自己打自己, 就直接挡下。
+//  自己射出的子弹打的是盾外的敌人, 受害者不是受护 marine, 天然不受影响。
+//  实体弹药(榴弹/火箭/能量球)不走这里, 由炮弹逻辑另行处理。
+// ============================================================================
+public void OnEntityCreated(int entity, const char[] classname)
+{
+    if (StrEqual(classname, "asw_marine", false))
+    {
+        SDKUnhook(entity, SDKHook_OnTakeDamage, OnTakeDamage_Marine);
+        SDKHook(entity, SDKHook_OnTakeDamage, OnTakeDamage_Marine);
+    }
+}
+
+void HookAllMarines()
+{
+    int marine = -1;
+    while ((marine = FindEntityByClassname(marine, "asw_marine")) != -1)
+    {
+        SDKUnhook(marine, SDKHook_OnTakeDamage, OnTakeDamage_Marine);
+        SDKHook(marine, SDKHook_OnTakeDamage, OnTakeDamage_Marine);
+    }
+}
+
+// 某 marine 当前是否被护盾保护 (管理员 aura 或 X-33 限时盾)
+bool IsShieldedMarine(int marine)
+{
+    for (int c = 1; c <= MaxClients; c++)
+    {
+        if (!IsClientInGame(c) || IsFakeClient(c))
+            continue;
+        if (GetPlayerMarine(c) != marine)
+            continue;
+
+        bool bAura = g_cvAura.BoolValue && g_bAuraOn[c];
+        bool bX33  = g_cvX33.BoolValue && (g_fX33End[c] > GetGameTime());
+        if (bAura || bX33)
+            return true;
+    }
+    return false;
+}
+
+public Action OnTakeDamage_Marine(int victim, int &attacker, int &inflictor, float &damage,
+    int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom)
+{
+    if (!g_cvBlockBullets.BoolValue)
+        return Plugin_Continue;
+
+    // 只挡枪械子弹类 (瞬发射线)
+    if (!(damagetype & (DMG_BULLET | DMG_BUCKSHOT)))
+        return Plugin_Continue;
+
+    // 自己打自己不管
+    if (attacker == victim)
+        return Plugin_Continue;
+
+    // 受害者必须是某玩家当前护盾保护中的 marine
+    if (!IsShieldedMarine(victim))
+        return Plugin_Continue;
+
+    return Plugin_Handled;   // 挡下这颗子弹
+}
+
+// ============================================================================
+//  解析投射物的归属玩家 (用于"自己打出的炮弹不被自己的护盾影响")。找不到返回 0
+//  owner 可能是: 玩家 client / marine 实体 / 武器实体(需再取一次其持有者)
+// ============================================================================
+int ProjectileOwnerClient(int ent)
+{
+    int owner = 0;
+    if (HasEntProp(ent, Prop_Send, "m_hOwnerEntity"))
+        owner = GetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity");
+    if (owner <= 0 && HasEntProp(ent, Prop_Data, "m_hOwnerEntity"))
+        owner = GetEntPropEnt(ent, Prop_Data, "m_hOwnerEntity");
+    if (owner <= 0)
+        return 0;
+
+    if (owner <= MaxClients)
+        return IsClientInGame(owner) ? owner : 0;
+
+    char sCls[64];
+    GetEntityClassname(owner, sCls, sizeof(sCls));
+    if (StrEqual(sCls, "asw_marine", false))
+        return ClientOfMarine(owner);
+
+    // 武器等: 再取一次它的持有者
+    int h2 = 0;
+    if (HasEntProp(owner, Prop_Send, "m_hOwnerEntity"))
+        h2 = GetEntPropEnt(owner, Prop_Send, "m_hOwnerEntity");
+    if (h2 <= 0 && HasEntProp(owner, Prop_Data, "m_hOwner"))
+        h2 = GetEntPropEnt(owner, Prop_Data, "m_hOwner");
+    if (h2 <= 0)
+        return 0;
+    if (h2 <= MaxClients)
+        return IsClientInGame(h2) ? h2 : 0;
+    GetEntityClassname(h2, sCls, sizeof(sCls));
+    if (StrEqual(sCls, "asw_marine", false))
+        return ClientOfMarine(h2);
+    return 0;
+}
+
+// ============================================================================
 //  每游戏帧回调: 平滑推进动画 + 持续护盾
 //  放在 OnGameFrame(最高频率) 而非低频定时器, 每帧都更新位置并附带速度,
 //  客户端据此做帧间插值 → 即便很短(0.05s)的击退也平滑, 不会一顿一顿。
@@ -1229,6 +1872,8 @@ void ThinkAura()
     float fRadius  = g_cvAuraRadius.FloatValue;
     float fRadius2 = fRadius * fRadius;
     int   iPushed  = 0;
+    int   iPushedPlayers = 0;
+    int   iExtra   = 0;
 
     // 护盾模式下若开了 debug, 每隔 3 秒点名一次半径内所有实体类名,
     // 方便直接确认某只虫(如治疗虫)的真实类名, 不用改代码
@@ -1322,13 +1967,28 @@ void ThinkAura()
             iPushed += PushClassAliens(g_sCustomClasses[c], fCenter, fRadius2, false);
 
         if (g_cvProjectiles.BoolValue)
-            iPushed += PushProjectiles(fCenter, fRadius2, true);
+            iPushed += PushProjectiles(client, fCenter, fRadius2, true);
+
+        // 对玩家生效 (默认关闭): 护盾同样把范围内的玩家 marine 推开 (不含自己)
+        if (g_cvPushPlayers.BoolValue)
+            iPushedPlayers += PushPlayerMarines(client, fCenter, fRadius2, false);
+
+        // 扩展实体 (默认关闭): 任意炮弹 + 地图道具 (全图扫描较重, 每玩家节流到 ~10Hz)
+        if (g_cvExtra.BoolValue && (now - g_fLastExtraSweep[client] >= 0.1))
+        {
+            float fDelta = now - g_fLastExtraSweep[client];
+            if (fDelta <= 0.0 || fDelta > 0.5)
+                fDelta = 0.1;
+            g_fLastExtraSweep[client] = now;
+            iExtra += PushExtraEntities(client, fCenter, fRadius2, false, fDelta);
+        }
     }
 
-    if (g_cvDebug.BoolValue && iPushed > 0
+    if (g_cvDebug.BoolValue && (iPushed > 0 || iPushedPlayers > 0 || iExtra > 0)
         && now - g_fLastAuraLog >= 1.0)
     {
-        PrintToServer("[击退][aura] 本秒推开 %d 只", iPushed);
+        PrintToServer("[击退][aura] 本秒推开 %d 只, %d 名玩家, %d 个扩展实体",
+            iPushed, iPushedPlayers, iExtra);
         g_fLastAuraLog = now;
     }
 }
