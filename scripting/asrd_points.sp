@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 积分机制 (Points)
- *  版本 1.20.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.22.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  引入一套全队共享的积分经济:
@@ -11,9 +11,11 @@
  *       先扣除积分再放行给原插件执行功能; 聊天框用 /buy 4 <编号> 购买强化
  *       哨戒塔 (0机枪 1炮塔, 喷火/冰冻暂不支持), /buy 5 补充全部哨戒塔弹药
  *    3. 积分显示: 屏幕左上方常驻显示总积分, 每 0.5 秒刷新, 击杀/消费即时更新
+ *       (积分机制关闭时 HUD 隐藏并清掉残留文字)
  *    4. 进服通知: 玩家连上服务器后, 延迟几秒在聊天框私聊发送欢迎,
  *       并提示输入 /buy 查看详细用法 (详细用法在玩家输入 /buy 后才显示;
- *       不再周期性公告。开关见 sm_asrd_points_join_help)
+ *       不再周期性公告。开关见 sm_asrd_points_join_help;
+ *       积分机制关闭时既无 HUD 也不发此通知)
  *
  *  ── 积分池规则 ─────────────────────────────────────────
  *    - 全队共享一个积分池: 任何玩家击杀都加分, 任何玩家都能消费
@@ -67,17 +69,25 @@
  *                          6 2=守望者脉冲步枪 (由 asrd_watcher_pulse_rifle 掉落, 击杀计积分)
  *                        /buy 7=头顶弹药箱 (由 asrd_ammohead 在玩家自己头顶放置标准弹药箱,
  *                        游戏默认弹药量/有限/同一陆战队员头顶同时仅1个; 管理员 sm_ammohead 可自定义含量)
- *   /1 ../7           玩家: 聊天框快捷购买, 与 /buy <编号> **完全等价**且同样能带选项:
+ *                        /buy 8=弹药箱 (本插件直接实现在玩家身前地面掉落一个原版 asw_ammo_drop,
+ *                        弹药量=游戏原版默认(DEFAULT_AMMO_DROP_UNITS=100)/有限, 走过去补弹)
+ *   /1 ../8           玩家: 聊天框快捷购买, 与 /buy <编号> **完全等价**且同样能带选项:
  *                        /1 强化等级  /2 核弹  /3 [1-6] 叛变虫群(默认 drone×10)
  *                        /4 [0/1] 哨戒塔箱  /5 补充全部哨戒塔弹药  /6 [1|2] 武器箱(1=电锯 2=脉冲步枪)
- *                        /7 头顶弹药箱(标准弹药, 放到自己头顶)
+ *                        /7 头顶弹药箱(标准弹药, 放到自己头顶)  /8 弹药箱(身前地面掉落)
  *                        例: /3 2 = /buy 3 2 (游侠); /4 1 = /buy 4 1 (炮塔)
  *   /nukepub /betraypub /power_up /power_down
  *                     玩家: 聊天框直接调用原功能命令同样扣积分
- *   注: 无任何 sm_points* 控制台命令; 控制台调用原功能命令不扣积分
+ *   注: 玩家侧无任何 sm_points* 聊天/控制台命令 (控制台调用原功能命令不扣积分);
+ *       以下为管理员控制台命令:
+ *   sm_asrd_points_toggle       管理员: 一键切换积分机制开关 (不带参数=反转当前状态; 0=关 1=开)。
+ *                                   关闭后玩家无法使用任何购买命令 (也不免费放行), 击杀不再计分, HUD 隐藏
+ *   sm_asrd_points_mult <倍率>  管理员: 设置积分购买倍率 (例如 10=所有物品价格x10, 0.5=半价);
+ *                                   仅缩放购买花费, 不影响击杀计分
  *
  *  ── 常用 ConVar (自动生成 cfg/sourcemod/asrd_points.cfg) ──
  *   sm_asrd_points_enabled    总开关 (0=关 1=开, 默认 1)
+ *   sm_asrd_points_cost_mult  积分购买倍率 (默认 1.0; 所有物品购买价格按此倍率缩放, 例如设 10 = 价格x10; 0.5 = 半价)
  *   sm_asrd_points_start      每局初始积分 (默认 1000; 开局/换图时重置)
  *   sm_asrd_points_hp_scale   击杀积分 = 虫族最大血量 x 倍率 (默认 0.05, 最少 1 分)
  *   sm_asrd_points_nuke_cost  核弹价格 (默认 200, 0=不设门槛)
@@ -90,6 +100,7 @@
  *   sm_asrd_points_chainsaw_cost 增强电锯价格 (默认 300, 0=不设门槛)
  *   sm_asrd_points_rifle_cost  守望者脉冲步枪价格 (默认 300, 0=不设门槛)
  *   sm_asrd_points_ammohead_cost 头顶弹药箱价格 (默认 300, 0=不设门槛; 由 asrd_ammohead 放置标准弹药箱)
+ *   sm_asrd_points_ammodrop_cost 弹药箱价格 (默认 300, 0=不设门槛; 本插件在玩家身前地面掉落原版弹药箱)
  *   sm_asrd_points_hud        积分显示开关 (0=关 1=开, 默认 1)
  *   sm_asrd_points_hud_channel HUD 通道 (默认 6, 避开 4=哨戒塔/X-33, 5=核弹)
  *   sm_asrd_points_hud_x      横向位置 (默认 0.01 左上角; -1=居中)
@@ -104,6 +115,7 @@
 
 #include <sourcemod>
 #include <sdktools>
+#include <sdktools_trace>
 #include <sdkhooks>
 #include <events>
 
@@ -111,7 +123,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Points"
-#define PLUGIN_VERSION "1.20.0"
+#define PLUGIN_VERSION "1.22.0"
 
 // 与 asrd_ammohead 联动: 玩家 /buy 7 经此 native 在"自己"头顶放置标准(游戏默认)弹药箱。
 // native 由 asrd_ammohead 注册; 本插件用 MarkNativeAsOptional 标记为可选,
@@ -134,8 +146,16 @@ native int ASRDAmmoHead_PlaceDefaultOnClient(int client);
 // ─── /buy 3 叛变虫群可选虫种 (别名 + 数量, 对应 asrd_alien_civilwar 的 sm_betraypub) ─
 #define BUY_BETRAY_VARIANTS  6
 
-// ─── 快捷指令编号上限: /1 ~ /7 与 /buy 1 ~ /buy 7 一一对应 ─
-#define BUY_ITEM_MAX         7
+// ─── 快捷指令编号上限: /1 ~ /8 与 /buy 1 ~ /buy 8 一一对应 ─
+#define BUY_ITEM_MAX         8
+
+// ─── /buy 8 掉落弹药箱: 在玩家身前地面生成一个原版 asw_ammo_drop ─
+//   AMMO_DROP_UNITS = 游戏原版弹药量, 见 RD 源码 asw_ammo_drop_shared.h
+//   "DEFAULT_AMMO_DROP_UNITS 100" (CASW_Ammo_Drop 构造默认值)。
+//   弹药箱本身完全沿用原版: 模型/碰撞/使用逻辑/用光(<=0)自动移除均不变。
+#define AMMO_DROP_CLASSNAME  "asw_ammo_drop"
+#define AMMO_DROP_UNITS      100     // = DEFAULT_AMMO_DROP_UNITS (游戏原版弹药量, 有限非无限)
+#define AMMO_DROP_FORWARD    60.0    // 生成点相对玩家前移距离 (与 /buy 6 掉落武器一致)
 char g_sBetrayAlias[BUY_BETRAY_VARIANTS + 1][16] = { "", "drone", "buzzer", "ranger", "shield", "mortar", "shaman" };
 int  g_iBetrayCount[BUY_BETRAY_VARIANTS + 1] = { 0, 10, 20, 10, 5, 10, 5 };
 
@@ -202,6 +222,7 @@ char g_sBetrayTypes[][3][] =
 
 // ─── ConVar 句柄 ─────────────────────────────────────────
 ConVar g_cvEnabled;
+ConVar g_cvCostMult;     // 积分购买倍率 (缩放所有物品价格)
 ConVar g_cvStart;
 ConVar g_cvHpScale;
 ConVar g_cvNukeCost;
@@ -213,6 +234,7 @@ ConVar g_cvRefillCost;
 ConVar g_cvChainsawCost;  // 第 6 类 武器箱 6 1: 增强电锯的积分价格
 ConVar g_cvRifleCost;     // 第 6 类 武器箱 6 2: 守望者脉冲步枪的积分价格
 ConVar g_cvAmmoHeadCost;  // 第 7 类 头顶弹药箱: 标准弹药箱放到自己头顶的积分价格
+ConVar g_cvAmmoDropCost;  // 第 8 类 弹药箱: 在玩家身前地面掉落一个原版弹药箱的积分价格
 ConVar g_cvHud;
 ConVar g_cvHudChannel;
 ConVar g_cvHudX;
@@ -251,6 +273,11 @@ public void OnPluginStart()
         "sm_asrd_points_enabled", "1",
         "积分机制总开关 (0=关 1=开)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
+    );
+    g_cvCostMult = CreateConVar(
+        "sm_asrd_points_cost_mult", "1.0",
+        "积分购买倍率: 所有物品购买价格按此倍率缩放 (例如 10 = 价格x10; 0.5 = 半价; 0=全部免费)",
+        FCVAR_NOTIFY, true, 0.0, true, 1000.0
     );
     g_cvStart = CreateConVar(
         "sm_asrd_points_start", "1000",
@@ -307,6 +334,11 @@ public void OnPluginStart()
         "头顶弹药箱(/buy 7)积分价格: 在玩家自己头顶放置标准(游戏默认/有限)弹药箱 (0=不设积分门槛)",
         FCVAR_NOTIFY, true, 0.0
     );
+    g_cvAmmoDropCost = CreateConVar(
+        "sm_asrd_points_ammodrop_cost", "300",
+        "弹药箱(/buy 8)积分价格: 在玩家身前地面掉落一个原版弹药箱 (0=不设积分门槛)",
+        FCVAR_NOTIFY, true, 0.0
+    );
     g_cvHud = CreateConVar(
         "sm_asrd_points_hud", "1",
         "屏幕积分显示开关 (0=关 1=开)",
@@ -345,6 +377,12 @@ public void OnPluginStart()
 
     // 自动保存/读取配置到 cfg/sourcemod/asrd_points.cfg
     AutoExecConfig(true, "asrd_points");
+
+    // 管理员命令: 一键切换积分机制开关 / 设置积分购买倍率
+    RegAdminCmd("sm_asrd_points_toggle", Cmd_TogglePoints, ADMFLAG_GENERIC,
+        "一键切换积分机制开关: 不带参数=反转当前状态; 0=关(禁止购买) 1=开");
+    RegAdminCmd("sm_asrd_points_mult", Cmd_SetMult, ADMFLAG_GENERIC,
+        "设置积分购买倍率: sm_asrd_points_mult <倍率> (例如 10 = 所有物品价格x10; 0.5 = 半价)");
 
     // 无注册命令: /buy、/1~/5 等聊天框购买统一走 OnClientSayCommand (同一份逻辑);
     // 控制台没有积分相关命令 (原功能命令控制台调用不扣积分)。
@@ -752,7 +790,14 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
     char sCmd[64];
     GetArgFromString(sText, 0, sCmd, sizeof(sCmd));   // 参数 0 = 命令本身 (去前缀)
 
-    // ── /buy <编号> [选项] 与快捷指令 /1 ~ /5 走**同一套逻辑** ──
+    // ── 积分机制关闭: 所有购买相关聊天命令统一拦截 (已禁用则不允许购买, 也不免费放行) ──
+    if (!g_cvEnabled.BoolValue && IsPointsCommand(sCmd))
+    {
+        PrintToChat(client, "\x04[积分]\x01 积分机制已关闭, 暂时无法购买任何物品");
+        return Plugin_Handled;
+    }
+
+    // ── /buy <编号> [选项] 与快捷指令 /1 ~ /8 走**同一套逻辑** ──
     //    /buy 3 2  等价于  /3 2       (编号后的选项位置不同, 统一收进 sOpt)
     if (StrEqual(sCmd, "buy", false) || IsBuyShortcut(sCmd))
     {
@@ -812,7 +857,7 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 }
 
 // ============================================================================
-//  快捷指令 /1 ~ /5: 判定 + 与 /buy 共用的分发入口
+//  快捷指令 /1 ~ /8: 判定 + 与 /buy 共用的分发入口
 // ============================================================================
 bool IsBuyShortcut(const char[] sCmd)
 {
@@ -841,6 +886,106 @@ bool IsNumericArg(const char[] s)
             return false;
     }
     return true;
+}
+
+// ============================================================================
+//  积分机制是否关闭: 聊天框购买相关命令判定
+//  (buy / 1~8 快捷 / nukepub / betraypub / power_up / power_down 全部拦截)
+// ============================================================================
+bool IsPointsCommand(const char[] sCmd)
+{
+    if (StrEqual(sCmd, "buy", false) || StrEqual(sCmd, "nukepub", false)
+        || StrEqual(sCmd, "betraypub", false) || StrEqual(sCmd, "power_up", false)
+        || StrEqual(sCmd, "power_down", false))
+        return true;
+    if (IsBuyShortcut(sCmd))   // /1 ~/8 与 /buy 1~/8 等价, 一并拦截
+        return true;
+    return false;
+}
+
+// ============================================================================
+//  积分购买倍率: 把单个物品的积分价格按 sm_asrd_points_cost_mult 缩放
+//    raw<=0 (免费门槛) 直接返回原值; 否则 = round(raw x 倍率)
+// ============================================================================
+int GetScaledCost(ConVar cv)
+{
+    int iRaw = cv.IntValue;
+    if (iRaw <= 0)
+        return iRaw;
+    float fMult = g_cvCostMult.FloatValue;
+    int iCost = RoundToNearest(float(iRaw) * fMult);
+    if (iCost < 0)
+        iCost = 0;
+    return iCost;
+}
+
+// ============================================================================
+//  管理员命令: sm_asrd_points_toggle —— 一键切换积分机制开关
+//    不带参数 = 反转当前状态; 0 = 关闭(禁止购买) 1 = 开启
+//    关闭后: 击杀不计分 / HUD 隐藏 / 玩家无法用任何购买命令 (也不免费放行)
+// ============================================================================
+public Action Cmd_TogglePoints(int client, int args)
+{
+    int iNew;
+    if (args >= 1)
+    {
+        char sArg[8];
+        GetCmdArg(1, sArg, sizeof(sArg));
+        if (StrEqual(sArg, "0", false))
+            iNew = 0;
+        else if (StrEqual(sArg, "1", false))
+            iNew = 1;
+        else
+            iNew = g_cvEnabled.BoolValue ? 0 : 1;
+    }
+    else
+    {
+        iNew = g_cvEnabled.BoolValue ? 0 : 1;
+    }
+
+    g_cvEnabled.IntValue = iNew;
+    RefreshHud();   // 开启即恢复 HUD; 关闭即清掉残留 HUD 文字
+
+    if (iNew == 0)
+        PrintToChatAll("\x04[积分]\x01 积分机制已关闭: 玩家无法再购买任何物品 (击杀不再计分, 积分显示已隐藏)");
+    else
+        PrintToChatAll("\x04[积分]\x01 积分机制已开启: 击杀计分 / 积分购买 / HUD 显示恢复正常");
+
+    if (g_cvDebug.BoolValue)
+        PrintToServer("[积分][debug] %N 将积分机制切换为 %d", client, iNew);
+
+    return Plugin_Handled;
+}
+
+// ============================================================================
+//  管理员命令: sm_asrd_points_mult <倍率> —— 设置积分购买倍率
+//    仅缩放购买花费, 不影响击杀计分。例如 10 = 所有物品价格x10, 0.5 = 半价
+// ============================================================================
+public Action Cmd_SetMult(int client, int args)
+{
+    if (args < 1)
+    {
+        PrintToChat(client, "\x04[积分]\x01 用法: sm_asrd_points_mult <倍率>  (当前倍率 %.2f)",
+            g_cvCostMult.FloatValue);
+        return Plugin_Handled;
+    }
+
+    char sArg[16];
+    GetCmdArg(1, sArg, sizeof(sArg));
+    float fVal = StringToFloat(sArg);
+    if (fVal < 0.0)
+    {
+        PrintToChat(client, "\x04[积分]\x01 倍率不能为负数");
+        return Plugin_Handled;
+    }
+
+    g_cvCostMult.FloatValue = fVal;
+    PrintToChatAll("\x04[积分]\x01 积分购买倍率已设为 \x05%.2f\x01 (所有物品购买价格按此倍率缩放)", fVal);
+
+    if (g_cvDebug.BoolValue)
+        PrintToServer("[积分][debug] %N 将积分购买倍率设为 %.2f", client, fVal);
+
+    return Plugin_Handled;
 }
 
 // ============================================================================
@@ -962,7 +1107,7 @@ void HandleBuyItem(int client, int iItem, const char[] sOpt)
                 default:
                 {
                     PrintToChat(client, "\x04[积分]\x01 第 6 类 武器箱: \x05/buy 6 1\x01 增强电锯 (%d 分)   \x05/buy 6 2\x01 守望者脉冲步枪 (%d 分)",
-                        g_cvChainsawCost.IntValue, g_cvRifleCost.IntValue);
+                        GetScaledCost(g_cvChainsawCost), GetScaledCost(g_cvRifleCost));
                     PrintToChat(client, "\x04[积分]\x01 快捷指令: \x05/6 1\x01 电锯   \x05/6 2\x01 脉冲步枪");
                 }
             }
@@ -973,6 +1118,13 @@ void HandleBuyItem(int client, int iItem, const char[] sOpt)
         {
             // /buy 7 与 /7: 头顶弹药箱 (标准弹药, 放到自己头顶)
             BuyAmmoHead(client);
+            return;
+        }
+
+        case 8:
+        {
+            // /buy 8 与 /8: 弹药箱 (在玩家身前地面掉落一个原版弹药箱)
+            BuyAmmoDrop(client);
             return;
         }
 
@@ -1023,6 +1175,12 @@ void BuyPowerFromChat(int client, bool bUp)
     }
     else
     {
+        // 积分机制关闭: 禁止购买 (聊天入口已拦截, 这里做兜底)
+        if (!g_cvEnabled.BoolValue)
+        {
+            PrintToChat(client, "\x04[积分]\x01 积分机制已关闭, 暂时无法购买强化体型调整");
+            return;
+        }
         // 已达最小体型: 不再扣分
         if (g_iPlayerLevel[client] <= -GetPowerShrinkMax())
         {
@@ -1074,15 +1232,21 @@ void BuyAmmoHead(int client)
         return;
     }
 
-    // 积分机制关闭或价格=0: 不设门槛, 直接放置(仍受 ammohead 内部"唯一+标准"约束)
-    if (!g_cvEnabled.BoolValue || g_cvAmmoHeadCost.IntValue <= 0)
+    // 积分机制关闭: 禁止购买 (聊天入口已拦截, 这里做兜底)
+    if (!g_cvEnabled.BoolValue)
+    {
+        PrintToChat(client, "\x04[积分]\x01 积分机制已关闭, 暂时无法购买头顶弹药箱");
+        return;
+    }
+
+    int iCost = GetScaledCost(g_cvAmmoHeadCost);
+    // 价格=0: 不设门槛, 直接放置(仍受 ammohead 内部"唯一+标准"约束)
+    if (iCost <= 0)
     {
         ASRDAmmoHead_PlaceDefaultOnClient(client);
         PrintToChatAll("\x04[积分]\x01 %N 获得【头顶弹药箱】(无积分门槛)", client);
         return;
     }
-
-    int iCost = g_cvAmmoHeadCost.IntValue;
     if (g_iPoints < iCost)
     {
         PrintToChat(client, "\x04[积分]\x01 积分不足: 头顶弹药箱需要 \x05%d\x01 积分, 当前 \x05%d\x01 积分",
@@ -1096,6 +1260,125 @@ void BuyAmmoHead(int client)
         client, iCost, g_iPoints);
 
     ASRDAmmoHead_PlaceDefaultOnClient(client);
+}
+
+// ============================================================================
+//  弹药箱购买 (/buy 8): 在玩家(其陆战队员)身前地面掉落一个"原版"弹药箱。
+//  本功能直接实现在积分插件内, 不依赖任何其它插件 (不像 /buy 6/7 需转发)。
+//    - 实体 = asw_ammo_drop, 弹药量 = AMMO_DROP_UNITS(100) = 游戏原版默认
+//      (RD 源码 asw_ammo_drop_shared.h: DEFAULT_AMMO_DROP_UNITS = 100)
+//    - 除位置外完全沿用原版属性: 模型/碰撞/使用逻辑/用光(<=0)自动移除均不变
+//    - 有限、非无限 (与头顶弹药箱一致)
+// ============================================================================
+void BuyAmmoDrop(int client)
+{
+    // 不在游戏中 (未控制任何陆战队员) 的玩家不能消费积分 / 也没有落点
+    if (!IsActivePlayer(client))
+    {
+        PrintToChat(client, "\x04[积分]\x01 不在游戏中的玩家不能购买, 请先加入游戏");
+        return;
+    }
+
+    // 积分机制关闭: 禁止购买 (聊天入口已拦截, 这里做兜底)
+    if (!g_cvEnabled.BoolValue)
+    {
+        PrintToChat(client, "\x04[积分]\x01 积分机制已关闭, 暂时无法购买弹药箱");
+        return;
+    }
+
+    int iCost = GetScaledCost(g_cvAmmoDropCost);
+
+    // 先校验积分, 不足则不生成、不扣分
+    if (iCost > 0 && g_iPoints < iCost)
+    {
+        PrintToChat(client, "\x04[积分]\x01 积分不足: 弹药箱需要 \x05%d\x01 积分, 当前 \x05%d\x01 积分",
+            iCost, g_iPoints);
+        return;
+    }
+
+    // 先生成: 生成失败(如无有效落点)就别扣分
+    int iBox = SpawnAmmoDropNear(client);
+    if (iBox <= 0)
+    {
+        PrintToChat(client, "\x04[积分]\x01 弹药箱生成失败 (请确认自己已控制陆战队员)");
+        return;
+    }
+
+    if (iCost > 0)
+    {
+        g_iPoints -= iCost;
+        RefreshHud();
+        PrintToChatAll("\x04[积分]\x01 %N 花费 \x05%d\x01 积分购买【弹药箱】, 剩余 \x05%d\x01 积分",
+            client, iCost, g_iPoints);
+    }
+    else
+    {
+        PrintToChatAll("\x04[积分]\x01 %N 获得【弹药箱】(无积分门槛)", client);
+    }
+}
+
+// ============================================================================
+//  在玩家(其陆战队员)身前地面生成一个原版 asw_ammo_drop
+//    - 落点: 身前 AMMO_DROP_FORWARD(60) 单位, 再向下探测地面贴地放置(与原版掉落一致)
+//    - 返回实体索引 (>0=成功, -1=失败)
+//  关键顺序: 先 Teleport 到落点, 再 DispatchSpawn —— 因为 CASW_Ammo_Drop::Spawn()
+//  会用 GetAbsOrigin() 做一次贴地/电梯挂接的射线检测, 位置必须先就位。
+// ============================================================================
+int SpawnAmmoDropNear(int client)
+{
+    int iMarine = GetClientMarine(client);
+    if (iMarine <= 0)
+        return -1;
+
+    // 落点 = 陆战队员脚下原点 沿其视角水平前方偏移 (与 asrd_watcher 掉落武器同一算法)
+    float fPos[3], fAng[3];
+    GetEntPropVector(iMarine, Prop_Data, "m_vecAbsOrigin", fPos);
+    GetClientEyeAngles(client, fAng);
+    float fYaw = DegToRad(fAng[1]);
+    fPos[0] += Cosine(fYaw) * AMMO_DROP_FORWARD;
+    fPos[1] += Sine(fYaw) * AMMO_DROP_FORWARD;
+
+    // 从落点上方往下打一条只与场景几何(BRUSH)作用的射线: 命中则把箱子贴到地面,
+    // 未命中(悬空/探测失败)则退回"落点上方 20 单位", 与原版掉落观感一致。
+    float fStart[3], fEnd[3];
+    fStart[0] = fPos[0]; fStart[1] = fPos[1]; fStart[2] = fPos[2] + 64.0;
+    fEnd[0]   = fPos[0]; fEnd[1]   = fPos[1]; fEnd[2]   = fPos[2] - 512.0;
+    TR_TraceRayFilter(fStart, fEnd, MASK_SOLID_BRUSHONLY, RayType_EndPoint, TraceFilter_AmmoDrop);
+    if (TR_DidHit())
+    {
+        float fHit[3];
+        TR_GetEndPosition(fHit);
+        fPos[2] = fHit[2];
+    }
+    else
+    {
+        fPos[2] += 20.0;
+    }
+
+    int iBox = CreateEntityByName(AMMO_DROP_CLASSNAME);
+    if (iBox == -1)
+    {
+        if (g_cvDebug.BoolValue)
+            PrintToServer("[积分][debug] CreateEntityByName(%s) 失败 (实体未注册?)", AMMO_DROP_CLASSNAME);
+        return -1;
+    }
+
+    char sUnits[16];
+    IntToString(AMMO_DROP_UNITS, sUnits, sizeof(sUnits));
+    DispatchKeyValue(iBox, "percent_remaining", sUnits);   // 100 = 游戏原版默认弹药量
+
+    // 先就位再 DispatchSpawn (见函数头注释)
+    TeleportEntity(iBox, fPos, NULL_VECTOR, NULL_VECTOR);
+    DispatchSpawn(iBox);
+
+    return iBox;
+}
+
+// 弹药箱贴地射线过滤器: 忽略所有实体, 只让场景几何(brush/world)参与碰撞
+// (MASK_SOLID_BRUSHONLY 下 world/brush 不受 filter 影响, 故恒返回 false 即可)
+public bool TraceFilter_AmmoDrop(int entity, int contentsMask, any data)
+{
+    return false;
 }
 
 // 满级判断: 玩家控制的陆战队员最大血量达到强化插件等级表上限(L5=1000)即视为满级
@@ -1116,8 +1399,16 @@ bool IsMarineMaxLevel(int client)
 // ============================================================================
 void BuyMaxLevelHeal(int client)
 {
-    // 积分机制关闭或价格=0: 不提供免费加血, 放行原插件自行处理 (会提示已达最高等级)
-    if (!g_cvEnabled.BoolValue || g_cvPowerCost.IntValue <= 0)
+    // 积分机制关闭: 禁止购买 (聊天入口已拦截, 这里做兜底)
+    if (!g_cvEnabled.BoolValue)
+    {
+        PrintToChat(client, "\x04[积分]\x01 积分机制已关闭, 暂时无法购买强化加血");
+        return;
+    }
+
+    int iCostML = GetScaledCost(g_cvPowerCost);
+    // 价格=0: 不提供加血, 放行原插件自行处理 (会提示已达最高等级)
+    if (iCostML <= 0)
     {
         FakeClientCommand(client, "sm_power_up");
         return;
@@ -1148,17 +1439,17 @@ void BuyMaxLevelHeal(int client)
     }
 
     // 积分不足: 不做任何操作, 仅提示
-    if (g_iPoints < g_cvPowerCost.IntValue)
+    if (g_iPoints < iCostML)
     {
         PrintToChat(client, "\x04[积分]\x01 积分不足: 强化加血需要 \x05%d\x01 积分, 当前 \x05%d\x01 积分",
-            g_cvPowerCost.IntValue, g_iPoints);
+            iCostML, g_iPoints);
         return;
     }
 
-    g_iPoints -= g_cvPowerCost.IntValue;
+    g_iPoints -= iCostML;
     RefreshHud();
     PrintToChatAll("\x04[积分]\x01 %N 花费 \x05%d\x01 积分购买【满级加血】, 剩余 \x05%d\x01 积分",
-        client, g_cvPowerCost.IntValue, g_iPoints);
+        client, iCostML, g_iPoints);
 
     // 治疗: 当前血量 +200, 封顶最大血量
     int iMaxHealth = GetEntProp(marine, Prop_Data, "m_iMaxHealth");
@@ -1224,15 +1515,18 @@ void JoinArgsFrom(const char[] sInput, int n, char[] buf, int maxlen)
 void ShowBuyHelp(int client)
 {
     PrintToChat(client, "欢迎 \x05%N\x01! 当前总积分: \x05%d\x01   用法: \x05/buy <编号> [选项]", client, g_iPoints);
-    PrintToChat(client, "  \x05/buy 1\x01  属性强化 +1 (%d 分; 满级后转为加血)", g_cvPowerCost.IntValue);
-    PrintToChat(client, "  \x05/buy 2\x01  战术核弹 (%d 分, 购买后 %d 秒内不能再买)", g_cvNukeCost.IntValue, g_cvNukeCooldown.IntValue);
-    PrintToChat(client, "  \x05/buy 3 [1-6]\x01  友军虫群 (%d 分): 1=工蜂 2=蜂群 3=游侠 4=盾甲虫 5=迫击炮虫 6=治疗虫", g_cvBetrayCost.IntValue);
-    PrintToChat(client, "  \x05/buy 4 <0/1>\x01  强化哨戒塔箱 (%d 分): 0=机枪 1=炮塔", g_cvSentryCost.IntValue);
-    PrintToChat(client, "  \x05/buy 5\x01  补充全部哨戒塔弹药 (%d 分)", g_cvRefillCost.IntValue);
-    PrintToChat(client, "  \x05/buy 6 1\x01  增强电锯 (%d 分, 掉落在身边)", g_cvChainsawCost.IntValue);
-    PrintToChat(client, "  \x05/buy 6 2\x01  守望者脉冲步枪 (%d 分, 掉落在身边, 击杀计积分)", g_cvRifleCost.IntValue);
-    PrintToChat(client, "  \x05/buy 7\x01  头顶弹药箱 (%d 分, 标准弹药放到自己头顶, 游戏默认/有限/同时仅1个)", g_cvAmmoHeadCost.IntValue);
-    PrintToChat(client, "  快捷指令: \x05/1\x01 强化   \x05/2\x01 核弹   \x05/3 [1-6]\x01 虫群   \x05/4 [0/1]\x01 哨戒塔箱   \x05/5\x01 补弹药   \x05/6 [1|2]\x01 武器箱(1=电锯 2=脉冲步枪)   \x05/7\x01 头顶弹药箱");
+    if (g_cvCostMult.FloatValue != 1.0)
+        PrintToChat(client, "  (当前购买倍率 \x05x%.2f\x01: 以下价格已按此倍率缩放)", g_cvCostMult.FloatValue);
+    PrintToChat(client, "  \x05/buy 1\x01  属性强化 +1 (%d 分; 满级后转为加血)", GetScaledCost(g_cvPowerCost));
+    PrintToChat(client, "  \x05/buy 2\x01  战术核弹 (%d 分, 购买后 %d 秒内不能再买)", GetScaledCost(g_cvNukeCost), g_cvNukeCooldown.IntValue);
+    PrintToChat(client, "  \x05/buy 3 [1-6]\x01  友军虫群 (%d 分): 1=工蜂 2=蜂群 3=游侠 4=盾甲虫 5=迫击炮虫 6=治疗虫", GetScaledCost(g_cvBetrayCost));
+    PrintToChat(client, "  \x05/buy 4 <0/1>\x01  强化哨戒塔箱 (%d 分): 0=机枪 1=炮塔", GetScaledCost(g_cvSentryCost));
+    PrintToChat(client, "  \x05/buy 5\x01  补充全部哨戒塔弹药 (%d 分)", GetScaledCost(g_cvRefillCost));
+    PrintToChat(client, "  \x05/buy 6 1\x01  增强电锯 (%d 分, 掉落在身边)", GetScaledCost(g_cvChainsawCost));
+    PrintToChat(client, "  \x05/buy 6 2\x01  守望者脉冲步枪 (%d 分, 掉落在身边, 击杀计积分)", GetScaledCost(g_cvRifleCost));
+    PrintToChat(client, "  \x05/buy 7\x01  头顶弹药箱 (%d 分, 标准弹药放到自己头顶, 游戏默认/有限/同时仅1个)", GetScaledCost(g_cvAmmoHeadCost));
+    PrintToChat(client, "  \x05/buy 8\x01  弹药箱 (%d 分, 在身前地面掉落一个原版弹药箱, 走过去补弹)", GetScaledCost(g_cvAmmoDropCost));
+    PrintToChat(client, "  快捷指令: \x05/1\x01 强化   \x05/2\x01 核弹   \x05/3 [1-6]\x01 虫群   \x05/4 [0/1]\x01 哨戒塔箱   \x05/5\x01 补弹药   \x05/6 [1|2]\x01 武器箱(1=电锯 2=脉冲步枪)   \x05/7\x01 头顶弹药箱   \x05/8\x01 弹药箱");
     PrintToChat(client, "  例: \x05/3 2\x01 = /buy 3 2 (游侠)   \x05/4 1\x01 = /buy 4 1 (炮塔)   \x05/6 2\x01 = /buy 6 2 (脉冲步枪)");
     PrintToChat(client, "  积分: \x05通过击杀虫族获取\x01");
 }
@@ -1285,13 +1579,20 @@ bool PurchaseFromChat(int client, const char[] sFullCommand, const char[] sArgs,
         return false;
     }
 
-    // 插件总开关或价格=0: 不设积分门槛, 直接放行原命令
-    if (!g_cvEnabled.BoolValue || costCv.IntValue <= 0)
+    // 积分机制关闭: 整个机制禁用, 不允许购买 (聊天入口已拦截, 这里做兜底)
+    if (!g_cvEnabled.BoolValue)
+    {
+        PrintToChat(client, "\x04[积分]\x01 积分机制已关闭, 暂时无法购买");
+        return false;
+    }
+
+    int iCost = GetScaledCost(costCv);
+    // 价格=0 (原始为0 或 倍率折算为0): 不设积分门槛, 直接放行原命令
+    if (iCost <= 0)
     {
         FakeClientCommand(client, "%s %s", sFullCommand, sArgs);
         return true;
     }
-    int iCost = costCv.IntValue;
 
     // 原插件总开关: 关着就拒绝, 不扣分
     ConVar cvEnabled = FindConVar(sEnabledCv);
@@ -1384,7 +1685,8 @@ public void OnGameFrame()
             continue;
 
         g_fJoinHelpAt[i] = 0.0;
-        if (g_cvJoinHelp.BoolValue && IsClientInGame(i) && !IsFakeClient(i))
+        if (g_cvJoinHelp.BoolValue
+            && IsClientInGame(i) && !IsFakeClient(i))
             SendJoinWelcome(i);
     }
 
@@ -1396,23 +1698,38 @@ public void OnGameFrame()
 }
 
 // ============================================================================
-//  进服欢迎: 仅聊天私发一行 —— 欢迎 + 提示输入 /buy 查看用法 (无 [积分] 前缀)
-//  (详细购买命令与快捷指令由玩家输入 /buy 后经 ShowBuyHelp 显示)
+//  进服欢迎: 仅聊天私发一行 —— 欢迎 + (积分机制开启时)提示输入 /buy 查看用法
+//  (无 [积分] 前缀。详细购买命令与快捷指令由玩家输入 /buy 后经 ShowBuyHelp 显示)
+//  注意: 积分机制即使关闭, 依然发送欢迎消息; 只是不再附 /buy 用法提示。
 // ============================================================================
 void SendJoinWelcome(int client)
 {
     if (!IsClientInGame(client) || IsFakeClient(client))
         return;
 
-    PrintToChat(client, "欢迎 \x05%N\x01！请输入\x05/buy\x01查看积分使用方法。", client);
+    // 积分机制开启时才追加 /buy 用法提示 (关闭后 /buy 本就被拦截, 提示无意义)
+    if (g_cvEnabled.BoolValue)
+        PrintToChat(client, "欢迎 \x05%N\x01！请输入\x05/buy\x01查看积分使用方法。", client);
+    else
+        PrintToChat(client, "欢迎 \x05%N\x01！", client);
 }
 
 void RefreshHud()
 {
-    if (!g_cvEnabled.BoolValue || !g_cvHud.BoolValue)
-        return;
+    int iChannel = g_cvHudChannel.IntValue;
 
-    int   iChannel = g_cvHudChannel.IntValue;
+    // 积分机制或 HUD 关闭: 清掉残留的 HUD 文字, 防止关闭前显示的旧 "总积分" 仍挂在屏幕上
+    if (!g_cvEnabled.BoolValue || !g_cvHud.BoolValue)
+    {
+        for (int i = 1; i <= MaxClients; i++)
+        {
+            if (!IsClientInGame(i) || IsFakeClient(i))
+                continue;
+            ShowHudText(i, iChannel, "");
+        }
+        return;
+    }
+
     float fX = g_cvHudX.FloatValue;
     float fY = g_cvHudY.FloatValue;
     int   iAlpha = g_cvHudAlpha.IntValue;
