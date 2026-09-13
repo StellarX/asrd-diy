@@ -33,7 +33,7 @@
  *   sm_power_set <玩家> <等级>      指定强化某个玩家 (等级= -缩小max ~ 放大max, 0=恢复默认)
  *                                  玩家可填 名字 / 部分名字 / #userid
  *
- *  ── 常用 ConVar (仅代码默认值, 不生成 cfg 文件) ─
+ *  ── 常用 ConVar (载入时自动生成 cfg/sourcemod/asrd_marine_power.cfg, 可直接在其中修改) ─
  *   sm_asrd_power_enabled        总开关 (0=关 1=开, 默认 1)
  *   sm_asrd_power_public         是否允许普通玩家自行强化 (0=仅管理员 1=公开, 默认 1)
  *   sm_asrd_power_max_level      放大最大等级 (默认 5)
@@ -47,7 +47,7 @@
  *   近战倍率(固定): 等级1~5 = x2 / x4 / x8 / x16 / x32 (逐人, 按攻击者本人等级)
  *   sm_asrd_power_debug          调试输出 (默认 0)
  *   sm_asrd_power_cam_base       视角高度基准相机距离 (默认 412, 与游戏原生一致; 放大等级在此基础上每级 +cam_step)
- *   sm_asrd_power_cam_step       每放大 1 级增加的相机距离(默认 150, 即视角抬升量; 越大越高越远)
+ *   sm_asrd_power_cam_step       每放大 1 级增加的相机距离(默认 150, 即视角抬升量; 统一每级一致, 越大越高越远; 改这个即可调整每级增量)
  *   sm_asrd_power_cam_pitch      相机俯仰角 (默认 60, 30~89; 越小越接近正俯视, 90=正俯视)
  *
  *  ── 实现原理 ───────────────────────────────────────
@@ -81,7 +81,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Marine Power"
-#define PLUGIN_VERSION "1.4.1"
+#define PLUGIN_VERSION "1.4.2"
 
 // 重新断言周期(秒): 换陆战队员/复活后仍生效, 不回血
 #define REAPPLY_INTERVAL 1.0
@@ -247,7 +247,10 @@ public void OnPluginStart()
     if (g_hCamDist == null || g_hCamPitch == null)
         LogError("[强化] 未找到引擎相机 ConVar (asw_cam_marine_dist/_pitch), 视角抬升功能不可用; 确认运行在 AS:RD");
 
-    // 不生成 cfg: 参数统一使用代码默认值, 避免旧 cfg 覆盖新默认值
+    // 自动生成 cfg/sourcemod/asrd_marine_power.cfg, 可在其中修改所有 ConVar
+    // (含每级视角增量 sm_asrd_power_cam_step)。首次加载生成, 之后以 cfg 内的值为准。
+    // 若要恢复代码默认值, 删掉该 cfg 让插件重新生成即可。
+    AutoExecConfig(true, "asrd_marine_power");
 
     // 玩家命令
     RegConsoleCmd("sm_power_up",    Cmd_PowerUp,    "调大 1 级强化");
