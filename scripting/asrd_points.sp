@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 积分机制 (Points)
- *  版本 1.19.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.19.1  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  引入一套全队共享的积分经济:
@@ -53,7 +53,8 @@
  *
  *  ── 命令 ────────────────────────────────────────────────
  *   /buy [1] [2]      玩家: 聊天框购买 (唯一扣积分入口, 无控制台命令)
- *                        /buy = 显示格式; /buy 1=属性强化+1; /buy 2=核弹;
+ *                        /buy = 显示格式; /buy 1=属性强化+1; /buy 2=核弹
+ *                        (核弹购买后 nuke_cooldown 秒内不能再买, 默认 3);
  *                        /buy 3 [1-6]=叛变虫群 (/buy 3 无选项=drone×10)
  *                        (强化已满级时 /buy 1 转为加血: 血量<800 花
  *                        power_cost 恢复 200 血, 封顶最大血量)
@@ -77,6 +78,8 @@
  *   sm_asrd_points_start      每局初始积分 (默认 1000; 开局/换图时重置)
  *   sm_asrd_points_hp_scale   击杀积分 = 虫族最大血量 x 倍率 (默认 0.05, 最少 1 分)
  *   sm_asrd_points_nuke_cost  核弹价格 (默认 200, 0=不设门槛)
+ *   sm_asrd_points_nuke_cooldown 核弹购买冷却秒数 (默认 3; 同一玩家购买后
+ *                                此时间内不能再购买核弹; 0=不限制)
  *   sm_asrd_points_betray_cost 叛变虫群价格 (默认 100, 0=不设门槛)
  *   sm_asrd_points_power_cost 强化等级价格 (默认 400, 0=不设门槛)
  *   sm_asrd_points_sentry_cost 强化哨戒塔价格 (默认 300, 0=不设门槛)
@@ -104,7 +107,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Points"
-#define PLUGIN_VERSION "1.19.0"
+#define PLUGIN_VERSION "1.19.1"
 
 // ─── /buy 4 强化哨戒塔可选编号 (哨戒塔插件 sm_sentrydrop 的塔类型; 2喷火/3冰冻暂不支持) ─
 #define BUY_SENTRY_VARIANTS_MAX 1   // 当前支持的最高塔编号 (0=机枪 1=炮塔)
@@ -193,6 +196,7 @@ ConVar g_cvEnabled;
 ConVar g_cvStart;
 ConVar g_cvHpScale;
 ConVar g_cvNukeCost;
+ConVar g_cvNukeCooldown;
 ConVar g_cvBetrayCost;
 ConVar g_cvPowerCost;
 ConVar g_cvSentryCost;
@@ -212,6 +216,7 @@ int    g_iPoints;
 float  g_fLastHudCheck;         // HUD 帧回调节流时间 (秒)
 int    g_iPlayerLevel[MAXPLAYERS + 1];   // 强化等级镜像, 与 asrd_marine_power 同步, 用于满/低级别拦截扣分
 float  g_fJoinHelpAt[MAXPLAYERS + 1];    // 进服购买说明的待发时刻 (GetEngineTime; 0=无待发)
+float  g_fNukeBuyTime[MAXPLAYERS + 1];   // 每位玩家上次购买核弹的时刻 (GetEngineTime; 用于核弹购买冷却)
 
 // ============================================================================
 //  插件信息
@@ -250,6 +255,11 @@ public void OnPluginStart()
     g_cvNukeCost = CreateConVar(
         "sm_asrd_points_nuke_cost", "200",
         "核弹(sm_nukepub)积分价格 (0=不设积分门槛)",
+        FCVAR_NOTIFY, true, 0.0
+    );
+    g_cvNukeCooldown = CreateConVar(
+        "sm_asrd_points_nuke_cooldown", "3",
+        "核弹购买冷却秒数: 同一玩家购买核弹后此时间内不能再购买 (0=不限制)",
         FCVAR_NOTIFY, true, 0.0
     );
     g_cvBetrayCost = CreateConVar(
@@ -753,8 +763,7 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
     {
         char sRest[64];
         JoinArgsFrom(sText, 1, sRest, sizeof(sRest));
-        PurchaseFromChat(client, "sm_nukepub", sRest, g_cvNukeCost,
-            "核弹", "sm_asrd_nuke_enabled", "sm_asrd_nuke_public");
+        BuyNukeFromChat(client, sRest);
         return Plugin_Handled;
     }
     if (StrEqual(sCmd, "betraypub", false))
@@ -824,8 +833,7 @@ void HandleBuyItem(int client, int iItem, const char[] sOpt)
             BuyPowerFromChat(client, true);
 
         case 2:
-            PurchaseFromChat(client, "sm_nukepub", "", g_cvNukeCost,
-                "核弹", "sm_asrd_nuke_enabled", "sm_asrd_nuke_public");
+            BuyNukeFromChat(client, "");
 
         case 3:
         {
@@ -941,6 +949,30 @@ void HandleBuyItem(int client, int iItem, const char[] sOpt)
         default:
             PrintToChat(client, "\x04[积分]\x01 /buy 编号无效, 输入 \x05/buy\x01 查看格式");
     }
+}
+
+// ============================================================================
+//  核弹购买 (统一入口: /buy 2、/2、/nukepub)
+//    冷却: 同一玩家购买核弹后 nuke_cooldown 秒内不能再购买 (默认 3, 0=不限制)
+//    冷却仅作用于"扣分路径" (积分开启且价格>0); 积分关闭/免费时不拦截,
+//    由原插件自行处理, 保持原有行为
+// ============================================================================
+void BuyNukeFromChat(int client, const char[] sArgs)
+{
+    if (g_cvEnabled.BoolValue && g_cvNukeCost.IntValue > 0 &&
+        g_cvNukeCooldown.FloatValue > 0.0 && g_fNukeBuyTime[client] > 0.0)
+    {
+        float fElapsed = GetEngineTime() - g_fNukeBuyTime[client];
+        if (fElapsed < g_cvNukeCooldown.FloatValue)
+        {
+            int iLeft = RoundToCeil(g_cvNukeCooldown.FloatValue - fElapsed);
+            PrintToChat(client, "\x04[积分]\x01 核弹倒计时中, 请 \x05%d\x01 秒后再购买", iLeft);
+            return;
+        }
+    }
+    if (PurchaseFromChat(client, "sm_nukepub", sArgs, g_cvNukeCost,
+        "核弹", "sm_asrd_nuke_enabled", "sm_asrd_nuke_public"))
+        g_fNukeBuyTime[client] = GetEngineTime();
 }
 
 void BuyPowerFromChat(int client, bool bUp)
@@ -1100,7 +1132,7 @@ void ShowBuyHelp(int client)
 {
     PrintToChat(client, "欢迎 \x05%N\x01! 当前总积分: \x05%d\x01   用法: \x05/buy <编号> [选项]", client, g_iPoints);
     PrintToChat(client, "  \x05/buy 1\x01  属性强化 +1 (%d 分; 满级后转为加血)", g_cvPowerCost.IntValue);
-    PrintToChat(client, "  \x05/buy 2\x01  战术核弹 (%d 分)", g_cvNukeCost.IntValue);
+    PrintToChat(client, "  \x05/buy 2\x01  战术核弹 (%d 分, 购买后 %d 秒内不能再买)", g_cvNukeCost.IntValue, g_cvNukeCooldown.IntValue);
     PrintToChat(client, "  \x05/buy 3 [1-6]\x01  友军虫群 (%d 分): 1=工蜂 2=蜂群 3=游侠 4=盾甲虫 5=迫击炮虫 6=治疗虫", g_cvBetrayCost.IntValue);
     PrintToChat(client, "  \x05/buy 4 <0/1>\x01  强化哨戒塔箱 (%d 分): 0=机枪 1=炮塔", g_cvSentryCost.IntValue);
     PrintToChat(client, "  \x05/buy 5\x01  补充全部哨戒塔弹药 (%d 分)", g_cvRefillCost.IntValue);
