@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 积分机制 (Points)
- *  版本 1.19.1  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.20.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  引入一套全队共享的积分经济:
@@ -65,9 +65,12 @@
  *                        /buy 6 [1|2]=武器箱 (第 6 类):
  *                          6 1=增强电锯 (伤害由 asrd_chainsaw_turbo 的 sm_asrd_chainsaw_dmg_mult 决定)
  *                          6 2=守望者脉冲步枪 (由 asrd_watcher_pulse_rifle 掉落, 击杀计积分)
- *   /1 ../5           玩家: 聊天框快捷购买, 与 /buy <编号> **完全等价**且同样能带选项:
+ *                        /buy 7=头顶弹药箱 (由 asrd_ammohead 在玩家自己头顶放置标准弹药箱,
+ *                        游戏默认弹药量/有限/同一陆战队员头顶同时仅1个; 管理员 sm_ammohead 可自定义含量)
+ *   /1 ../7           玩家: 聊天框快捷购买, 与 /buy <编号> **完全等价**且同样能带选项:
  *                        /1 强化等级  /2 核弹  /3 [1-6] 叛变虫群(默认 drone×10)
  *                        /4 [0/1] 哨戒塔箱  /5 补充全部哨戒塔弹药  /6 [1|2] 武器箱(1=电锯 2=脉冲步枪)
+ *                        /7 头顶弹药箱(标准弹药, 放到自己头顶)
  *                        例: /3 2 = /buy 3 2 (游侠); /4 1 = /buy 4 1 (炮塔)
  *   /nukepub /betraypub /power_up /power_down
  *                     玩家: 聊天框直接调用原功能命令同样扣积分
@@ -86,6 +89,7 @@
  *   sm_asrd_points_refill_cost 补充全部哨戒塔弹药价格 (默认 500, 0=不设门槛)
  *   sm_asrd_points_chainsaw_cost 增强电锯价格 (默认 300, 0=不设门槛)
  *   sm_asrd_points_rifle_cost  守望者脉冲步枪价格 (默认 300, 0=不设门槛)
+ *   sm_asrd_points_ammohead_cost 头顶弹药箱价格 (默认 300, 0=不设门槛; 由 asrd_ammohead 放置标准弹药箱)
  *   sm_asrd_points_hud        积分显示开关 (0=关 1=开, 默认 1)
  *   sm_asrd_points_hud_channel HUD 通道 (默认 6, 避开 4=哨戒塔/X-33, 5=核弹)
  *   sm_asrd_points_hud_x      横向位置 (默认 0.01 左上角; -1=居中)
@@ -107,7 +111,12 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Points"
-#define PLUGIN_VERSION "1.19.1"
+#define PLUGIN_VERSION "1.20.0"
+
+// 与 asrd_ammohead 联动: 玩家 /buy 7 经此 native 在"自己"头顶放置标准(游戏默认)弹药箱。
+// native 由 asrd_ammohead 注册; 本插件用 MarkNativeAsOptional 标记为可选,
+// 即使 ammohead 未加载也不影响其它购买功能 (购买前用 GetFeatureStatus 判断可用与否)。
+native int ASRDAmmoHead_PlaceDefaultOnClient(int client);
 
 // ─── /buy 4 强化哨戒塔可选编号 (哨戒塔插件 sm_sentrydrop 的塔类型; 2喷火/3冰冻暂不支持) ─
 #define BUY_SENTRY_VARIANTS_MAX 1   // 当前支持的最高塔编号 (0=机枪 1=炮塔)
@@ -125,8 +134,8 @@
 // ─── /buy 3 叛变虫群可选虫种 (别名 + 数量, 对应 asrd_alien_civilwar 的 sm_betraypub) ─
 #define BUY_BETRAY_VARIANTS  6
 
-// ─── 快捷指令编号上限: /1 ~ /5 与 /buy 1 ~ /buy 5 一一对应 ─
-#define BUY_ITEM_MAX         6
+// ─── 快捷指令编号上限: /1 ~ /7 与 /buy 1 ~ /buy 7 一一对应 ─
+#define BUY_ITEM_MAX         7
 char g_sBetrayAlias[BUY_BETRAY_VARIANTS + 1][16] = { "", "drone", "buzzer", "ranger", "shield", "mortar", "shaman" };
 int  g_iBetrayCount[BUY_BETRAY_VARIANTS + 1] = { 0, 10, 20, 10, 5, 10, 5 };
 
@@ -203,6 +212,7 @@ ConVar g_cvSentryCost;
 ConVar g_cvRefillCost;
 ConVar g_cvChainsawCost;  // 第 6 类 武器箱 6 1: 增强电锯的积分价格
 ConVar g_cvRifleCost;     // 第 6 类 武器箱 6 2: 守望者脉冲步枪的积分价格
+ConVar g_cvAmmoHeadCost;  // 第 7 类 头顶弹药箱: 标准弹药箱放到自己头顶的积分价格
 ConVar g_cvHud;
 ConVar g_cvHudChannel;
 ConVar g_cvHudX;
@@ -292,6 +302,11 @@ public void OnPluginStart()
         "守望者脉冲步枪(sm_watcherdrop)积分价格 (0=不设积分门槛)",
         FCVAR_NOTIFY, true, 0.0
     );
+    g_cvAmmoHeadCost = CreateConVar(
+        "sm_asrd_points_ammohead_cost", "300",
+        "头顶弹药箱(/buy 7)积分价格: 在玩家自己头顶放置标准(游戏默认/有限)弹药箱 (0=不设积分门槛)",
+        FCVAR_NOTIFY, true, 0.0
+    );
     g_cvHud = CreateConVar(
         "sm_asrd_points_hud", "1",
         "屏幕积分显示开关 (0=关 1=开)",
@@ -348,10 +363,18 @@ public void OnPluginStart()
     // 重置积分并把强化等级镜像清 0, 避免满级判断漂移
     HookEventEx("asw_mission_restart", Event_MissionRestart, EventHookMode_Post);
 
-    // 热加载 (插件中途载入 / map 已在进行) 时补挂虫族伤害钩子
-    char sMap[PLATFORM_MAX_PATH];
-    if (GetCurrentMap(sMap, sizeof(sMap)) > 0)
-        HookExistingAliens();
+	// 热加载 (插件中途载入 / map 已在进行) 时补挂虫族伤害钩子
+	char sMap[PLATFORM_MAX_PATH];
+	if (GetCurrentMap(sMap, sizeof(sMap)) > 0)
+		HookExistingAliens();
+}
+
+// 标记与 asrd_ammohead 联动的 native 为可选: 即使 ammohead 插件未加载,
+// 本插件也能正常编译与运行 (/buy 7 会在购买前用 GetFeatureStatus 判断并优雅拒绝)。
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+	MarkNativeAsOptional("ASRDAmmoHead_PlaceDefaultOnClient");
+	return APLRes_Success;
 }
 
 // ============================================================================
@@ -946,6 +969,13 @@ void HandleBuyItem(int client, int iItem, const char[] sOpt)
             return;
         }
 
+        case 7:
+        {
+            // /buy 7 与 /7: 头顶弹药箱 (标准弹药, 放到自己头顶)
+            BuyAmmoHead(client);
+            return;
+        }
+
         default:
             PrintToChat(client, "\x04[积分]\x01 /buy 编号无效, 输入 \x05/buy\x01 查看格式");
     }
@@ -1003,6 +1033,69 @@ void BuyPowerFromChat(int client, bool bUp)
             "强化等级", "sm_asrd_power_enabled", "sm_asrd_power_public"))
             g_iPlayerLevel[client]--;
     }
+}
+
+// ============================================================================
+//  头顶弹药箱购买 (/buy 7): 经 asrd_ammohead 的 native 在玩家自己头顶放置
+//  "标准(游戏默认)"弹药箱。
+//    - 弹药量 = 游戏默认 (asrd_ammohead 内部固定 percent_remaining=100, 有限非无限)
+//    - 同一陆战队员头顶同时只能有 1 个 (插件内部放置前会替换旧的)
+//    - 不叠加、不无限: 满足"积分购买的弹药箱不能是无限弹药"与"保持原版属性"
+//  前置: asrd_ammohead 已加载 (native 可用) 且 sm_asrd_ammohead_enabled/public 开启
+// ============================================================================
+void BuyAmmoHead(int client)
+{
+    // 原插件(ammohead)是否已加载? native 可用才放行
+    if (GetFeatureStatus(FeatureType_Native, "ASRDAmmoHead_PlaceDefaultOnClient") != FeatureStatus_Available)
+    {
+        PrintToChat(client, "\x04[积分]\x01 头顶弹药箱插件未加载, 无法购买");
+        return;
+    }
+
+    // 原插件总开关
+    ConVar cvEnabled = FindConVar("sm_asrd_ammohead_enabled");
+    if (cvEnabled != null && !cvEnabled.BoolValue)
+    {
+        PrintToChat(client, "\x04[积分]\x01 头顶弹药箱功能已禁用");
+        return;
+    }
+
+    // 对玩家开放开关
+    ConVar cvPublic = FindConVar("sm_asrd_ammohead_public");
+    if (cvPublic == null || !cvPublic.BoolValue)
+    {
+        PrintToChat(client, "\x04[积分]\x01 头顶弹药箱未对玩家开放 (管理员需设置 sm_asrd_ammohead_public 1)");
+        return;
+    }
+
+    if (!IsActivePlayer(client))
+    {
+        PrintToChat(client, "\x04[积分]\x01 不在游戏中的玩家不能购买, 请先加入游戏");
+        return;
+    }
+
+    // 积分机制关闭或价格=0: 不设门槛, 直接放置(仍受 ammohead 内部"唯一+标准"约束)
+    if (!g_cvEnabled.BoolValue || g_cvAmmoHeadCost.IntValue <= 0)
+    {
+        ASRDAmmoHead_PlaceDefaultOnClient(client);
+        PrintToChatAll("\x04[积分]\x01 %N 获得【头顶弹药箱】(无积分门槛)", client);
+        return;
+    }
+
+    int iCost = g_cvAmmoHeadCost.IntValue;
+    if (g_iPoints < iCost)
+    {
+        PrintToChat(client, "\x04[积分]\x01 积分不足: 头顶弹药箱需要 \x05%d\x01 积分, 当前 \x05%d\x01 积分",
+            iCost, g_iPoints);
+        return;
+    }
+
+    g_iPoints -= iCost;
+    RefreshHud();
+    PrintToChatAll("\x04[积分]\x01 %N 花费 \x05%d\x01 积分购买【头顶弹药箱】, 剩余 \x05%d\x01 积分",
+        client, iCost, g_iPoints);
+
+    ASRDAmmoHead_PlaceDefaultOnClient(client);
 }
 
 // 满级判断: 玩家控制的陆战队员最大血量达到强化插件等级表上限(L5=1000)即视为满级
@@ -1138,7 +1231,8 @@ void ShowBuyHelp(int client)
     PrintToChat(client, "  \x05/buy 5\x01  补充全部哨戒塔弹药 (%d 分)", g_cvRefillCost.IntValue);
     PrintToChat(client, "  \x05/buy 6 1\x01  增强电锯 (%d 分, 掉落在身边)", g_cvChainsawCost.IntValue);
     PrintToChat(client, "  \x05/buy 6 2\x01  守望者脉冲步枪 (%d 分, 掉落在身边, 击杀计积分)", g_cvRifleCost.IntValue);
-    PrintToChat(client, "  快捷指令: \x05/1\x01 强化   \x05/2\x01 核弹   \x05/3 [1-6]\x01 虫群   \x05/4 [0/1]\x01 哨戒塔箱   \x05/5\x01 补弹药   \x05/6 [1|2]\x01 武器箱(1=电锯 2=脉冲步枪)");
+    PrintToChat(client, "  \x05/buy 7\x01  头顶弹药箱 (%d 分, 标准弹药放到自己头顶, 游戏默认/有限/同时仅1个)", g_cvAmmoHeadCost.IntValue);
+    PrintToChat(client, "  快捷指令: \x05/1\x01 强化   \x05/2\x01 核弹   \x05/3 [1-6]\x01 虫群   \x05/4 [0/1]\x01 哨戒塔箱   \x05/5\x01 补弹药   \x05/6 [1|2]\x01 武器箱(1=电锯 2=脉冲步枪)   \x05/7\x01 头顶弹药箱");
     PrintToChat(client, "  例: \x05/3 2\x01 = /buy 3 2 (游侠)   \x05/4 1\x01 = /buy 4 1 (炮塔)   \x05/6 2\x01 = /buy 6 2 (脉冲步枪)");
     PrintToChat(client, "  积分: \x05通过击杀虫族获取\x01");
 }
