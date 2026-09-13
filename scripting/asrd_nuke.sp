@@ -1,13 +1,15 @@
 /**
  * ============================================================================
  *  [AS:RD] 核弹轰炸 (Nuke Strike)
- *  版本 1.7.7  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.7.8  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  玩家按下绑定按键 (或输入命令) 后, 触发一次"战术核弹":
  *    1. 在所有玩家屏幕中央以红色大字倒计时 "呼叫战术核弹 / ETA n 秒"
  *    2. n 秒后轰炸全图: 清除地图上所有虫族 (含异形卵)
  *    3. 倒计时期间禁止再次触发 (同一时刻只有一发核弹在路上)
+ *    4. 游戏尚未部署 (briefing/部署前阶段, 场上没有受玩家操控的陆战队员) 时拒绝呼叫,
+ *       避免换图/重开后游戏还没开始就被按键或聊天命令引爆 (v1.7.8 修复)
  *
  *  ── 核爆特效 ────────────────────────────────────────────
  *    - 白色炫光闪屏 (Fade 用户消息)
@@ -42,7 +44,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Nuke Strike"
-#define PLUGIN_VERSION "1.7.7"
+#define PLUGIN_VERSION "1.7.8"
 
 // 倒计时红字的位置与颜色 (内置 HUD 坐标: -1=居中; game_text: 0=居中)
 #define ETA_HUD_X       -1.0
@@ -147,6 +149,13 @@ public void OnPluginStart()
         "呼叫战术核弹轰炸全图虫族");
     // 玩家命令 (需管理员开启 public)
     RegConsoleCmd("sm_nukepub", Command_NukePublic, "呼叫战术核弹 (需管理员开启)");
+
+    // 同图重开 (mp_restartgame / restart / asw_mission_restart) 不会触发 OnMapStart,
+    // 必须也清空核弹倒计时状态, 否则重开后上一局的倒计时会带着 g_fCountEnd 继续走,
+    // 在新一局游戏还没开始时就引爆 (表现为"重开即核爆"). 与 asrd_points 同款处理.
+    AddCommandListener(Listener_Restart, "mp_restartgame");
+    AddCommandListener(Listener_Restart, "restart");
+    HookEventEx("asw_mission_restart", Event_MissionRestart, EventHookMode_Post);
 }
 
 // ============================================================================
@@ -156,9 +165,47 @@ public void OnMapStart()
 {
     // 换图时若有核弹正倒计时, 直接清空倒计时状态。
     // (v1.7.5 起倒计时代由帧回调推进, 不再有带 NO_MAPCHANGE 的残留定时器)
+    ResetNukeState();
+}
+
+// ============================================================================
+//  地图结束: 同样杀掉残留倒计时状态 (双保险)
+// ============================================================================
+public void OnMapEnd()
+{
+    ResetNukeState();
+}
+
+// ============================================================================
+//  同图重开: 清空核弹倒计时状态 (mp_restartgame / restart 命令)
+//  (这两类重开不触发 OnMapStart, 必须单独处理, 否则倒计时残留到新一局)
+// ============================================================================
+public Action Listener_Restart(int client, const char[] command, int argc)
+{
+    ResetNukeState();
+    return Plugin_Continue;
+}
+
+// ============================================================================
+//  同图重开事件: AS:RD 重新开始本关 (asw_mission_restart)
+// ============================================================================
+public void Event_MissionRestart(Event event, const char[] name, bool dontBroadcast)
+{
+    ResetNukeState();
+}
+
+// ============================================================================
+//  清空核弹运行态: 倒计时锁 / ETA 秒数 / 引爆时刻 + 所有玩家的 ETA 红字.
+//  换图 (OnMapStart) / 地图结束 (OnMapEnd) / 同图重开 统一走这里, 防止倒计时
+//  残留到新一局. (先 ClearEta 用当前 HUD 模式/实体引用 Kill 掉红字, 再清标记)
+// ============================================================================
+void ResetNukeState()
+{
     g_bPending = false;
     g_fCountEnd = 0.0;
     g_iEtaSeconds = 0;
+
+    ClearEta();   // 清掉所有玩家屏幕上的 ETA 红字 (HUD 字幕 / game_text 实体)
 
     for (int i = 1; i <= MaxClients; i++)
     {
@@ -168,13 +215,50 @@ public void OnMapStart()
 }
 
 // ============================================================================
-//  地图结束: 同样杀掉残留倒计时定时器 (双保险)
+//  游戏是否已部署: 场上是否存在被玩家接管的陆战队员
+//  (即玩家已部署, 不在 briefing/部署前阶段; 没有受控 marine 即视为游戏尚未开始)
 // ============================================================================
-public void OnMapEnd()
+bool IsGameDeployed()
 {
-    g_bPending = false;
-    g_fCountEnd = 0.0;
-    g_iEtaSeconds = 0;
+    int iEnt = -1;
+    while ((iEnt = FindEntityByClassname(iEnt, "asw_marine")) != -1)
+    {
+        if (GetCommanderClient(iEnt) > 0)
+            return true;
+    }
+    return false;
+}
+
+// ============================================================================
+//  查实体上的 m_Commander (CASW_Inhabitable_NPC 字段, marine/虫族都有):
+//  先数据属性后网络属性, 返回操控该实体的玩家 (0=无人操控)
+//  (与 asrd_points / asrd_marine_power 同源写法, 已验证)
+// ============================================================================
+int GetCommanderClient(int ent)
+{
+    if (FindDataMapInfo(ent, "m_Commander") > 0)
+    {
+        int client = GetEntPropEnt(ent, Prop_Data, "m_Commander");
+        if (IsUsableClient(client))
+            return client;
+    }
+
+    char sNetClass[64];
+    if (GetEntityNetClass(ent, sNetClass, sizeof(sNetClass))
+        && FindSendPropInfo(sNetClass, "m_Commander") > 0)
+    {
+        int client = GetEntPropEnt(ent, Prop_Send, "m_Commander");
+        if (IsUsableClient(client))
+            return client;
+    }
+
+    return 0;
+}
+
+bool IsUsableClient(int client)
+{
+    return client > 0 && client <= MaxClients
+        && IsClientInGame(client) && !IsFakeClient(client);
 }
 
 // ============================================================================
@@ -238,6 +322,14 @@ void StartNuke(int client)
     if (g_bPending)
     {
         ReplyToCommand(client, "[核弹] 战术核弹已在路上 (预计 %d 秒抵达), 请稍候", g_iEtaSeconds);
+        return;
+    }
+
+    // 缺陷 B: 游戏尚未部署 (briefing/部署前阶段, 场上没有受玩家操控的陆战队员) 时拒绝
+    // 呼叫核弹, 避免"进入新地图/游戏还没开始"就被按键或聊天命令引爆.
+    if (!IsGameDeployed())
+    {
+        ReplyToCommand(client, "[核弹] 游戏尚未开始部署, 无法呼叫核弹");
         return;
     }
 
