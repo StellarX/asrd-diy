@@ -1,0 +1,2912 @@
+﻿Alien Swarm Reactive Drop 全模型清单 (2642 个 .mdl) - 详细中文注释版
+来源: reactivedrop/pak01_dir.vpk + pak02_dir.vpk
+============================================================
+
+== 场景道具 props (596) ==
+  models/props/128_fuse_set09/128_fuse_set09.mdl
+  models/props/acc32_concrete_arch.mdl
+  models/props/acc32_j5carts.mdl
+  models/props/ar_dizzy/dizzy_generator/dizzy_generator_pole.mdl  # 眩晕通道道具
+  models/props/ar_dizzy/dizzy_trash/dizzy_cardboard_trash_01.mdl  # 眩晕通道道具
+  models/props/ar_dizzy/dizzy_trash/dizzy_cardboard_trash_02.mdl  # 眩晕通道道具
+  models/props/ar_dizzy/dizzy_trash/dizzy_cardboard_trash_03.mdl  # 眩晕通道道具
+  models/props/barracks/bed_cabinet_2.mdl  # 军营
+  models/props/barracks/bunk_bed.mdl  # 军营
+  models/props/barrels/oildrum.mdl  # 油桶(可炸)
+  models/props/barrels/oildrum_phys.mdl  # 油桶(物理)
+  models/props/barrels/oildrum_redd.mdl  # 红色油桶
+  models/props/barrels/oildrum_yell.mdl  # 黄色油桶
+  models/props/bridge/bridge_base.mdl  # 桥
+  models/props/bridge/bridge_corner_bev.mdl  # 桥
+  models/props/bridge/bridge_mid_bar.mdl  # 桥
+  models/props/bridge/bridge_socket_bot.mdl  # 桥
+  models/props/bridge/bridge_socket_top.mdl  # 桥
+  models/props/bridge/bridge_sup_bot.mdl  # 桥
+  models/props/bridge/bridge_sup_top.mdl  # 桥
+  models/props/bridge/bridge_wedge.mdl  # 桥
+  models/props/bridge/hanging_pipea.mdl  # 桥
+  models/props/bridge/lower_beam.mdl  # 桥
+  models/props/bridge/road_railing256.mdl  # 桥
+  models/props/bridge/side_accent.mdl  # 桥
+  models/props/bridge/side_trim256.mdl  # 桥
+  models/props/cake/cake.mdl  # 蛋糕
+  models/props/claw/claw_pincer01.mdl  # 机械爪
+  models/props/crates/container01.mdl  # 集装箱
+  models/props/crates/containerload.mdl  # 装载集装箱
+  models/props/crates/supplycrate.mdl  # 补给箱
+  models/props/crates/supplycratejunk01.mdl  # 板条箱
+  models/props/crates/supplycratejunk02.mdl  # 板条箱
+  models/props/crates/supplycratejunk03.mdl  # 板条箱
+  models/props/crates/supplycratejunk04.mdl  # 板条箱
+  models/props/crates/supplycratejunk05.mdl  # 板条箱
+  models/props/crates/supplycratejunk06.mdl  # 板条箱
+  models/props/crates/supplycratejunk07.mdl  # 板条箱
+  models/props/cs_assault/acunit02.mdl  # CS突击地图道具
+  models/props/cs_assault/consolepanelloadingbay.mdl  # CS突击地图道具
+  models/props/cs_assault/handtruck.mdl  # CS突击地图道具
+  models/props/cs_assault/ventilationduct01.mdl  # CS突击地图道具
+  models/props/cs_militia/boxes_frontroom.mdl  # CS民兵地图道具
+  models/props/cs_militia/boxes_garage_lower.mdl  # CS民兵地图道具
+  models/props/cs_militia/food_stack.mdl  # CS民兵地图道具
+  models/props/cs_militia/footlocker01_closed.mdl  # CS民兵地图道具
+  models/props/cs_militia/footlocker01_open.mdl  # CS民兵地图道具
+  models/props/cs_militia/table_shed.mdl  # CS民兵地图道具
+  models/props/cs_militia/van.mdl  # CS民兵地图道具
+  models/props/cs_militia/van_glass.mdl  # CS民兵地图道具
+  models/props/cs_office/chair_office.mdl  # CS办公地图道具
+  models/props/cs_office/light_ceiling.mdl  # CS办公地图道具
+  models/props/de_dust/hr_dust/dust_cell_tower/dust_cell_tower_half.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/dust_crates/dust_plastic_fruit_crate.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/dust_crates/dust_plastic_fruit_crate_stack_01.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/dust_crates/dust_plastic_fruit_crate_stack_02.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/dust_curbs_001/dust_curbs_001_1024_a.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/dust_curbs_001/dust_curbs_001_128_a.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/dust_curbs_001/dust_curbs_001_128_a_striped.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/dust_curbs_001/dust_curbs_001_16_a.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/dust_curbs_001/dust_curbs_001_256_a.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/dust_curbs_001/dust_curbs_001_512_a.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/dust_curbs_001/dust_curbs_001_512_a_striped.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/dust_curbs_001/dust_curbs_001_64_a.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/dust_lights/dust_hanging_lantern_01_small.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/dust_lights/dust_ornate_lantern_chain_48.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/dust_propane_tanks/propane_tank_01.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/dust_propane_tanks/propane_tank_01_cluster_01.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/dust_propane_tanks/propane_tank_01_cluster_02.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/dust_propane_tanks/propane_tank_02.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/dust_propane_tanks/propane_tank_02_cluster_01.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/dust_propane_tanks/propane_tank_02_cluster_02.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/dust_soccerball/dust_soccer_ball001.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/foliage/palm_tree_04.mdl  # CS沙漠地图道具
+  models/props/de_dust/hr_dust/foliage/palm_tree_small_01.mdl  # CS沙漠地图道具
+  models/props/de_dust/palm_tree_trunk.mdl  # CS沙漠地图道具
+  models/props/de_inferno/bushgreenbig.mdl  # CS炼狱小镇道具
+  models/props/de_inferno/bushgreensmall.mdl  # CS炼狱小镇道具
+  models/props/de_inferno/cactus.mdl  # CS炼狱小镇道具
+  models/props/de_inferno/cactus2.mdl  # CS炼狱小镇道具
+  models/props/de_inferno/hr_i/barrel_b/barrel_b.mdl  # CS炼狱小镇道具
+  models/props/de_inferno/hr_i/inferno_paintings/inferno_paintings_03.mdl  # CS炼狱小镇道具
+  models/props/de_inferno/hr_i/inferno_paintings/inferno_paintings_04.mdl  # CS炼狱小镇道具
+  models/props/de_inferno/hr_i/inferno_water_heater/inferno_water_heater.mdl  # CS炼狱小镇道具
+  models/props/de_inferno/hr_i/inferno_wine_crate/inferno_wine_crate_01.mdl  # CS炼狱小镇道具
+  models/props/de_inferno/hr_i/inferno_wine_crate/inferno_wine_crate_02.mdl  # CS炼狱小镇道具
+  models/props/de_inferno/hr_i/missile/missile_02.mdl  # CS炼狱小镇道具
+  models/props/de_inferno/hr_i/weapon_crate_a/weapon_crate_a_plastic.mdl  # CS炼狱小镇道具
+  models/props/de_inferno/largebush02.mdl  # CS炼狱小镇道具
+  models/props/de_inferno/largebush06.mdl  # CS炼狱小镇道具
+  models/props/de_inferno/succulant.mdl  # CS炼狱小镇道具
+  models/props/de_inferno/tree_large.mdl  # CS炼狱小镇道具
+  models/props/de_inferno/tree_small.mdl  # CS炼狱小镇道具
+  models/props/de_nuke/clock.mdl  # CS核子危机地图道具
+  models/props/de_nuke/emergency_lighta.mdl  # CS核子危机地图道具
+  models/props/de_nuke/emergency_lightb.mdl  # CS核子危机地图道具
+  models/props/de_nuke/equipment2.mdl  # CS核子危机地图道具
+  models/props/de_nuke/equipment3a.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/chainlink_fence_001/chainlink_fence_001_128.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/chainlink_fence_001/chainlink_fence_001_256.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/chainlink_fence_001/chainlink_fence_001_32.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/chainlink_fence_001/chainlink_fence_001_64.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/chainlink_fence_001/chainlink_fence_001_post.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/chainlink_fence_001/chainlink_fence_gate_003a_wheels.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/medium_silo/medium_silo.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/medium_silo_frame/medium_silo_frame.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/metal_crate_001/metal_crate_001_128x112x256_low.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/metal_crate_001/metal_crate_001_76.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/metal_crate_001/metal_crate_001_76_low.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/metal_crate_001/metal_crate_001_96.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/metal_crate_001/metal_crate_001_96_low.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/metal_crate_001/metal_crate_002_64_low.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/metal_crate_001/metal_crate_003_48_low.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/metal_crate_001/metal_crate_004_32x64_low.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/metal_ladder_001/metal_ladder_001_128.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/metal_ladder_001/metal_ladder_001_256.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/metal_pipe_001/metal_pipe_001d_frame_low.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/metal_railing_001/metal_railing_001_128.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/metal_railing_001/metal_railing_001_16.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/metal_railing_001/metal_railing_001_24.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/metal_railing_001/metal_railing_001_256.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/metal_railing_001/metal_railing_001_32.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/metal_railing_001/metal_railing_001_end.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_bombsite_target/nuke_bombsite_target_03.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_bombsite_target/nuke_bombsite_trolley.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_computer/nuke_supercomputer_01.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_computer/nuke_supercomputer_02.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_electric_panel/nuke_electric_panel01.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_electric_panel/nuke_electric_panel01_big.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_electric_panel/nuke_electric_panel02.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_electric_panel/nuke_electric_panel02_big.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_electric_panel/nuke_electric_panel02_small.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_floor_hatch/nuke_floor_hatch_flat_32.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_floor_hatch/nuke_floor_hatch_flat_64.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_forklift/forklift_tire_01.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_forklift/nuke_forklift_base.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_forklift/nuke_forklift_fork.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_forklift/nuke_forklift_small.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_hand_truck/nuke_hand_truck.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_industrial_props/nuke_industrial_electrical_panel_001.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_industrial_props/nuke_industrial_electrical_panel_001b_door.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_industrial_props/nuke_industrial_electrical_panel_001b_door_small.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_industrial_props/nuke_industrial_electrical_panel_002.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_industrial_props/nuke_industrial_electrical_panel_002_small.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_industrial_props/nuke_industrial_electrical_panel_002b_door.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_industrial_props/nuke_industrial_electrical_panel_002b_door_small.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_industrial_props/nuke_industrial_upper_crane_001a_new.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_machinery/nuke_machinery_01.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_machinery/nuke_machinery_02.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_machinery/nuke_machinery_03.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_machinery/nuke_machinery_04.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_machinery/nuke_machinery_05_big.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_machinery/nuke_machinery_05b.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_reactor_vessel_head/nuke_reactor_vessel_head.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_roof_ac/ac_powerbox_small.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/nuke_roof_ac/nuke_roof_ac01_low.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/stains/nuke_oil_puddle01.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/stains/nuke_oil_puddle02.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/stains/nuke_oil_puddle03.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/substation_transformer/substation_transformer.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/transformer_add_01/transformer_add_01.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/transformer_yard_powerbox/transformer_yard_powerbox.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/transformer_yard_powerbox/transformer_yard_powerbox_small.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/web_joist_001/web_joist_001_large_128.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/web_joist_001/web_joist_001_large_16.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/web_joist_001/web_joist_001_large_256.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/web_joist_001/web_joist_001_large_32.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/web_joist_001/web_joist_001_large_512.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/web_joist_001/web_joist_001_large_64.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/web_joist_001/web_joist_001_small_128.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/web_joist_001/web_joist_001_small_16.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/web_joist_001/web_joist_001_small_256.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/web_joist_001/web_joist_001_small_32.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/web_joist_001/web_joist_001_small_512.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/web_joist_001/web_joist_001_small_64.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/web_joist_001/web_joist_001_small_8.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/web_joist_001/web_joist_support_001_vertical_128.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/web_joist_001/web_joist_support_001_vertical_256.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/web_joist_001/web_joist_support_001_vertical_64.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/web_joist_001/web_joist_support_003_vertical_128.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/web_joist_001/web_joist_support_003_vertical_256.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/web_joist_001/web_joist_support_003_vertical_32.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/web_joist_001/web_joist_support_003_vertical_64.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/wires_001/wires_001a_128.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/wires_001/wires_001a_16.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/wires_001/wires_001a_256.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/wires_001/wires_001a_32.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/wires_001/wires_001a_4.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/wires_001/wires_001a_512.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/wires_001/wires_001a_64.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/wires_001/wires_001a_8.mdl  # CS核子危机地图道具
+  models/props/de_nuke/hr_nuke/wires_001/wires_001a_curve_long.mdl  # CS核子危机地图道具
+  models/props/de_nuke/truck_nuke.mdl  # CS核子危机地图道具
+  models/props/de_nuke/truck_nuke_glass.mdl  # CS核子危机地图道具
+  models/props/de_nuke/ventilationduct02large.mdl  # CS核子危机地图道具
+  models/props/de_nuke/warehouse_structure1.mdl  # CS核子危机地图道具
+  models/props/de_nuke/warehouselightingeffects.mdl  # CS核子危机地图道具
+  models/props/de_overpass/overpass_light.mdl
+  models/props/de_piranesi/pi_apc.mdl
+  models/props/de_prodigy/ammo_can_01.mdl  # CS天才地图道具
+  models/props/de_prodigy/ammo_can_02.mdl  # CS天才地图道具
+  models/props/de_prodigy/ammo_can_03.mdl  # CS天才地图道具
+  models/props/de_prodigy/desk_console1.mdl  # CS天才地图道具
+  models/props/de_prodigy/desk_console1a.mdl  # CS天才地图道具
+  models/props/de_prodigy/desk_console1b.mdl  # CS天才地图道具
+  models/props/de_prodigy/desk_console2.mdl  # CS天才地图道具
+  models/props/de_prodigy/tire2.mdl  # CS天才地图道具
+  models/props/de_prodigy/tirestack.mdl  # CS天才地图道具
+  models/props/de_prodigy/tirestack2.mdl  # CS天才地图道具
+  models/props/de_prodigy/tirestack3.mdl  # CS天才地图道具
+  models/props/de_prodigy/wall_console1.mdl  # CS天才地图道具
+  models/props/de_prodigy/wall_console2.mdl  # CS天才地图道具
+  models/props/de_prodigy/wall_console3.mdl  # CS天才地图道具
+  models/props/de_prodigy/wood_pallet_01.mdl  # CS天才地图道具
+  models/props/de_prodigy/wood_pallet_debris_01.mdl  # CS天才地图道具
+  models/props/de_prodigy/wood_pallet_debris_02.mdl  # CS天才地图道具
+  models/props/de_prodigy/wood_pallet_debris_04.mdl  # CS天才地图道具
+  models/props/de_prodigy/wood_pallet_debris_06.mdl  # CS天才地图道具
+  models/props/de_prodigy/wood_pallet_debris_09.mdl  # CS天才地图道具
+  models/props/de_prodigy/wood_pallet_debris_10.mdl  # CS天才地图道具
+  models/props/de_prodigy/wood_pallet_debris_11.mdl  # CS天才地图道具
+  models/props/de_prodigy/wood_pallet_debris_12.mdl  # CS天才地图道具
+  models/props/de_tides/truck.mdl
+  models/props/de_train/de_train_signalbox_01.mdl  # CS火车地图道具
+  models/props/de_train/hr_t/fan_a/parts/fan_blade.mdl  # CS火车地图道具
+  models/props/de_train/hr_t/i_beam_a/i_beam_a.mdl  # CS火车地图道具
+  models/props/de_train/hr_t/i_beam_d/i_beam_d.mdl  # CS火车地图道具
+  models/props/de_train/hr_t/i_beam_e/i_beam_e.mdl  # CS火车地图道具
+  models/props/de_train/hr_t/i_beam_f/i_beam_f.mdl  # CS火车地图道具
+  models/props/de_train/hr_t/i_beam_f/i_beam_f_l.mdl  # CS火车地图道具
+  models/props/de_train/hr_t/metal_door_m/metal_door_m.mdl  # CS火车地图道具
+  models/props/de_train/hr_t/metal_door_m/metal_door_m_b.mdl  # CS火车地图道具
+  models/props/de_train/hr_t/metal_support_a/metal_support_a.mdl  # CS火车地图道具
+  models/props/de_train/hr_t/nuclear_container_a/nuclear_container_a.mdl  # CS火车地图道具
+  models/props/de_train/hr_t/nuclear_engine_a/nuclear_engine_a.mdl  # CS火车地图道具
+  models/props/de_train/hr_t/nuclear_engine_a/nuclear_engine_a_stand.mdl  # CS火车地图道具
+  models/props/de_train/hr_t/nuclear_engine_a/nuclear_engine_b.mdl  # CS火车地图道具
+  models/props/de_train/hr_t/server_a/server_a.mdl  # CS火车地图道具
+  models/props/de_train/utility_truck.mdl  # CS火车地图道具
+  models/props/de_train/utility_truck_windows.mdl  # CS火车地图道具
+  models/props/de_vertigo/hvac_controller_01.mdl  # CS眩晕地图道具
+  models/props/de_vertigo/hvac_controller_02.mdl  # CS眩晕地图道具
+  models/props/de_vertigo/hvac_controller_03.mdl  # CS眩晕地图道具
+  models/props/de_vertigo/hvac_fan_02.mdl  # CS眩晕地图道具
+  models/props/de_vertigo/hvac_fan_03.mdl  # CS眩晕地图道具
+  models/props/de_vertigo/hvac_fanblade_spinning_01.mdl  # CS眩晕地图道具
+  models/props/de_vertigo/railingstairs_112_l.mdl  # CS眩晕地图道具
+  models/props/de_vertigo/railingstairs_112_r.mdl  # CS眩晕地图道具
+  models/props/de_vertigo/railingstairs_80_l.mdl  # CS眩晕地图道具
+  models/props/de_vertigo/railingstairs_80_r.mdl  # CS眩晕地图道具
+  models/props/de_vertigo/railingstraight_128.mdl  # CS眩晕地图道具
+  models/props/de_vertigo/railingstraight_96.mdl  # CS眩晕地图道具
+  models/props/destructable_pipe_set/destroyed_pipe.mdl  # 可破坏管道
+  models/props/destructable_pipe_set/destructable_pipe_straight.mdl  # 可破坏管道
+  models/props/destructable_pipe_set/destructable_pipe_turn_down.mdl  # 可破坏管道
+  models/props/destructable_pipe_set/destructable_pipe_turn_side.mdl  # 可破坏管道
+  models/props/destructable_pipe_set/undestroyed_pipe.mdl  # 可破坏管道
+  models/props/doors/door001a_256/door001a_256.mdl  # 门
+  models/props/doors/door001a_256/doorframe001a_256.mdl  # 门
+  models/props/doors/heavy_doors/doorleft.mdl  # 门
+  models/props/doors/heavy_doors/doorright.mdl  # 门
+  models/props/doors/heavy_doors/heavy_door_frame.mdl  # 门
+  models/props/doors/heavy_doors/heavy_door_frame_inner.mdl  # 门
+  models/props/doors/heavy_doors/heavy_door_frame_outer.mdl  # 门
+  models/props/doors/slow_heavy_door/slow_heavy_door.mdl  # 门
+  models/props/doors/slow_heavy_door/slow_heavy_door_v2.mdl  # 门
+  models/props/dust_massive/cargo_container/cargo_container_square.mdl  # 大沙漠地图
+  models/props/dust_massive/cargo_container/cargo_container_square_closed.mdl  # 大沙漠地图
+  models/props/dust_massive/cargo_container/cargo_container_square_paint.mdl  # 大沙漠地图
+  models/props/dust_massive/rocks/cliff_rock001.mdl  # 大沙漠地图
+  models/props/dust_massive/rocks/cliff_rock002.mdl  # 大沙漠地图
+  models/props/dust_massive/rocks/cliff_rock003.mdl  # 大沙漠地图
+  models/props/dust_massive/rocks/cliff_rock004.mdl  # 大沙漠地图
+  models/props/dust_massive/rocks/cliff_rock005.mdl  # 大沙漠地图
+  models/props/dust_massive/rocks/cliff_rock006.mdl  # 大沙漠地图
+  models/props/dust_massive/rocks/cliff_rock007.mdl  # 大沙漠地图
+  models/props/dust_massive/rocks/cliff_wall001.mdl  # 大沙漠地图
+  models/props/dust_massive/rocks/cliff_wall002.mdl  # 大沙漠地图
+  models/props/dust_massive/rocks/cliff_wall003.mdl  # 大沙漠地图
+  models/props/dust_massive/rocks/cliff_wall004.mdl  # 大沙漠地图
+  models/props/dust_massive/rocks/cliff_wall005.mdl  # 大沙漠地图
+  models/props/dust_massive/rocks/cliff_wall006.mdl  # 大沙漠地图
+  models/props/dust_massive/rocks/cliff_wall007.mdl  # 大沙漠地图
+  models/props/dust_massive/rocks/cliff_wall008.mdl  # 大沙漠地图
+  models/props/dz_fall/foliage/beech_tree_01_fall.mdl  # 头号特训-坠落
+  models/props/dz_fall/foliage/beech_tree_02_fall.mdl  # 头号特训-坠落
+  models/props/dz_fall/foliage/birch_tree_01_fall.mdl  # 头号特训-坠落
+  models/props/dz_fall/foliage/birch_tree_02_fall.mdl  # 头号特训-坠落
+  models/props/elevator_shaft/shaft01a.mdl  # 电梯井
+  models/props/elevator_shaft/shaft01b.mdl  # 电梯井
+  models/props/explosive/explosive.mdl
+  models/props/floor/grate02/grate02_64.mdl  # 地板
+  models/props/floor/grate02/grate02_64_broken.mdl  # 地板
+  models/props/floor/hatches/hatch01.mdl  # 地板
+  models/props/floor/hazard_stripe_01/hazard_stripe_128.mdl  # 地板
+  models/props/floor/hazard_stripe_rect_01/hazard_stripe_rect_01.mdl  # 地板
+  models/props/floor/metal_flashing/metal_flashing_128.mdl  # 地板
+  models/props/floor/metal_flashing/metal_flashing_256.mdl  # 地板
+  models/props/floor/metal_flashing/metal_flashing_64.mdl  # 地板
+  models/props/floor/panels/panel_01.mdl  # 地板
+  models/props/floor/panels/panel_02.mdl  # 地板
+  models/props/floor/panels/panel_03.mdl  # 地板
+  models/props/floor/panels/panel_04.mdl  # 地板
+  models/props/floor/panels/panel_06.mdl  # 地板
+  models/props/floor/panels/rubber_mat_01.mdl  # 地板
+  models/props/floor/tile/tile_broken_128/tile_broken_128.mdl  # 地板
+  models/props/floor/tile/tile_broken_128/tile_broken_128b.mdl  # 地板
+  models/props/floor/tile/tile_broken_128/tile_broken_128c.mdl  # 地板
+  models/props/floor/trash/trash_01.mdl  # 地板
+  models/props/floor/trash/trash_01b.mdl  # 地板
+  models/props/floor/trash/trash_01c.mdl  # 地板
+  models/props/floor/wires01_512/wires01_512.mdl  # 地板
+  models/props/floor/wires02_512/wires02_512.mdl  # 地板
+  models/props/floor/wires03/outlet.mdl  # 地板
+  models/props/floor/wires03/wire03_1.mdl  # 地板
+  models/props/floor/wires03/wire03_2.mdl  # 地板
+  models/props/floor/wires03/wire03_3.mdl  # 地板
+  models/props/floor/wires03/wire03_4.mdl  # 地板
+  models/props/furniture/chairs/officechair01.mdl  # 家具
+  models/props/furniture/chairs/officechair02.mdl  # 家具
+  models/props/furniture/desks/desks/laboratorydesk01.mdl  # 家具
+  models/props/furniture/desks/desks/laboratorydesk02.mdl  # 家具
+  models/props/furniture/desks/desks/officecart01.mdl  # 家具
+  models/props/furniture/lockers/officelockers01.mdl  # 家具
+  models/props/furniture/misc/bathroombin.mdl  # 家具
+  models/props/furniture/misc/bathroompartitionwall1.mdl  # 家具
+  models/props/furniture/misc/bathroomsink.mdl  # 家具
+  models/props/furniture/misc/fridge.mdl  # 家具
+  models/props/furniture/misc/papertoweldispenser.mdl  # 家具
+  models/props/furniture/misc/small_ladder.mdl  # 家具
+  models/props/furniture/misc/soapldispenser.mdl  # 家具
+  models/props/furniture/misc/toilet.mdl  # 家具
+  models/props/furniture/shelves/cabinet01.mdl  # 家具
+  models/props/furniture/shelves/cabinet01door_left.mdl  # 家具
+  models/props/furniture/shelves/cabinet01door_right.mdl  # 家具
+  models/props/furniture/shelves/hangingshelf01.mdl  # 家具
+  models/props/furniture/shelves/hangingshelf02.mdl  # 家具
+  models/props/furniture/shelves/hangingshelfdoor_left.mdl  # 家具
+  models/props/furniture/shelves/hangingshelfdoor_right.mdl  # 家具
+  models/props/furniture/tables/office_table01/office_table01.mdl  # 家具
+  models/props/furniture/tables/table001a_64/table001a_64.mdl  # 家具
+  models/props/gg_handling/baggage_handling_control_panel.mdl
+  models/props/hospital_ivstand01.mdl
+  models/props/hr_massive/foliage_ported/fir_tree_1.mdl  # HR大型地图
+  models/props/hr_massive/foliage_ported/fir_tree_4.mdl  # HR大型地图
+  models/props/hr_massive/foliage_ported/fir_tree_young_2.mdl  # HR大型地图
+  models/props/hr_massive/hr_foliage/hr_maple_tree_01.mdl  # HR大型地图
+  models/props/hr_massive/hr_foliage/hr_tree_stump_01.mdl  # HR大型地图
+  models/props/kb_mouse/keyboard.mdl  # 键盘鼠标
+  models/props/kb_mouse/mouse.mdl  # 键盘鼠标
+  models/props/lab_monitor_pose01/lab_monitor_pose01.mdl  # 实验室显示器
+  models/props/lab_monitor_pose01/lab_monitor_pose03.mdl  # 实验室显示器
+  models/props/lights/cagedlight01.mdl  # 灯
+  models/props/lights/doorlight.mdl  # 灯
+  models/props/lights/light_powerbox.mdl  # 灯
+  models/props/lights/neonlightwall.mdl  # 灯
+  models/props/lights/outside_lamppost.mdl  # 灯
+  models/props/lights/platformlight.mdl  # 灯
+  models/props/lights/spotlight01.mdl  # 灯
+  models/props/lights/tube_light_01/tube_light_01.mdl  # 灯
+  models/props/machinery/boilers/blueboiler160.mdl  # 机械
+  models/props/machinery/boilers/hugeboiler01.mdl  # 机械
+  models/props/machinery/boilers/hugeboiler01endcap1.mdl  # 机械
+  models/props/machinery/boilers/refinery_boiler_a.mdl  # 机械
+  models/props/machinery/boilers/refinery_boiler_b.mdl  # 机械
+  models/props/machinery/boilers/refinery_boiler_c.mdl  # 机械
+  models/props/machinery/boilers/refinery_boiler_d.mdl  # 机械
+  models/props/machinery/boilers/refinery_catwalk.mdl  # 机械
+  models/props/machinery/boilers/refinery_catwalkb.mdl  # 机械
+  models/props/machinery/crane/arm.mdl  # 机械
+  models/props/machinery/crane/base.mdl  # 机械
+  models/props/machinery/crane/cab.mdl  # 机械
+  models/props/machinery/crane/support01.mdl  # 机械
+  models/props/machinery/crane/supportbase.mdl  # 机械
+  models/props/machinery/elevators/elevator_landingbay_motor.mdl  # 机械
+  models/props/machinery/elevators/elevator_landingbay_railing.mdl  # 机械
+  models/props/machinery/elevators/elevator_landingbay_ramp.mdl  # 机械
+  models/props/machinery/elevators/elevator_landingbay01.mdl  # 机械
+  models/props/machinery/elevators/elevator_landingbay02.mdl  # 机械
+  models/props/machinery/elevators/elevator_landingbay03.mdl  # 机械
+  models/props/machinery/elevators/elevator_landingbay04.mdl  # 机械
+  models/props/machinery/generators/generator01.mdl  # 机械
+  models/props/machinery/generators/generator02.mdl  # 机械
+  models/props/machinery/generators/generator03.mdl  # 机械
+  models/props/machinery/generators/generator04.mdl  # 机械
+  models/props/miscdeco/pallet/pallet.mdl  # 杂项装饰
+  models/props/miscdeco/pallet/palletsingle.mdl  # 杂项装饰
+  models/props/miscdeco/papers/paper_fold.mdl  # 杂项装饰
+  models/props/miscdeco/papers/paper_form.mdl  # 杂项装饰
+  models/props/miscdeco/papers/paper_note.mdl  # 杂项装饰
+  models/props/miscdeco/papers/paper_ream.mdl  # 杂项装饰
+  models/props/outside/building_trim/building_trim_256.mdl  # 户外
+  models/props/outside/building_trim/building_trim_corner.mdl  # 户外
+  models/props/outside/building_trim/snow_building_trim_256.mdl  # 户外
+  models/props/outside/building_trim/snow_building_trim_512.mdl  # 户外
+  models/props/pipes/pipeset_2/bend01.mdl  # 管道
+  models/props/pipes/pipeset_2/bend02.mdl  # 管道
+  models/props/pipes/pipeset_2/multibend.mdl  # 管道
+  models/props/pipes/pipeset_2/s_piece01.mdl  # 管道
+  models/props/pipes/pipeset_2/straight_01.mdl  # 管道
+  models/props/pipes/pipeset_2/straight_02.mdl  # 管道
+  models/props/pipes/pipeset_32/pipe_clamp.mdl  # 管道
+  models/props/pipes/pipeset_32/pipe_corner.mdl  # 管道
+  models/props/pipes/pipeset_32/pipe_endcap_01.mdl  # 管道
+  models/props/pipes/pipeset_32/pipe_endcap_02.mdl  # 管道
+  models/props/pipes/pipeset_32/pipe_endcap_04.mdl  # 管道
+  models/props/pipes/pipeset_32/pipe_endcap_05.mdl  # 管道
+  models/props/pipes/pipeset_32/pipe_s.mdl  # 管道
+  models/props/pipes/pipeset_32/pipe_straight_128.mdl  # 管道
+  models/props/pipes/pipeset_32/pipe_straight_64.mdl  # 管道
+  models/props/pipes/pipeset_32/pipe_t.mdl  # 管道
+  models/props/pipes/pipeset_4/curve90_left.mdl  # 管道
+  models/props/pipes/pipeset_4/curve90_right.mdl  # 管道
+  models/props/pipes/pipeset_4/straight128.mdl  # 管道
+  models/props/pipes/pipeset_4/straight64.mdl  # 管道
+  models/props/pipes/pipeset_8/pipe_128.mdl  # 管道
+  models/props/pipes/pipeset_8/pipe_160.mdl  # 管道
+  models/props/pipes/pipeset_8/pipe_64.mdl  # 管道
+  models/props/pipes/pipeset_8/pipe_8_connector.mdl  # 管道
+  models/props/pipes/pipeset_8/pipe_8_endcap.mdl  # 管道
+  models/props/pipes/pipeset_8/pipe_8_insert02.mdl  # 管道
+  models/props/pipes/pipeset_8/pipe_8_mount.mdl  # 管道
+  models/props/pipes/pipeset_8/pipe_8_regulator.mdl  # 管道
+  models/props/pipes/pipeset_8/pipe_8_supportbeam.mdl  # 管道
+  models/props/pipes/pipeset_8/pipe_8_valve.mdl  # 管道
+  models/props/pipes/pipeset_8/pipe_corner.mdl  # 管道
+  models/props/pipes/rydberg_pipes/rydberg_bigpipe_rim.mdl  # 管道
+  models/props/pipes/rydberg_pipes/rydberg_bigpipea.mdl  # 管道
+  models/props/pipes/rydberg_pipes/rydberg_bigpipeb.mdl  # 管道
+  models/props/pipes/rydberg_pipes/rydberg_mediumpipe_rim.mdl  # 管道
+  models/props/pipes/rydberg_pipes/rydberg_mediumpipea.mdl  # 管道
+  models/props/pipes/rydberg_pipes/rydberg_mediumpipeb.mdl  # 管道
+  models/props/props_gameplay/biohazard_tank_highpoly.mdl
+  models/props/props_utilities/electric_cables01.mdl
+  models/props/railings/ind/high_safety_buffer.mdl  # 栏杆
+  models/props/railings/ind/straight_128.mdl  # 栏杆
+  models/props/railings/ind/straight_64.mdl  # 栏杆
+  models/props/railings/ind/straight_cap_128.mdl  # 栏杆
+  models/props/railings/ind/straight_cap_64.mdl  # 栏杆
+  models/props/railings/ind/straight_small_bend_8.mdl  # 栏杆
+  models/props/railings/ind/straight_small_bend_8_in.mdl  # 栏杆
+  models/props/railings/ind/straight_tall_128.mdl  # 栏杆
+  models/props/railings/ind/straight_tall_64.mdl  # 栏杆
+  models/props/railings/ryd/railing_small_cap_ryd.mdl  # 栏杆
+  models/props/railings/ryd/railing_small128_ryd.mdl  # 栏杆
+  models/props/railings/ryd/railing_small64_ryd.mdl  # 栏杆
+  models/props/railings/ryd/railing_tall_bend_ryd.mdl  # 栏杆
+  models/props/railings/ryd/railing_tall_cap_ryd.mdl  # 栏杆
+  models/props/railings/ryd/railing_tall128_ryd.mdl  # 栏杆
+  models/props/railings/ryd/railing_tall64_ryd.mdl  # 栏杆
+  models/props/railings/ryd/railling_small64_bend_ryd.mdl  # 栏杆
+  models/props/sewergrate/sewergrate.mdl
+  models/props/ship/ship.mdl
+  models/props/snow/icefield01.mdl  # 雪地物件
+  models/props/snow/icefield02.mdl  # 雪地物件
+  models/props/snow/icefield03.mdl  # 雪地物件
+  models/props/snow/rock03.mdl  # 雪地物件
+  models/props/snow/rock06.mdl  # 雪地物件
+  models/props/snow/rock07.mdl  # 雪地物件
+  models/props/snow/rock09.mdl  # 雪地物件
+  models/props/snow/rubble01.mdl  # 雪地物件
+  models/props/snow/rubble02.mdl  # 雪地物件
+  models/props/snow/snow01.mdl  # 雪地物件
+  models/props/snow/snow01b.mdl  # 雪地物件
+  models/props/snow/snow02.mdl  # 雪地物件
+  models/props/snow/snow03.mdl  # 雪地物件
+  models/props/snow/tracks01c.mdl  # 雪地物件
+  models/props/snow/tracks02a.mdl  # 雪地物件
+  models/props/snow/tracks02b.mdl  # 雪地物件
+  models/props/stains/stain_01.mdl  # 污渍
+  models/props/stains/stain_01_256.mdl  # 污渍
+  models/props/stains/stain_03.mdl  # 污渍
+  models/props/stains/stain_04.mdl  # 污渍
+  models/props/stains/stain_05a.mdl  # 污渍
+  models/props/stains/stain_05b.mdl  # 污渍
+  models/props/stains/stain_05c.mdl  # 污渍
+  models/props/stains/stain_05d.mdl  # 污渍
+  models/props/stains/stain_06.mdl  # 污渍
+  models/props/stains/stain_07.mdl  # 污渍
+  models/props/stains/stain_08.mdl  # 污渍
+  models/props/stains/stain_11.mdl  # 污渍
+  models/props/stains/stain_12.mdl  # 污渍
+  models/props/stairs/stairs_160_top/stairs_160_top.mdl  # 楼梯
+  models/props/stairs/stairs_160_top/stairs_160wide_no_top_piece.mdl  # 楼梯
+  models/props/stairs/stairs01_128w/stairs01_128.mdl  # 楼梯
+  models/props/stairs/stairs01_128w/stairs01_128noends.mdl  # 楼梯
+  models/props/stairs/stairs01_128w/stairs01_64.mdl  # 楼梯
+  models/props/stairs/stairs01_128w/stairs01_64noends.mdl  # 楼梯
+  models/props/stairs/stairs01_128w/stairs02_128.mdl  # 楼梯
+  models/props/stairs/stairs01_128w/stairs02_128noends.mdl  # 楼梯
+  models/props/stairs/stairs01_128w/stairs02_64.mdl  # 楼梯
+  models/props/stairs/stairs01_128w/stairs02_64noends.mdl  # 楼梯
+  models/props/supports/crossbeam_1/crossbeam_1a.mdl  # 支撑结构
+  models/props/supports/crossbeam_2/crossbeam_02.mdl  # 支撑结构
+  models/props/supports/crossbeam_3/crossbeam03a.mdl  # 支撑结构
+  models/props/supports/crossbeam_3/crossbeam03b.mdl  # 支撑结构
+  models/props/supports/crossbeam_3/crossbeam03c.mdl  # 支撑结构
+  models/props/supports/crossbeam_lowpoly/crossbeam_lowpoly.mdl  # 支撑结构
+  models/props/supports/crossbeam_square_128/cross_beam_square_128.mdl  # 支撑结构
+  models/props/supports/ryd_ceiling/ceiling_track_corner.mdl  # 支撑结构
+  models/props/supports/ryd_ceiling/ceiling_track128.mdl  # 支撑结构
+  models/props/supports/ryd_ceiling/ceiling_track256.mdl  # 支撑结构
+  models/props/supports/ryd_ceiling/ceiling_track64.mdl  # 支撑结构
+  models/props/supports/ryd_floor/floor_trim_plate.mdl  # 支撑结构
+  models/props/supports/ryd_floor/floor_trim128.mdl  # 支撑结构
+  models/props/supports/ryd_floor/floor_trim256.mdl  # 支撑结构
+  models/props/supports/ryd_floor/floor_trim64.mdl  # 支撑结构
+  models/props/supports/ryd_support_beam01/ryd_support_beam01.mdl  # 支撑结构
+  models/props/supports/ryd_support_beam01/ryd_support_beam01curve.mdl  # 支撑结构
+  models/props/supports/ryd_support_beam01/ryd_support_beam01top.mdl  # 支撑结构
+  models/props/supports/ryd_support_beam01/ryd_support_beam02.mdl  # 支撑结构
+  models/props/supports/ryd_support_beam01/ryd_support_beam03.mdl  # 支撑结构
+  models/props/supports/ryd_support_beam01/ryd_support_beam04.mdl  # 支撑结构
+  models/props/supports/ryd_support_beam01/ryd_support_beam05.mdl  # 支撑结构
+  models/props/supports/ryd_support_beam01/ryd_support_beam06.mdl  # 支撑结构
+  models/props/supports/ryd_support_beam01/ryd_wire_system.mdl  # 支撑结构
+  models/props/supports/ryd_support_beam01/ryd_x_support.mdl  # 支撑结构
+  models/props/supports/rydberg_vent/rydberg_vent.mdl  # 支撑结构
+  models/props/supports/scaffoldingsystem01/beam128.mdl  # 支撑结构
+  models/props/supports/scaffoldingsystem01/beam256.mdl  # 支撑结构
+  models/props/supports/scaffoldingsystem01/beam64.mdl  # 支撑结构
+  models/props/supports/scaffoldingsystem01/bracingthin.mdl  # 支撑结构
+  models/props/supports/scaffoldingsystem01/connector1.mdl  # 支撑结构
+  models/props/supports/scaffoldingsystem01/connector2.mdl  # 支撑结构
+  models/props/supports/scaffoldingsystem01/crossbeam.mdl  # 支撑结构
+  models/props/supports/scaffoldingsystem01/mount.mdl  # 支撑结构
+  models/props/supports/scaffoldingsystem01/thinbeam64.mdl  # 支撑结构
+  models/props/supports/wall_trim/walltrim01a.mdl  # 支撑结构
+  models/props/supports/wall_trim/walltrim01b.mdl  # 支撑结构
+  models/props/supports/wall_trim/walltrim01c.mdl  # 支撑结构
+  models/props/supports/wall_trim/walltrim01d.mdl  # 支撑结构
+  models/props/supports/wall_trim/walltrimwire01a.mdl  # 支撑结构
+  models/props/supports/wall_trim/walltrimwire01b.mdl  # 支撑结构
+  models/props/supports/wall_trim/walltrimwire01c.mdl  # 支撑结构
+  models/props/supports/wall_trim/walltrimwire01d.mdl  # 支撑结构
+  models/props/supports/wall_trim/walltrimwire01e.mdl  # 支撑结构
+  models/props/supports/wall_trim/walltrimwire01g.mdl  # 支撑结构
+  models/props/tanks/lab_wheel_tank/lab_wheel_tank.mdl
+  models/props/techdeco/battery_cart/battery_cart.mdl  # 科技装饰
+  models/props/techdeco/battery_cart/battery_cart_drawer.mdl  # 科技装饰
+  models/props/techdeco/buttonpanel/panel01.mdl  # 科技装饰
+  models/props/techdeco/buttonpanel/panel02.mdl  # 科技装饰
+  models/props/techdeco/computers/modul01.mdl  # 科技装饰
+  models/props/techdeco/computers/monitorkeyboard.mdl  # 科技装饰
+  models/props/techdeco/computers/monitorrack.mdl  # 科技装饰
+  models/props/techdeco/computers/notepad.mdl  # 科技装饰
+  models/props/techdeco/computers/portablehddr01.mdl  # 科技装饰
+  models/props/techdeco/computers/portablehddr02.mdl  # 科技装饰
+  models/props/techdeco/computers/server01.mdl  # 科技装饰
+  models/props/techdeco/computers/server02.mdl  # 科技装饰
+  models/props/techdeco/computers/suspendedmonitor1.mdl  # 科技装饰
+  models/props/techdeco/computers/suspendedmonitor2.mdl  # 科技装饰
+  models/props/techdeco/computers/suspendedmonitor3.mdl  # 科技装饰
+  models/props/techdeco/holo_projector/holo_projector.mdl  # 科技装饰
+  models/props/techdeco/laboratory/freezerlaboratory.mdl  # 科技装饰
+  models/props/techdeco/laboratory/freezershelf.mdl  # 科技装饰
+  models/props/techdeco/laboratory/xraymachine.mdl  # 科技装饰
+  models/props/techdeco/laboratory/xrayscreen.mdl  # 科技装饰
+  models/props/techdeco/ractor_room/control_room_cables.mdl  # 科技装饰
+  models/props/techdeco/ractor_room/control_room_monitor.mdl  # 科技装饰
+  models/props/techdeco/ractor_room/module_rack.mdl  # 科技装饰
+  models/props/techdeco/ractor_room/module_rack02.mdl  # 科技装饰
+  models/props/techdeco/ractor_room/module_rack03.mdl  # 科技装饰
+  models/props/techdeco/ractor_room/reactor_power_box.mdl  # 科技装饰
+  models/props/techdeco/ractor_room/reactor_power_box_door.mdl  # 科技装饰
+  models/props/toilet_body_reference.mdl
+  models/props/toilet_lid_reference.mdl
+  models/props/utilities/antenna001a.mdl  # 公用设施
+  models/props/utilities/antenna002a.mdl  # 公用设施
+  models/props/utilities/cable_set01.mdl  # 公用设施
+  models/props/utilities/cable_set02.mdl  # 公用设施
+  models/props/utilities/powerbox01.mdl  # 公用设施
+  models/props/utilities/powerbox02.mdl  # 公用设施
+  models/props/utilities/powerbox03.mdl  # 公用设施
+  models/props/utilities/powerbox04.mdl  # 公用设施
+  models/props/utilities/satellite_dish001a.mdl  # 公用设施
+  models/props/utilities/satellite_dish002a.mdl  # 公用设施
+  models/props/utilities/vent003.mdl  # 公用设施
+  models/props/utilities/vent003_blades.mdl  # 公用设施
+  models/props/utilities/vent003_housing.mdl  # 公用设施
+  models/props/utilities/vents001a_base.mdl  # 公用设施
+  models/props/utilities/vents002a_base.mdl  # 公用设施
+  models/props/utilities/vents002a_fan.mdl  # 公用设施
+  models/props/vehicles/bulldozer/bulldozer.mdl  # 载具
+  models/props/vehicles/cargo_carrier/cargo_carrier.mdl  # 载具
+  models/props/vehicles/dropship/dropship.mdl  # 载具
+  models/props/vehicles/dropship/dropship_but_cooler.mdl  # 载具
+  models/props/vehicles/forklift/forklift.mdl  # 载具
+  models/props/vehicles/helicopter/chopper.mdl  # 载具
+  models/props/vehicles/helicopter/chopper_wreck.mdl  # 载具
+  models/props/vehicles/tank_truck/tank_truck.mdl  # 载具
+  models/props/vents/vent_01/vent_01.mdl  # 通风口
+  models/props/vents/vent_02/vent_02.mdl  # 通风口
+  models/props/vents/ventwall/ventwall01.mdl  # 通风口
+  models/props/windows/window01a.mdl  # 窗户
+  models/props/windows/window01b.mdl  # 窗户
+
+== 场景道具(精简) props_reduction (265) ==
+  models/props_reduction/custom/angelbot.mdl  # 自定义地图道具
+  models/props_reduction/custom/barrel_explodo_nwh.mdl  # 自定义地图道具
+  models/props_reduction/custom/barrel_pallet_nwh.mdl  # 自定义地图道具
+  models/props_reduction/custom/bridgewreck_predemo.mdl  # 自定义地图道具
+  models/props_reduction/custom/bridgewreck_remainder.mdl  # 自定义地图道具
+  models/props_reduction/custom/bridgewreck_span.mdl  # 自定义地图道具
+  models/props_reduction/custom/bridging_feet.mdl  # 自定义地图道具
+  models/props_reduction/custom/bridging_foot1_stored.mdl  # 自定义地图道具
+  models/props_reduction/custom/bridging_foot2_stored.mdl  # 自定义地图道具
+  models/props_reduction/custom/bridging_hinge.mdl  # 自定义地图道具
+  models/props_reduction/custom/bridging_panel_small.mdl  # 自定义地图道具
+  models/props_reduction/custom/bridging_unit_stored.mdl  # 自定义地图道具
+  models/props_reduction/custom/bridging_unit1.mdl  # 自定义地图道具
+  models/props_reduction/custom/bridging_unit2.mdl  # 自定义地图道具
+  models/props_reduction/custom/capstone.mdl  # 自定义地图道具
+  models/props_reduction/custom/catwalkx_descend_200_ccw.mdl  # 自定义地图道具
+  models/props_reduction/custom/catwalkx_descend_200_cw.mdl  # 自定义地图道具
+  models/props_reduction/custom/catwalkx_straight_200.mdl  # 自定义地图道具
+  models/props_reduction/custom/catwalkx_straight_500.mdl  # 自定义地图道具
+  models/props_reduction/custom/caveinbuilding01.mdl  # 自定义地图道具
+  models/props_reduction/custom/cpstuff_antenna_pose1.mdl  # 自定义地图道具
+  models/props_reduction/custom/cpstuff_antenna_pose2.mdl  # 自定义地图道具
+  models/props_reduction/custom/cpstuff_handset_pose1.mdl  # 自定义地图道具
+  models/props_reduction/custom/cpstuff_handset_pose2.mdl  # 自定义地图道具
+  models/props_reduction/custom/cpstuff_radio.mdl  # 自定义地图道具
+  models/props_reduction/custom/crawlerbloodstain.mdl  # 自定义地图道具
+  models/props_reduction/custom/curb_128.mdl  # 自定义地图道具
+  models/props_reduction/custom/curb_16.mdl  # 自定义地图道具
+  models/props_reduction/custom/curb_256.mdl  # 自定义地图道具
+  models/props_reduction/custom/curb_256_bevelled.mdl  # 自定义地图道具
+  models/props_reduction/custom/curb_32.mdl  # 自定义地图道具
+  models/props_reduction/custom/curb_512.mdl  # 自定义地图道具
+  models/props_reduction/custom/curb_64.mdl  # 自定义地图道具
+  models/props_reduction/custom/curb_8.mdl  # 自定义地图道具
+  models/props_reduction/custom/curb_corner_16.mdl  # 自定义地图道具
+  models/props_reduction/custom/curb_corner_192.mdl  # 自定义地图道具
+  models/props_reduction/custom/curb_corner_64.mdl  # 自定义地图道具
+  models/props_reduction/custom/curb_drain.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_chainlinkfence_01.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_cinderblock_large.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_cinderblock_medium.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_cinderblock_small.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_groundtrash_large.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_groundtrash_small.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_ibeam_01.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_ibeam_02.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_ibeamsmall_01.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_ibeamsmall_02.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_sheetmetal_01.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_sheetmetal_01a.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_sheetmetal_02.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_sheetmetal_02a.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_sheetmetal_03.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_sheetmetal_03a.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_sheetmetal_04.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_sheetmetal_04a.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_sheetmetal_05.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_sheetmetal_05a.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_sheetmetal_06.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_sheetmetal_06a.mdl  # 自定义地图道具
+  models/props_reduction/custom/debris_spentcasings.mdl  # 自定义地图道具
+  models/props_reduction/custom/dirwarninglight_techlook_body.mdl  # 自定义地图道具
+  models/props_reduction/custom/dirwarninglight_techlook_tube.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_bomb_phys.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_bomb_small_1.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_bomb_small_2.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_bomb_small_3.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_bomb_small_4.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_bomb_small_5.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_bomb_small_6.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_bomb_stat.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_bomb_tiny_1.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_bomb_tiny_2.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_bomb_tiny_3.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_bomb_tiny_4.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_bomb_tiny_5.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_bomb_tiny_6.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_bombs_3up.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_formation_bmb.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_formation_nbmb.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_hull.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_ramp.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_ramp_small.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_roof.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_small.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_small_bmb.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_small_nbmb.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_small_nbmb2.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_tiny.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_tiny_bmb.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_tiny_nbmb.mdl  # 自定义地图道具
+  models/props_reduction/custom/dropship52_wings.mdl  # 自定义地图道具
+  models/props_reduction/custom/explodo_tank_intact.mdl  # 自定义地图道具
+  models/props_reduction/custom/explodo_tank_smashed.mdl  # 自定义地图道具
+  models/props_reduction/custom/fwindow_inner_frame.mdl  # 自定义地图道具
+  models/props_reduction/custom/fwindow_inner_frame_smashed.mdl  # 自定义地图道具
+  models/props_reduction/custom/fwindow_inner_glass.mdl  # 自定义地图道具
+  models/props_reduction/custom/fwindow_inner_glass_broken.mdl  # 自定义地图道具
+  models/props_reduction/custom/fwindow_inner_glass_smashed.mdl  # 自定义地图道具
+  models/props_reduction/custom/fwindow_outer_frame.mdl  # 自定义地图道具
+  models/props_reduction/custom/fwindow_outer_frame_smashed1.mdl  # 自定义地图道具
+  models/props_reduction/custom/fwindow_outer_frame_smashed2.mdl  # 自定义地图道具
+  models/props_reduction/custom/fwindow_outer_glass.mdl  # 自定义地图道具
+  models/props_reduction/custom/fwindow_outer_glass_broken.mdl  # 自定义地图道具
+  models/props_reduction/custom/fwindow_outer_glass_smashed1.mdl  # 自定义地图道具
+  models/props_reduction/custom/fwindow_outer_glass_smashed2.mdl  # 自定义地图道具
+  models/props_reduction/custom/gutter_pipe_smashed_1.mdl  # 自定义地图道具
+  models/props_reduction/custom/gutter_pipe_smashed_2.mdl  # 自定义地图道具
+  models/props_reduction/custom/gutter_pipe_smashed_3.mdl  # 自定义地图道具
+  models/props_reduction/custom/helixturbine.mdl  # 自定义地图道具
+  models/props_reduction/custom/highwaycurvecompass_large.mdl  # 自定义地图道具
+  models/props_reduction/custom/holographic_landscape.mdl  # 自定义地图道具
+  models/props_reduction/custom/hud_firesupport.mdl  # 自定义地图道具
+  models/props_reduction/custom/light_small_artdeco.mdl  # 自定义地图道具
+  models/props_reduction/custom/light_street_artdeco.mdl  # 自定义地图道具
+  models/props_reduction/custom/light_street_wreck_artdeco.mdl  # 自定义地图道具
+  models/props_reduction/custom/metalrailing_128.mdl  # 自定义地图道具
+  models/props_reduction/custom/metalrailing_256.mdl  # 自定义地图道具
+  models/props_reduction/custom/metalrailing_512.mdl  # 自定义地图道具
+  models/props_reduction/custom/metalrailing_64.mdl  # 自定义地图道具
+  models/props_reduction/custom/metalrailing_endpost.mdl  # 自定义地图道具
+  models/props_reduction/custom/metalrailing_endsmash.mdl  # 自定义地图道具
+  models/props_reduction/custom/mountainpeak_large.mdl  # 自定义地图道具
+  models/props_reduction/custom/mountainpeak_large_onesided.mdl  # 自定义地图道具
+  models/props_reduction/custom/mountainpeaks.mdl  # 自定义地图道具
+  models/props_reduction/custom/oldwindow_breaklarge.mdl  # 自定义地图道具
+  models/props_reduction/custom/oldwindow_breaksmall.mdl  # 自定义地图道具
+  models/props_reduction/custom/oldwindow_breaksmall_glass.mdl  # 自定义地图道具
+  models/props_reduction/custom/oldwindow_glassremains1.mdl  # 自定义地图道具
+  models/props_reduction/custom/oldwindow_glassremains3.mdl  # 自定义地图道具
+  models/props_reduction/custom/oldwindow_glassremainsmid.mdl  # 自定义地图道具
+  models/props_reduction/custom/oldwindow_intact.mdl  # 自定义地图道具
+  models/props_reduction/custom/oldwindow_intact_glassgood.mdl  # 自定义地图道具
+  models/props_reduction/custom/oldwindow_smashed1quarter.mdl  # 自定义地图道具
+  models/props_reduction/custom/oldwindow_smashed3quarters.mdl  # 自定义地图道具
+  models/props_reduction/custom/oldwindow_smashedhalfhoriz.mdl  # 自定义地图道具
+  models/props_reduction/custom/oldwindow_smashedhalfvert.mdl  # 自定义地图道具
+  models/props_reduction/custom/pallet_roller_nwh_phys.mdl  # 自定义地图道具
+  models/props_reduction/custom/paperdebris_01.mdl  # 自定义地图道具
+  models/props_reduction/custom/paperdebris_02.mdl  # 自定义地图道具
+  models/props_reduction/custom/paperdebris_03.mdl  # 自定义地图道具
+  models/props_reduction/custom/paperdebris_04.mdl  # 自定义地图道具
+  models/props_reduction/custom/parkingspots_arrow.mdl  # 自定义地图道具
+  models/props_reduction/custom/parkingspots_basic.mdl  # 自定义地图道具
+  models/props_reduction/custom/parkingspots_handi.mdl  # 自定义地图道具
+  models/props_reduction/custom/parkingspots_noparking.mdl  # 自定义地图道具
+  models/props_reduction/custom/parkingspots_nothere_narrow.mdl  # 自定义地图道具
+  models/props_reduction/custom/parkingspots_nothere_wide.mdl  # 自定义地图道具
+  models/props_reduction/custom/parkingspots_parahandi.mdl  # 自定义地图道具
+  models/props_reduction/custom/parkingspots_parallel.mdl  # 自定义地图道具
+  models/props_reduction/custom/rubble_asphalt_01.mdl  # 自定义地图道具
+  models/props_reduction/custom/rubble_asphalt_01small.mdl  # 自定义地图道具
+  models/props_reduction/custom/rubble_asphalt_02.mdl  # 自定义地图道具
+  models/props_reduction/custom/rubble_asphalt_02small.mdl  # 自定义地图道具
+  models/props_reduction/custom/rubble_asphalt_03.mdl  # 自定义地图道具
+  models/props_reduction/custom/rubble_asphalt_04.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_basic_deep_1.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_basic_deep_2.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_basic_shallow_1.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_basic_shallow_2.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_conc_large.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_conc_small.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_concdirt_large.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_concdirt_small.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_concrubbleb_large.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_concrubbleb_small.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_concrubblec_large.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_concrubblec_small.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_dirt_large.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_dirt_small.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_dirtrubbleb_large.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_dirtrubbleb_small.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_dirtrubblec_large.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_dirtrubblec_small.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_long_deep_1.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_long_deep_2.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_long_shallow_1.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_long_shallow_2.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_paveconc_large.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_paveconc_small.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_paved_large.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_paved_small.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_pavedirt_large.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_pavedirt_small.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_paverubbleb_large.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_paverubbleb_small.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_paverubblec_large.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_paverubblec_small.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_rubbleb_large.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_rubbleb_small.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_rubblec_large.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_rubblec_small.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_rubblecb_large.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_rubblecb_small.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_sewer_large.mdl  # 自定义地图道具
+  models/props_reduction/custom/shellcrater_sewer_small.mdl  # 自定义地图道具
+  models/props_reduction/custom/shoppingcart.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_airlockroom_hull.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_airlockroom_roof.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_airlockroom_roof_recce.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_antenna_post.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_bridge_cage_nose.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_bridge_cage_reardn.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_bridge_cage_rearup.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_bridge_glass.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_bridge_glass_glow.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_bridge_hull.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_bridge_roof.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_door_ext.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_door_ext_distant.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_door_int.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_door_int_blast.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_door_int_frame.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_engine_thruster.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_engineroom_hull.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_engineroom_roof.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_landinggear_door_lower.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_landinggear_door_upper.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_landinggear_lower.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_landinggear_midsleeve.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_landinggear_toe.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_landinggear_upper.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_opsroom_hull.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_opsroom_roof.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_quarters_glass.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_quarters_glass_glow.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_quarters_hull.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_quarters_roof.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_repairroom_hull.mdl  # 自定义地图道具
+  models/props_reduction/custom/starshipx_repairroom_roof.mdl  # 自定义地图道具
+  models/props_reduction/custom/warningsign.mdl  # 自定义地图道具
+  models/props_reduction/custom/woodfence_1.mdl  # 自定义地图道具
+  models/props_reduction/custom/woodfence_2.mdl  # 自定义地图道具
+  models/props_reduction/custom/woodfence_broken.mdl  # 自定义地图道具
+  models/props_reduction/custom/woodfence_brokenends.mdl  # 自定义地图道具
+  models/props_reduction/custom/woodfence_brokenpost.mdl  # 自定义地图道具
+  models/props_reduction/custom/woodfence_end.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe32_128.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe32_256.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe32_512.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe32_cross.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe32_end_blank.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe32_end_flanged.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe32_end_heavy.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe32_tjunc.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe32_turn_15.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe32_turn_30.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe32_turn_45.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe32_turn_60.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe32_turn_90.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe64_128.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe64_256.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe64_512.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe64_cross.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe64_end_blank.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe64_end_flanged.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe64_end_heavy.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe64_tjunc.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe64_turn_15.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe64_turn_30.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe64_turn_45.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe64_turn_60.mdl  # 自定义地图道具
+  models/props_reduction/custom/xfuncpipe64_turn_90.mdl  # 自定义地图道具
+  models/props_reduction/gunship_green/gunship_green.mdl
+  models/props_reduction/gunship_tan/gunship_tan.mdl
+
+== 碎片 props_debris (183) ==
+  models/props_debris/barricade_short02a.mdl
+  models/props_debris/barricade_short03a.mdl
+  models/props_debris/barricade_short04a.mdl
+  models/props_debris/barricade_tall01a.mdl
+  models/props_debris/barricade_tall02a.mdl
+  models/props_debris/barricade_tall03a.mdl
+  models/props_debris/barricade_tall04a.mdl
+  models/props_debris/beam01c.mdl
+  models/props_debris/broken_floor001a.mdl
+  models/props_debris/broken_pile001a.mdl
+  models/props_debris/building_brokenexterior001a.mdl
+  models/props_debris/building_brokenexterior001b.mdl
+  models/props_debris/building_brokenexterior001c.mdl
+  models/props_debris/building_brokenexterior002a.mdl
+  models/props_debris/building_brokenexterior002b.mdl
+  models/props_debris/building_brokenexterior002c.mdl
+  models/props_debris/building_brokenwindow001a.mdl
+  models/props_debris/building_brokenwindow001b.mdl
+  models/props_debris/burnt_building_corner_01.mdl
+  models/props_debris/burnt_building_corner_02.mdl
+  models/props_debris/burnt_building_debrispile_01.mdl
+  models/props_debris/burnt_building_debrispile_02.mdl
+  models/props_debris/burnt_building_rafters_01.mdl
+  models/props_debris/burnt_building_rafters_02.mdl
+  models/props_debris/burnt_building_wall_01.mdl
+  models/props_debris/burnt_building_wall_02.mdl
+  models/props_debris/burnt_building_wall_03.mdl
+  models/props_debris/burnt_building_wall_04.mdl
+  models/props_debris/burnt_building_wall_05.mdl
+  models/props_debris/burnt_building_wall_06.mdl
+  models/props_debris/burnt_building_wall_07.mdl
+  models/props_debris/concrete_chunk02a.mdl
+  models/props_debris/concrete_chunk03a.mdl
+  models/props_debris/concrete_chunk05g.mdl
+  models/props_debris/concrete_chunk06d.mdl
+  models/props_debris/concrete_chunk07a.mdl
+  models/props_debris/concrete_chunk08a.mdl
+  models/props_debris/concrete_chunk09a.mdl
+  models/props_debris/concrete_column001a_base.mdl
+  models/props_debris/concrete_column001a_top.mdl
+  models/props_debris/concrete_corner01a.mdl
+  models/props_debris/concrete_cornerpile01a.mdl
+  models/props_debris/concrete_debris128pile001a.mdl
+  models/props_debris/concrete_debris128pile001b.mdl
+  models/props_debris/concrete_debris256barricade001a.mdl
+  models/props_debris/concrete_debris256pile001a.mdl
+  models/props_debris/concrete_section128floor001a.mdl
+  models/props_debris/concrete_section128floor001b.mdl
+  models/props_debris/concrete_section128wall001a.mdl
+  models/props_debris/concrete_section128wall001b.mdl
+  models/props_debris/concrete_section128wall001c.mdl
+  models/props_debris/concrete_section64floor001a.mdl
+  models/props_debris/concrete_section64floor001b.mdl
+  models/props_debris/concrete_section64floor001c.mdl
+  models/props_debris/concrete_spawnchunk001j.mdl
+  models/props_debris/concrete_spawnchunk001k.mdl
+  models/props_debris/concrete_spawnhole001a.mdl
+  models/props_debris/concrete_spawnplug001a.mdl
+  models/props_debris/concrete_wall01a.mdl
+  models/props_debris/concrete_wall02a.mdl
+  models/props_debris/concrete_wallpile01a.mdl
+  models/props_debris/corner_rubble1.mdl
+  models/props_debris/corner_rubble2.mdl
+  models/props_debris/debris_brick01.mdl
+  models/props_debris/debris_brick02.mdl
+  models/props_debris/destroyed_floor_corner1.mdl
+  models/props_debris/destroyed_floor_corner2.mdl
+  models/props_debris/destroyed_floor_section1.mdl
+  models/props_debris/destroyedceiling01a.mdl
+  models/props_debris/destroyedceiling01b.mdl
+  models/props_debris/destroyedceiling01c.mdl
+  models/props_debris/destroyedceiling01d.mdl
+  models/props_debris/edge_rubble1.mdl
+  models/props_debris/flash_destroyed_foundation1.mdl
+  models/props_debris/flash_destroyed_foundation2.mdl
+  models/props_debris/flash_destroyed_foundation3.mdl
+  models/props_debris/floor_rubble1.mdl
+  models/props_debris/floor_rubble2.mdl
+  models/props_debris/floor_rubble3.mdl
+  models/props_debris/metal_panel01a.mdl
+  models/props_debris/metal_panel01a_breakable.mdl
+  models/props_debris/metal_panel02a.mdl
+  models/props_debris/metal_panelchunk01a.mdl
+  models/props_debris/metal_panelchunk01b.mdl
+  models/props_debris/metal_panelchunk01d.mdl
+  models/props_debris/metal_panelchunk01e.mdl
+  models/props_debris/metal_panelchunk01f.mdl
+  models/props_debris/metal_panelchunk01g.mdl
+  models/props_debris/metal_panelchunk02d.mdl
+  models/props_debris/metal_panelchunk02e.mdl
+  models/props_debris/metal_panelshard01a.mdl
+  models/props_debris/metal_panelshard01b.mdl
+  models/props_debris/metal_panelshard01c.mdl
+  models/props_debris/metal_panelshard01d.mdl
+  models/props_debris/metal_panelshard01e.mdl
+  models/props_debris/plaster_ceiling001a.mdl
+  models/props_debris/plaster_ceiling002a.mdl
+  models/props_debris/plaster_ceilingpile001a.mdl
+  models/props_debris/plaster_ceilingpile001b.mdl
+  models/props_debris/plaster_ceilingpile001c.mdl
+  models/props_debris/plaster_wall001a.mdl
+  models/props_debris/plaster_wall002a.mdl
+  models/props_debris/rebar_cluster001a.mdl
+  models/props_debris/rebar_cluster001b.mdl
+  models/props_debris/rebar_cluster002a.mdl
+  models/props_debris/rebar_cluster002b.mdl
+  models/props_debris/rebar_medthin01a.mdl
+  models/props_debris/rebar_medthin02a.mdl
+  models/props_debris/rebar_medthin02b.mdl
+  models/props_debris/rebar_medthin02c.mdl
+  models/props_debris/rebar_medthin03a.mdl
+  models/props_debris/rebar_smallnorm01a.mdl
+  models/props_debris/rebar_smallnorm01c.mdl
+  models/props_debris/rebar001a_32.mdl
+  models/props_debris/rebar001b_48.mdl
+  models/props_debris/rebar001c_64.mdl
+  models/props_debris/rebar001d_96.mdl
+  models/props_debris/rebar002a_32.mdl
+  models/props_debris/rebar002b_48.mdl
+  models/props_debris/rebar002c_64.mdl
+  models/props_debris/rebar002d_96.mdl
+  models/props_debris/rebar003a_32.mdl
+  models/props_debris/rebar003b_48.mdl
+  models/props_debris/rebar003c_64.mdl
+  models/props_debris/rebar004a_32.mdl
+  models/props_debris/rebar004b_48.mdl
+  models/props_debris/rebar004c_64.mdl
+  models/props_debris/rebar004d_96.mdl
+  models/props_debris/tile_walkway001a.mdl
+  models/props_debris/tile_walkway001b.mdl
+  models/props_debris/tile_walkwaypile001a.mdl
+  models/props_debris/tile_wall001a.mdl
+  models/props_debris/tile_wall001a_base.mdl
+  models/props_debris/tile_wall001a_core.mdl
+  models/props_debris/wall_brick_destroyed_bottom.mdl
+  models/props_debris/wall_brick_destroyed_corner_bl.mdl
+  models/props_debris/wall_brick_destroyed_edge.mdl
+  models/props_debris/wall_brick_destroyed_hole.mdl
+  models/props_debris/wall_brick_destroyed_side.mdl
+  models/props_debris/wall_rubble1.mdl
+  models/props_debris/wall_rubble2.mdl
+  models/props_debris/wall001a_base.mdl
+  models/props_debris/walldestroyed01a.mdl
+  models/props_debris/walldestroyed02a.mdl
+  models/props_debris/walldestroyed03a.mdl
+  models/props_debris/walldestroyed05a.mdl
+  models/props_debris/walldestroyed06b.mdl
+  models/props_debris/walldestroyed07b.mdl
+  models/props_debris/walldestroyed08a.mdl
+  models/props_debris/walldestroyed09a.mdl
+  models/props_debris/walldestroyed09c.mdl
+  models/props_debris/walldestroyed09e.mdl
+  models/props_debris/walldestroyed09f.mdl
+  models/props_debris/walldestroyed09g.mdl
+  models/props_debris/windowdestroyed01a.mdl
+  models/props_debris/windowdestroyed01b.mdl
+  models/props_debris/windowdestroyed01d.mdl
+  models/props_debris/wood_board04a.mdl
+  models/props_debris/wood_board05a.mdl
+  models/props_debris/wood_board07a.mdl
+  models/props_debris/wood_chunk04a.mdl
+  models/props_debris/wood_chunk04b.mdl
+  models/props_debris/wood_chunk04c.mdl
+  models/props_debris/wood_chunk04d.mdl
+  models/props_debris/wood_chunk04e.mdl
+  models/props_debris/wood_chunk04f.mdl
+  models/props_debris/wood_chunk05a.mdl
+  models/props_debris/wood_chunk05b.mdl
+  models/props_debris/wood_chunk05c.mdl
+  models/props_debris/wood_chunk05d.mdl
+  models/props_debris/wood_chunk05e.mdl
+  models/props_debris/wood_chunk05f.mdl
+  models/props_debris/wood_chunk07a.mdl
+  models/props_debris/wood_chunk07b.mdl
+  models/props_debris/wood_chunk07c.mdl
+  models/props_debris/wood_chunk07d.mdl
+  models/props_debris/wood_chunk07e.mdl
+  models/props_debris/wood_chunk07f.mdl
+  models/props_debris/wood_splinters01a.mdl
+  models/props_debris/wood_splinters01b.mdl
+  models/props_debris/wood_splinters01c.mdl
+  models/props_debris/wood_splinters01d.mdl
+  models/props_debris/wood_splinters01e.mdl
+
+== ASRD专属 swarm (160) ==
+  models/swarm/ammo/ammoar2.mdl  # AR2弹药箱
+  models/swarm/ammo/ammoassaultrifle.mdl  # 突击步枪弹药箱
+  models/swarm/ammo/ammoautogun.mdl  # 自动机枪弹药箱
+  models/swarm/ammo/ammobag.mdl  # 弹药袋
+  models/swarm/ammo/ammobattery.mdl  # 电池弹药箱
+  models/swarm/ammo/ammoflamer.mdl  # 火焰喷射器弹药箱
+  models/swarm/ammo/ammogrenadelauncher.mdl  # 榴弹弹药箱
+  models/swarm/ammo/ammohvyrifle.mdl  # 重步枪弹药箱
+  models/swarm/ammo/ammopdw.mdl  # PDW弹药箱
+  models/swarm/ammo/ammopistol.mdl  # 手枪弹药箱
+  models/swarm/ammo/ammorailgun.mdl  # 磁轨炮弹药箱
+  models/swarm/ammo/ammoshotgun.mdl  # 霰弹弹药箱
+  models/swarm/ammo/ammosniperrifle.mdl  # 狙击步枪弹药箱
+  models/swarm/ammo/ammovindicator.mdl  # 复仇者弹药箱
+  models/swarm/autogun/autogun.mdl  # 自动机枪
+  models/swarm/barrel/barrel.mdl  # 油桶(扔出用,3秒爆炸)
+  models/swarm/barrel/barrelpiece1.mdl  # 油桶碎片1
+  models/swarm/barrel/barrelpiece2.mdl  # 油桶碎片2
+  models/swarm/barrel/barrelpiece3.mdl  # 油桶碎片3
+  models/swarm/barrel/barrelpiece4.mdl  # 油桶碎片4
+  models/swarm/bayonet/bayonet.mdl  # 刺刀
+  models/swarm/buzzer/buzzer.mdl  # 蜂虫 Buzzer
+  models/swarm/colonist/male/malecolonist.mdl  # 殖民者NPC
+  models/swarm/crafting/alien_chitin.mdl  # 合成-外星甲壳素
+  models/swarm/crafting/antlion_carapace.mdl  # 合成-蚁狮甲壳
+  models/swarm/crafting/argon_canister.mdl  # 合成-氩气罐
+  models/swarm/crafting/arithmetic_logic_unit.mdl  # 合成-运算单元
+  models/swarm/crafting/battery_pack.mdl  # 合成-电池组
+  models/swarm/crafting/biomass_sample.mdl  # 合成-生物质样本
+  models/swarm/crafting/carbon.mdl  # 合成-碳
+  models/swarm/crafting/carbon_dust.mdl  # 合成-碳粉
+  models/swarm/crafting/claw_fragment.mdl  # 合成-爪碎片
+  models/swarm/crafting/coolant.mdl  # 合成-冷却液
+  models/swarm/crafting/cooled_volcanic_rock.mdl  # 合成-冷却火山岩
+  models/swarm/crafting/corrosive_fluid_sample.mdl  # 合成-腐蚀液样本
+  models/swarm/crafting/cryotic.mdl  # 合成-低温物质
+  models/swarm/crafting/data_storage_medium.mdl  # 合成-数据存储
+  models/swarm/crafting/electrical_components.mdl  # 合成-电子元件
+  models/swarm/crafting/glowing_green_acid.mdl  # 合成-发光绿酸
+  models/swarm/crafting/isotopes.mdl  # 合成-同位素
+  models/swarm/crafting/memory_management_unit.mdl  # 合成-内存管理单元
+  models/swarm/crafting/mini_crate.mdl  # 合成-小箱
+  models/swarm/crafting/ocm_floppy.mdl  # 合成-软盘
+  models/swarm/crafting/pile_of_red_sand.mdl  # 合成-红沙堆
+  models/swarm/crafting/placeholder.mdl  # 合成-占位
+  models/swarm/crafting/plastic_filament.mdl  # 合成-塑料线材
+  models/swarm/crafting/probability_drive.mdl  # 合成-概率驱动
+  models/swarm/crafting/retrieved_documents.mdl  # 合成-检索文档
+  models/swarm/crafting/roll_of_vent_tape.mdl  # 合成-通风胶带
+  models/swarm/crafting/scrap_metal.mdl  # 合成-废金属
+  models/swarm/crafting/spare_pipe.mdl  # 合成-备用管
+  models/swarm/crafting/unopened_synup_cola.mdl  # 合成-未开封苏打
+  models/swarm/crafting/wires_loose.mdl  # 合成-散线
+  models/swarm/crafting/wires_sorted.mdl  # 合成-整理线
+  models/swarm/crates/crate001.mdl  # 板条箱
+  models/swarm/crates/crate002.mdl  # 板条箱
+  models/swarm/crates/crate003.mdl  # 板条箱
+  models/swarm/doors/swarm_singledoor.mdl  # 门
+  models/swarm/doors/swarm_singledoor_fallen_padding.mdl  # 门
+  models/swarm/doors/swarm_singledoor_flipped.mdl  # 门
+  models/swarm/doors/swarm_singledoor_padding.mdl  # 门
+  models/swarm/drone/drone.mdl  # 工蜂 Drone
+  models/swarm/drone/uberdrone.mdl  # 工蜂 Drone
+  models/swarm/dronegibs/dronepart01.mdl  # 工蜂碎块
+  models/swarm/dronegibs/dronepart02.mdl  # 工蜂碎块
+  models/swarm/dronegibs/dronepart20.mdl  # 工蜂碎块
+  models/swarm/dronegibs/dronepart21.mdl  # 工蜂碎块
+  models/swarm/dronegibs/dronepart29.mdl  # 工蜂碎块
+  models/swarm/dronegibs/dronepart31.mdl  # 工蜂碎块
+  models/swarm/dronegibs/dronepart32.mdl  # 工蜂碎块
+  models/swarm/dronegibs/dronepart36.mdl  # 工蜂碎块
+  models/swarm/dronegibs/dronepart37.mdl  # 工蜂碎块
+  models/swarm/dronegibs/dronepart38.mdl  # 工蜂碎块
+  models/swarm/dronegibs/dronepart39.mdl  # 工蜂碎块
+  models/swarm/dronegibs/dronepart44.mdl  # 工蜂碎块
+  models/swarm/dronegibs/dronepart45.mdl  # 工蜂碎块
+  models/swarm/dronegibs/dronepart47.mdl  # 工蜂碎块
+  models/swarm/dronegibs/dronepart49.mdl  # 工蜂碎块
+  models/swarm/dronegibs/dronepart50.mdl  # 工蜂碎块
+  models/swarm/dronegibs/dronepart53.mdl  # 工蜂碎块
+  models/swarm/dronegibs/dronepart54.mdl  # 工蜂碎块
+  models/swarm/dronegibs/dronepart56.mdl  # 工蜂碎块
+  models/swarm/dronegibs/dronepart57.mdl  # 工蜂碎块
+  models/swarm/dronegibs/dronepart58.mdl  # 工蜂碎块
+  models/swarm/dronegibs/dronepart59.mdl  # 工蜂碎块
+  models/swarm/fireext/fireextpickup.mdl  # 灭火器
+  models/swarm/flare/flarebox.mdl  # 照明弹
+  models/swarm/flare/flareweapon.mdl  # 照明弹
+  models/swarm/flashlight/flashlightpickup.mdl  # 手电筒
+  models/swarm/grenades/clustergrenadeprojectile.mdl  # 集束手雷
+  models/swarm/grenades/gasgrenadeprojectile.mdl  # 毒气手雷
+  models/swarm/grenades/grenadebox.mdl  # 手雷箱
+  models/swarm/grenades/grenadelauncherprojectile.mdl  # 榴弹
+  models/swarm/grenades/handgrenadeprojectile.mdl  # 手雷
+  models/swarm/grenades/riflegrenadeprojectile.mdl  # 步枪榴弹
+  models/swarm/grenades/stungrenadeprojectile.mdl  # 眩晕手雷
+  models/swarm/grenades/vindicatorgrenadeprojectile.mdl  # 复仇者榴弹
+  models/swarm/grubs/grub.mdl  # 虫蛆 Grub
+  models/swarm/grubs/grubgib1.mdl  # 虫蛆 Grub
+  models/swarm/grubs/grubgib3.mdl  # 虫蛆 Grub
+  models/swarm/grubs/grubgib4.mdl  # 虫蛆 Grub
+  models/swarm/grubsac/grubsac.mdl  # 虫蛆囊
+  models/swarm/hangar/hangar.mdl  # 机库
+  models/swarm/hangar/marine_anim_helper.mdl  # 机库
+  models/swarm/harvester/harvester.mdl  # 收割者 Harvester
+  models/swarm/incident32_props/cryo_capsule.mdl  # 事件32道具(冷冻舱)
+  models/swarm/marine/attachments/electrified_armor.mdl  # 附件-电击护甲
+  models/swarm/marine/attachments/fist.mdl  # 附件-拳套
+  models/swarm/marine/attachments/flashlight.mdl  # 附件-手电筒
+  models/swarm/marine/attachments/grenade_belt.mdl  # 附件-手雷腰带
+  models/swarm/marine/attachments/jetpack.mdl  # 附件-喷气背包
+  models/swarm/marine/attachments/missile_backpack.mdl  # 附件-导弹背包
+  models/swarm/marine/attachments/missile_gauntlet.mdl  # 附件-导弹拳套
+  models/swarm/marine/attachments/night_vision.mdl  # 附件-夜视仪
+  models/swarm/marine/attachments/normal_armor.mdl  # 附件-标准护甲
+  models/swarm/marine/attachments/speed_burst.mdl  # 附件-加速装置
+  models/swarm/marine/attachments/teleport_armour.mdl  # 附件-传送护甲
+  models/swarm/marine/femalemarine.mdl  # 陆战队员(女)
+  models/swarm/marine/gibs/femalemarine_gib_head.mdl  # 尸块-女兵头部
+  models/swarm/marine/gibs/marine_gib_chest.mdl  # 尸块-胸腔
+  models/swarm/marine/gibs/marine_gib_head.mdl  # 尸块-头部
+  models/swarm/marine/gibs/marine_gib_leftarm.mdl  # 尸块-左臂
+  models/swarm/marine/gibs/marine_gib_leftleg.mdl  # 尸块-左腿
+  models/swarm/marine/gibs/marine_gib_pelvis.mdl  # 尸块-骨盆
+  models/swarm/marine/gibs/marine_gib_rightarm.mdl  # 尸块-右臂
+  models/swarm/marine/gibs/marine_gib_rightleg.mdl  # 尸块-右腿
+  models/swarm/marine/infected_marine.mdl  # 感染陆战队员
+  models/swarm/marine/marine.mdl  # 陆战队员(男)
+  models/swarm/marine/marine_anims.mdl  # 陆战队员动画
+  models/swarm/marine/marine_anims_extra.mdl  # 陆战队员动画(扩展)
+  models/swarm/marine/marine_infected_anims.mdl  # 感染陆战队员动画
+  models/swarm/marine/veteranmarine.mdl  # 老兵陆战队员
+  models/swarm/mine/mine.mdl  # 地雷
+  models/swarm/mininglaser/mininglaser.mdl  # 采矿激光
+  models/swarm/minirocket/minirocket.mdl  # 小型火箭弹
+  models/swarm/mortarbug/mortarbug.mdl  # 炮虫 Mortarbug
+  models/swarm/mortarbug/mortarbug_model.mdl  # 炮虫 Mortarbug
+  models/swarm/mortarbugprojectile/mortarbugprojectile.mdl  # 炮虫炮弹
+  models/swarm/orderarrow/orderarrow.mdl  # 命令箭头
+  models/swarm/parasite/parasite.mdl  # 寄生虫
+  models/swarm/parasite/parasitebig.mdl  # 寄生虫
+  models/swarm/parasite/parasitegibabdomen.mdl  # 寄生虫
+  models/swarm/parasite/parasitegibbackleg.mdl  # 寄生虫
+  models/swarm/parasite/parasitegibfrontleg.mdl  # 寄生虫
+  models/swarm/parasite/parasitegibhead.mdl  # 寄生虫
+  models/swarm/parasite/parasitegibmidleg.mdl  # 寄生虫
+  models/swarm/queen/queen.mdl  # 女王 Queen
+  models/swarm/queen/queendivers.mdl  # 女王潜航
+  models/swarm/queen/queengrabber.mdl  # 女王抓取
+  models/swarm/queen/queententacledecoleft.mdl  # 女王触须(左)
+  models/swarm/queen/queententacledecoright.mdl  # 女王触须(右)
+  models/swarm/railgun/railgun.mdl  # 磁轨炮
+  models/swarm/sentrygun/remoteturret.mdl  # 哨戒炮炮台
+  models/swarm/sentrygun/sentryguncase.mdl  # 哨戒炮炮台
+  models/swarm/shieldbug/shieldbug.mdl
+  models/swarm/shotgun/shotgunpellet.mdl  # 霰弹弹丸
+  models/swarm/shouldercone/lasersight.mdl  # 肩部锥(激光指示)
+  models/swarm/shouldercone/shouldercone.mdl  # 肩部锥(激光指示)
+  models/swarm/stim/stim.mdl  # 兴奋剂 Stim
+  models/swarm/welder/welder.mdl  # 焊枪 Welder
+
+== ASRD专属场景道具 swarmprops (156) ==
+  models/swarmprops/barrelsandcrates/cardbox1.mdl  # 桶与箱
+  models/swarmprops/barrelsandcrates/cardbox1breakable.mdl  # 桶与箱
+  models/swarmprops/barrelsandcrates/cardbox1breakable01.mdl  # 桶与箱
+  models/swarmprops/barrelsandcrates/cardbox1breakable02.mdl  # 桶与箱
+  models/swarmprops/barrelsandcrates/cardbox1breakable03.mdl  # 桶与箱
+  models/swarmprops/barrelsandcrates/cardbox1breakable04.mdl  # 桶与箱
+  models/swarmprops/barrelsandcrates/cardbox1breakable05.mdl  # 桶与箱
+  models/swarmprops/barrelsandcrates/cardbox1breakable06.mdl  # 桶与箱
+  models/swarmprops/barrelsandcrates/cardbox1breakable07.mdl  # 桶与箱
+  models/swarmprops/barrelsandcrates/cardbox1breakable08.mdl  # 桶与箱
+  models/swarmprops/barrelsandcrates/cardbox1breakable09.mdl  # 桶与箱
+  models/swarmprops/barrelsandcrates/chainsawcrate1.mdl  # 桶与箱
+  models/swarmprops/barrelsandcrates/chainsawcrate2.mdl  # 桶与箱
+  models/swarmprops/barrelsandcrates/metalcrate1mesh.mdl  # 桶与箱
+  models/swarmprops/barrelsandcrates/metalcrate2mesh.mdl  # 桶与箱
+  models/swarmprops/barrelsandcrates/swarm_containermesh.mdl  # 桶与箱
+  models/swarmprops/barrelsandcrates/swarm_supplybox.mdl  # 桶与箱
+  models/swarmprops/barrelsandcrates/swarm_supplyboxtop.mdl  # 桶与箱
+  models/swarmprops/barrelsandcrates/swarm_toxicbarrelmesh.mdl  # 桶与箱
+  models/swarmprops/beamsandpillars/bara.mdl  # 梁与柱
+  models/swarmprops/beamsandpillars/barb.mdl  # 梁与柱
+  models/swarmprops/beamsandpillars/barholder.mdl  # 梁与柱
+  models/swarmprops/beamsandpillars/barr.mdl  # 梁与柱
+  models/swarmprops/beamsandpillars/displaycasesupport.mdl  # 梁与柱
+  models/swarmprops/beamsandpillars/outsideconstrucionbeam1.mdl  # 梁与柱
+  models/swarmprops/beamsandpillars/outsidemetalgrille.mdl  # 梁与柱
+  models/swarmprops/beamsandpillars/pillar15.mdl  # 梁与柱
+  models/swarmprops/beamsandpillars/support2.mdl  # 梁与柱
+  models/swarmprops/doorsandframes/labselevatordoormesh.mdl  # 门与门框
+  models/swarmprops/doorsandframes/roundblastdoor1a.mdl  # 门与门框
+  models/swarmprops/doorsandframes/trapdoormesh.mdl  # 门与门框
+  models/swarmprops/floor/catwalksupportthin.mdl  # 地板
+  models/swarmprops/floor/minebridgeplatformmesh.mdl  # 地板
+  models/swarmprops/floor/singlepanelmesh.mdl  # 地板
+  models/swarmprops/furniture/aquariumrock2.mdl  # 家具(冰箱/街机/斯诺克台等)
+  models/swarmprops/furniture/blindbladesingle.mdl  # 家具(冰箱/街机/斯诺克台等)
+  models/swarmprops/furniture/corkboardasi.mdl  # 家具(冰箱/街机/斯诺克台等)
+  models/swarmprops/furniture/fridgemesh.mdl  # 冰箱
+  models/swarmprops/furniture/megaburgermachinemesh.mdl  # 巨无霸贩卖机
+  models/swarmprops/furniture/pcdesk1mesh.mdl  # 家具(冰箱/街机/斯诺克台等)
+  models/swarmprops/furniture/propagandamonitor1.mdl  # 家具(冰箱/街机/斯诺克台等)
+  models/swarmprops/furniture/propagandamonitor4.mdl  # 家具(冰箱/街机/斯诺克台等)
+  models/swarmprops/furniture/swarm_arcadegame2mesh.mdl  # 街机2
+  models/swarmprops/furniture/swarm_arcadegamemesh.mdl  # 街机1
+  models/swarmprops/furniture/swarm_snookerballmeshred.mdl  # 斯诺克红球
+  models/swarmprops/furniture/swarm_snookerballmeshwhite.mdl  # 斯诺克白球
+  models/swarmprops/furniture/swarm_snookerqueue.mdl  # 斯诺克球杆
+  models/swarmprops/furniture/swarm_snookerqueueholder.mdl  # 家具(冰箱/街机/斯诺克台等)
+  models/swarmprops/furniture/swarm_snookertable.mdl  # 斯诺克台
+  models/swarmprops/furniture/synupmachinemesh.mdl  # 苏打贩卖机
+  models/swarmprops/hl2based/bindergraylabel01b.mdl  # HL2风格道具
+  models/swarmprops/hl2based/binderredlabel.mdl  # HL2风格道具
+  models/swarmprops/hl2based/blastwindow.mdl  # HL2风格道具
+  models/swarmprops/hl2based/concrete_chunk01a.mdl  # HL2风格道具
+  models/swarmprops/hl2based/concrete_chunk02a.mdl  # HL2风格道具
+  models/swarmprops/hl2based/concrete_chunk03a.mdl  # HL2风格道具
+  models/swarmprops/hl2based/monitor01b.mdl  # HL2风格道具
+  models/swarmprops/lights/labssmalllightmesh.mdl  # 灯
+  models/swarmprops/lights/smalllight2red.mdl  # 灯
+  models/swarmprops/lights/swarm_floodlight.mdl  # 灯
+  models/swarmprops/machinery/forkliftmesharm.mdl  # 叉车臂
+  models/swarmprops/machinery/forkliftmeshbase.mdl  # 叉车底座
+  models/swarmprops/machinery/generator1mesh.mdl  # 发电机
+  models/swarmprops/machinery/hugeboilermesh.mdl  # 巨型锅炉
+  models/swarmprops/machinery/minemachine1.mdl  # 采矿机1
+  models/swarmprops/machinery/minemachine2.mdl  # 采矿机2
+  models/swarmprops/machinery/minemachine3.mdl  # 采矿机3
+  models/swarmprops/machinery/swarm_steamenginemesh.mdl  # 蒸汽机
+  models/swarmprops/miscdeco/bridgeexplosivesmesh.mdl  # 桥炸药
+  models/swarmprops/miscdeco/coilmesh.mdl  # 杂项装饰(风扇/梯子/路障等)
+  models/swarmprops/miscdeco/dangerslopesignmesh.mdl  # 杂项装饰(风扇/梯子/路障等)
+  models/swarmprops/miscdeco/explosivesdetonatormesh.mdl  # 炸药引爆器
+  models/swarmprops/miscdeco/framework1.mdl  # 杂项装饰(风扇/梯子/路障等)
+  models/swarmprops/miscdeco/frameworkceilingstraight.mdl  # 杂项装饰(风扇/梯子/路障等)
+  models/swarmprops/miscdeco/greenflare.mdl  # 绿色照明弹
+  models/swarmprops/miscdeco/laserfieldmesh.mdl  # 激光屏障
+  models/swarmprops/miscdeco/laserscannertrack.mdl  # 杂项装饰(风扇/梯子/路障等)
+  models/swarmprops/miscdeco/maintainanceshelf.mdl  # 杂项装饰(风扇/梯子/路障等)
+  models/swarmprops/miscdeco/minerocketelevatorbranch.mdl  # 杂项装饰(风扇/梯子/路障等)
+  models/swarmprops/miscdeco/minesignpostmesh.mdl  # 杂项装饰(风扇/梯子/路障等)
+  models/swarmprops/miscdeco/outsideclamp.mdl  # 杂项装饰(风扇/梯子/路障等)
+  models/swarmprops/miscdeco/papermesh.mdl  # 杂项装饰(风扇/梯子/路障等)
+  models/swarmprops/miscdeco/pdamesh.mdl  # 杂项装饰(风扇/梯子/路障等)
+  models/swarmprops/miscdeco/reactorcorehologrammesh.mdl  # 反应堆核心全息
+  models/swarmprops/miscdeco/reactorcorehologrammesh2.mdl  # 杂项装饰(风扇/梯子/路障等)
+  models/swarmprops/miscdeco/reactorcorehologrammesh3.mdl  # 杂项装饰(风扇/梯子/路障等)
+  models/swarmprops/miscdeco/rotatingfanmesh2.mdl  # 旋转风扇
+  models/swarmprops/miscdeco/safetyinstructionsmesh.mdl  # 杂项装饰(风扇/梯子/路障等)
+  models/swarmprops/miscdeco/securitycammount.mdl  # 杂项装饰(风扇/梯子/路障等)
+  models/swarmprops/miscdeco/securitysign2mesh.mdl  # 安全标志2
+  models/swarmprops/miscdeco/securitysignmesh.mdl  # 安全标志
+  models/swarmprops/miscdeco/sewerdrain.mdl  # 杂项装饰(风扇/梯子/路障等)
+  models/swarmprops/miscdeco/siteribbonmesh.mdl  # 杂项装饰(风扇/梯子/路障等)
+  models/swarmprops/miscdeco/smallcornerpiece.mdl  # 杂项装饰(风扇/梯子/路障等)
+  models/swarmprops/miscdeco/swarm_barrier.mdl  # 路障1
+  models/swarmprops/miscdeco/swarm_barrier2.mdl  # 路障2
+  models/swarmprops/miscdeco/swarm_basketball.mdl  # 篮球
+  models/swarmprops/miscdeco/swarm_ladder1.mdl  # 梯子1
+  models/swarmprops/miscdeco/swarm_ladder2.mdl  # 梯子2
+  models/swarmprops/miscdeco/swarm_securitycam.mdl  # 监控摄像头
+  models/swarmprops/miscdeco/swarm_sewerbars.mdl  # 杂项装饰(风扇/梯子/路障等)
+  models/swarmprops/miscdeco/swarm_smallbolt.mdl  # 杂项装饰(风扇/梯子/路障等)
+  models/swarmprops/miscdeco/swarmfence1.mdl  # 围栏1
+  models/swarmprops/miscdeco/swarmfence2.mdl  # 围栏2
+  models/swarmprops/miscdeco/swarmfence4.mdl  # 围栏4
+  models/swarmprops/miscdeco/synupcan.mdl  # 苏打罐 SynUp
+  models/swarmprops/nature/breakablerockmesh1.mdl  # 可破坏岩石1
+  models/swarmprops/nature/breakablerockmesh2.mdl  # 可破坏岩石2
+  models/swarmprops/nature/breakablerockmesh3.mdl  # 可破坏岩石3
+  models/swarmprops/nature/minegoldnuggetcluste2.mdl  # 金块簇
+  models/swarmprops/nature/swarm_minerocks3.mdl  # 矿石3
+  models/swarmprops/nature/swarm_minerocks4.mdl  # 矿石4
+  models/swarmprops/nature/swarm_minerocks5.mdl  # 矿石5
+  models/swarmprops/nature/swarm_minerocks6.mdl  # 矿石6
+  models/swarmprops/nature/swarm_minerocksgeysir.mdl  # 矿石喷泉
+  models/swarmprops/pipesboilerscables/concretepipe.mdl  # 管道/锅炉/线缆
+  models/swarmprops/pipesboilerscables/curvedtubecornerpiece.mdl  # 管道/锅炉/线缆
+  models/swarmprops/pipesboilerscables/curvedtubepipesetholder.mdl  # 管道/锅炉/线缆
+  models/swarmprops/pipesboilerscables/floorcable.mdl  # 管道/锅炉/线缆
+  models/swarmprops/pipesboilerscables/minepipeholdermesh.mdl  # 管道/锅炉/线缆
+  models/swarmprops/pipesboilerscables/minepipemesh.mdl  # 管道/锅炉/线缆
+  models/swarmprops/pipesboilerscables/officepowercord.mdl  # 管道/锅炉/线缆
+  models/swarmprops/pipesboilerscables/pipeinsert.mdl  # 管道/锅炉/线缆
+  models/swarmprops/pipesboilerscables/plantpipe2.mdl  # 管道/锅炉/线缆
+  models/swarmprops/pipesboilerscables/redpipe128straight.mdl  # 管道/锅炉/线缆
+  models/swarmprops/pipesboilerscables/redpipe90degrees.mdl  # 管道/锅炉/线缆
+  models/swarmprops/pipesboilerscables/smallpipemesh.mdl  # 管道/锅炉/线缆
+  models/swarmprops/pipesboilerscables/swarm_smallpipes1.mdl  # 管道/锅炉/线缆
+  models/swarmprops/pipesboilerscables/swarm_smallpipes2.mdl  # 管道/锅炉/线缆
+  models/swarmprops/pipesboilerscables/swarm_smallpipes4.mdl  # 管道/锅炉/线缆
+  models/swarmprops/pipesboilerscables/swarm_smallpipesconnector.mdl  # 管道/锅炉/线缆
+  models/swarmprops/pipesboilerscables/wiremess1.mdl  # 管道/锅炉/线缆
+  models/swarmprops/railings/cartrailing.mdl  # 栏杆
+  models/swarmprops/railings/mallbalconyrailing.mdl  # 栏杆
+  models/swarmprops/railings/outsidebridgerailing.mdl  # 栏杆
+  models/swarmprops/railings/railing100.mdl  # 栏杆
+  models/swarmprops/techdeco/infomonitormesh.mdl  # 科技装饰(显示器/键盘/火箭)
+  models/swarmprops/techdeco/keyboardmesh.mdl  # 科技装饰(显示器/键盘/火箭)
+  models/swarmprops/techdeco/labselevatorpanelmesh.mdl  # 科技装饰(显示器/键盘/火箭)
+  models/swarmprops/techdeco/rocketmesh/rocketmesh_new.mdl  # 火箭(核弹头插件用)
+  models/swarmprops/techdeco/rocketmesh/rocketmesh_new_crane.mdl  # 火箭-吊车型
+  models/swarmprops/techdeco/rocketmesh/rocketmesh_new_rail.mdl  # 火箭-轨道型
+  models/swarmprops/techdeco/rocketmesh/rocketmesh_new_rail_turn.mdl  # 火箭-轨道弯道型
+  models/swarmprops/techdeco/swarm_consoleblue.mdl  # 科技装饰(显示器/键盘/火箭)
+  models/swarmprops/techdeco/swarm_consolemesh.mdl  # 科技装饰(显示器/键盘/火箭)
+  models/swarmprops/techdeco/swarm_redvalve.mdl  # 科技装饰(显示器/键盘/火箭)
+  models/swarmprops/techdeco/turbine/turbine.mdl  # 科技装饰(显示器/键盘/火箭)
+  models/swarmprops/techdeco/turbinecontrolmesh.mdl  # 科技装饰(显示器/键盘/火箭)
+  models/swarmprops/techdeco/vent1mesh.mdl  # 科技装饰(显示器/键盘/火箭)
+  models/swarmprops/techdeco/windgenerator1.mdl  # 科技装饰(显示器/键盘/火箭)
+  models/swarmprops/techdeco/windgenerator2.mdl  # 科技装饰(显示器/键盘/火箭)
+  models/swarmprops/vehicles/bloodhoundmesh.mdl  # 猎犬车
+  models/swarmprops/vehicles/swarm_loadertire.mdl  # 装载机轮胎
+  models/swarmprops/walls/cleanwallcurvedwindow.mdl  # 墙
+  models/swarmprops/walls/outsidewallstructuretower.mdl  # 墙
+  models/swarmprops/walls/tunnelentrance.mdl  # 墙
+
+== 失落海岸 lostcoast (91) ==
+  models/lostcoast/props_junk/float01a.mdl
+  models/lostcoast/props_junk/float02a.mdl
+  models/lostcoast/props_junk/float03a.mdl
+  models/lostcoast/props_wasteland/boat_drydock01a.mdl
+  models/lostcoast/props_wasteland/boat_fishing01a.mdl
+  models/lostcoast/props_wasteland/boat_wooden001a_gib01.mdl
+  models/lostcoast/props_wasteland/boat_wooden001a_gib02.mdl
+  models/lostcoast/props_wasteland/boat_wooden001a_gib03.mdl
+  models/lostcoast/props_wasteland/boat_wooden001a_gib04.mdl
+  models/lostcoast/props_wasteland/boat_wooden001a_gib05.mdl
+  models/lostcoast/props_wasteland/boat_wooden001a_gib06.mdl
+  models/lostcoast/props_wasteland/boat_wooden001a_gib07.mdl
+  models/lostcoast/props_wasteland/boat_wooden01a.mdl
+  models/lostcoast/props_wasteland/boat_wooden02a.mdl
+  models/lostcoast/props_wasteland/boat_wooden02a_gib01.mdl
+  models/lostcoast/props_wasteland/boat_wooden02a_gib02.mdl
+  models/lostcoast/props_wasteland/boat_wooden02a_gib03.mdl
+  models/lostcoast/props_wasteland/boat_wooden02a_gib04.mdl
+  models/lostcoast/props_wasteland/boat_wooden02a_gib05.mdl
+  models/lostcoast/props_wasteland/boat_wooden02a_gib06.mdl
+  models/lostcoast/props_wasteland/boat_wooden03a.mdl
+  models/lostcoast/props_wasteland/boat_wooden03a_gib01.mdl
+  models/lostcoast/props_wasteland/boat_wooden03a_gib02.mdl
+  models/lostcoast/props_wasteland/boat_wooden03a_gib03.mdl
+  models/lostcoast/props_wasteland/boat_wooden03a_gib04.mdl
+  models/lostcoast/props_wasteland/boat_wooden03a_gib05.mdl
+  models/lostcoast/props_wasteland/boat_wooden03a_gib06.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_1stair01.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_1stair01_br01.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_1stair01_br02.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_2stair01.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_2stair01_br01.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_2stair01_br02.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_deck01.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_deck01_br01.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_deck01_br02.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_deck03.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_deck03_br01.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_deck03_br02.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_shard01.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_shard02.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_stepset03.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_stepset03_br01.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_stepset03_br02.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_stepset04.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_stepset04_br01.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_stepset04_br02.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_stepset05.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_stepset05_br01.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_stepset05_br02.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_stepset06.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_stepset06_br01.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_stepset06_br02.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_support01.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_support01_br01.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_support01_br02.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_support02.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_support02_br01.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_support02_br02.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_support03.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_support03_br01.mdl
+  models/lostcoast/props_wasteland/cliff_stairs_support03_br02.mdl
+  models/lostcoast/props_wasteland/crabpot.mdl
+  models/lostcoast/props_wasteland/gate01a.mdl
+  models/lostcoast/props_wasteland/gate01b.mdl
+  models/lostcoast/props_wasteland/gate01c.mdl
+  models/lostcoast/props_wasteland/rock_cliff01e.mdl
+  models/lostcoast/props_wasteland/rock_cliff02a.mdl
+  models/lostcoast/props_wasteland/rock_cliff02b.mdl
+  models/lostcoast/props_wasteland/rock_cliff02c.mdl
+  models/lostcoast/props_wasteland/rock_cliff02d.mdl
+  models/lostcoast/props_wasteland/rock_cliff02e.mdl
+  models/lostcoast/props_wasteland/rock_coast01a.mdl
+  models/lostcoast/props_wasteland/rock_coast01b.mdl
+  models/lostcoast/props_wasteland/rock_coast01c.mdl
+  models/lostcoast/props_wasteland/rock_coast01d.mdl
+  models/lostcoast/props_wasteland/rock_coast01e.mdl
+  models/lostcoast/props_wasteland/rock_coast02a.mdl
+  models/lostcoast/props_wasteland/rock_coast02b.mdl
+  models/lostcoast/props_wasteland/rock_coast02c.mdl
+  models/lostcoast/props_wasteland/rock_coast02d.mdl
+  models/lostcoast/props_wasteland/rock_coast02e.mdl
+  models/lostcoast/props_wasteland/rock_coast02f.mdl
+  models/lostcoast/props_wasteland/rock_coast02g.mdl
+  models/lostcoast/props_wasteland/rock_coast02h.mdl
+  models/lostcoast/props_wasteland/shipwreck_part01.mdl
+  models/lostcoast/props_wasteland/shipwreck_part02.mdl
+  models/lostcoast/props_wasteland/shipwreck_part03.mdl
+  models/lostcoast/props_wasteland/village_cluster01.mdl
+  models/lostcoast/props_wasteland/village_cluster02.mdl
+  models/lostcoast/props_wasteland/village_cluster03.mdl
+
+== Nowayhome道具 props_nowayhome (85) ==
+  models/props_nowayhome/barrel_flatbed01.mdl
+  models/props_nowayhome/barrel01.mdl
+  models/props_nowayhome/bts_clipboard.mdl
+  models/props_nowayhome/custom/arty_action.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/arty_barrel.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/arty_base.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/arty_breech_block.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/arty_breechblock.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/arty_breechplate.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/arty_controls.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/arty_drum.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/arty_loadedshells.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/arty_pistons.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/artyshell_live.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/artyshell_spent.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/artyshells_live.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/artyshells_spent.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/barricadehorse.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/boxcar_door.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/boxcar_top.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/cart_cargochassis_arm.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/cart_cargochassis_deployed.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/cart_cargochassis_waiting.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/cart_groundchassis.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/ceilinghatch.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/crane_gate.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/crane_jib.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/crane_magnet.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/crane_platform.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/crate_small_lid_nwh.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/crate_small_open_nwh.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/cratecage.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/cratecage_door.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/cratecage_doorphys.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/divider_128.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/divider_64.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/door_sliding_damaged.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/dropship_althatch.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/dropship_thrust_module.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/dropship_thrust_module_4up.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/escapepod_body.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/escapepod_body_crashed.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/escapepod_doorccw.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/escapepod_doorccw_crashed.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/escapepod_doorcw.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/escapepod_doorcw_crashed.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/escapepod_launched.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/escapepod_roof.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/escapepod_roof_crashed.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/external_airlock_frame.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/external_airlock_glass.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/external_airlock_hatch.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/external_airlock_motor.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/external_airlock_sleeve.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/hatch_phys_nwh.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/hatch_rim_nwh.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/hatch_static_nwh.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/hovercart_deployed.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/hovercart_waiting.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/jib_platform.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/manhole_cover.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/manhole_cover_static.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/manhole_hole.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/razorwire_128.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/razorwire_256.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/razorwire_512.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/razorwire_64.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/robotarm_hand.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/robotarm_joint.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/robotarm_length.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/sentrycowling.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/shutters_damaged.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/shutters_damaged_static.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/telephonepole_nwh.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/wall_low-rubbled.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/window_nwh_01_dmg-left.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/window_nwh_01_dmg-right.mdl  # 自定义地图道具
+  models/props_nowayhome/custom/window_nwh_01_nodmg.mdl  # 自定义地图道具
+  models/props_nowayhome/hospital_ivstand01.mdl
+  models/props_nowayhome/pallet_small/wood_pallet_01.mdl
+  models/props_nowayhome/static-converts/mininglaser.mdl
+  models/props_nowayhome/static-converts/railgun.mdl
+  models/props_nowayhome/toilet_body_reference.mdl
+  models/props_nowayhome/toilet_lid_reference.mdl
+  models/props_nowayhome/utility_truck.mdl
+
+== 外星生物 aliens (75) ==
+  models/aliens/biomass/biomasshelix.mdl  # 生物质 Biomass(只吃火伤)
+  models/aliens/biomass/biomassl.mdl  # 生物质 Biomass(只吃火伤)
+  models/aliens/biomass/biomasss.mdl  # 生物质 Biomass(只吃火伤)
+  models/aliens/biomass/biomassu.mdl  # 生物质 Biomass(只吃火伤)
+  models/aliens/boomer/boomer.mdl  # 自爆虫 Boomer(近身自爆)
+  models/aliens/boomer/boomer_animations.mdl  # 自爆虫 Boomer(近身自爆)
+  models/aliens/boomer/boomerleg.mdl  # 自爆虫 Boomer(近身自爆)
+  models/aliens/boomer/boomerlega.mdl  # 自爆虫 Boomer(近身自爆)
+  models/aliens/boomer/boomerlegb.mdl  # 自爆虫 Boomer(近身自爆)
+  models/aliens/boomer/boomerlegc.mdl  # 自爆虫 Boomer(近身自爆)
+  models/aliens/boomer/boomerparts_lower_leg.mdl  # 自爆虫 Boomer(近身自爆)
+  models/aliens/boomer/boomerparts_upper_leg.mdl  # 自爆虫 Boomer(近身自爆)
+  models/aliens/buzzer/buzzer.mdl  # 蜂虫 Buzzer(飞行远程)
+  models/aliens/drone/drone.mdl  # 工蜂 Drone(炮台无人机)
+  models/aliens/drone/dronegib2_abdomenrear.mdl  # 工蜂 Drone(炮台无人机)
+  models/aliens/drone/dronegib3_forelegl.mdl  # 工蜂 Drone(炮台无人机)
+  models/aliens/drone/dronegib4_forelegr.mdl  # 工蜂 Drone(炮台无人机)
+  models/aliens/drone/dronegib5_rearlegl.mdl  # 工蜂 Drone(炮台无人机)
+  models/aliens/drone/dronegib6_rearlegr.mdl  # 工蜂 Drone(炮台无人机)
+  models/aliens/drone/dronek.mdl  # 工蜂 Drone(炮台无人机)
+  models/aliens/drone/gib_torso.mdl  # 工蜂 Drone(炮台无人机)
+  models/aliens/drone/ragdoll_leg.mdl  # 工蜂 Drone(炮台无人机)
+  models/aliens/drone/ragdoll_leg_r.mdl  # 工蜂 Drone(炮台无人机)
+  models/aliens/drone/ragdoll_tail.mdl  # 工蜂 Drone(炮台无人机)
+  models/aliens/drone/ragdoll_uparm.mdl  # 工蜂 Drone(炮台无人机)
+  models/aliens/drone/ragdoll_uparm_r.mdl  # 工蜂 Drone(炮台无人机)
+  models/aliens/drone/uberdrone.mdl  # 工蜂 Drone(炮台无人机)
+  models/aliens/drone_gibs/gib_claw.mdl  # 工蜂碎块
+  models/aliens/drone_gibs/gib_interior.mdl  # 工蜂碎块
+  models/aliens/drone_gibs/gib_lower_leg.mdl  # 工蜂碎块
+  models/aliens/drone_gibs/gib_ribs.mdl  # 工蜂碎块
+  models/aliens/drone_gibs/gib_shoulder.mdl  # 工蜂碎块
+  models/aliens/drone_gibs/gib_upper_arm.mdl  # 工蜂碎块
+  models/aliens/egg/egg.mdl  # 虫卵(孵化寄生虫)
+  models/aliens/egg/egggib_1.mdl  # 虫卵(孵化寄生虫)
+  models/aliens/egg/egggib_2.mdl  # 虫卵(孵化寄生虫)
+  models/aliens/egg/egggib_3.mdl  # 虫卵(孵化寄生虫)
+  models/aliens/harvester/harvester.mdl  # 收割者 Harvester
+  models/aliens/mortar/mortar.mdl  # 炮虫 Mortar(变身用)
+  models/aliens/mortar3/gib_legfull.mdl  # 炮虫3型 Mortar3
+  models/aliens/mortar3/gibbody_1.mdl  # 炮虫3型 Mortar3
+  models/aliens/mortar3/gibbone.mdl  # 炮虫3型 Mortar3
+  models/aliens/mortar3/gibfinger_end.mdl  # 炮虫3型 Mortar3
+  models/aliens/mortar3/gibfinger_knuckle.mdl  # 炮虫3型 Mortar3
+  models/aliens/mortar3/gibfinger_whole.mdl  # 炮虫3型 Mortar3
+  models/aliens/mortar3/gibleg_end.mdl  # 炮虫3型 Mortar3
+  models/aliens/mortar3/gibleg_mid.mdl  # 炮虫3型 Mortar3
+  models/aliens/mortar3/mortar3.mdl  # 炮虫3型 Mortar3
+  models/aliens/parasite/gib_back.mdl  # 寄生虫 Parasite(寄生孵化)
+  models/aliens/parasite/gib_guts.mdl  # 寄生虫 Parasite(寄生孵化)
+  models/aliens/parasite/gib_head.mdl  # 寄生虫 Parasite(寄生孵化)
+  models/aliens/parasite/gib_left_leg.mdl  # 寄生虫 Parasite(寄生孵化)
+  models/aliens/parasite/gib_right_leg.mdl  # 寄生虫 Parasite(寄生孵化)
+  models/aliens/parasite/gib_tail.mdl  # 寄生虫 Parasite(寄生孵化)
+  models/aliens/parasite/gib_tooth.mdl  # 寄生虫 Parasite(寄生孵化)
+  models/aliens/parasite/parasite.mdl  # 寄生虫 Parasite(寄生孵化)
+  models/aliens/parasite/parasite_02.mdl  # 寄生虫 Parasite(寄生孵化)
+  models/aliens/parasite/parasite_swarmopedia.mdl  # 寄生虫 Parasite(寄生孵化)
+  models/aliens/queen/rd_queen.mdl  # 女王 Queen
+  models/aliens/rangerspit/rangerspit.mdl  # 游侠喷吐虫 Ranger Spit
+  models/aliens/sack/sack.mdl  # 血囊 Sack
+  models/aliens/shaman/gibbody.mdl  # 萨满 Shaman(施法支援)
+  models/aliens/shaman/gibbodyback.mdl  # 萨满 Shaman(施法支援)
+  models/aliens/shaman/giblegfront.mdl  # 萨满 Shaman(施法支援)
+  models/aliens/shaman/giblegrear.mdl  # 萨满 Shaman(施法支援)
+  models/aliens/shaman/shaman.mdl  # 萨满 Shaman(施法支援)
+  models/aliens/shieldbug/gib_back_leg.mdl  # 盾虫 Shieldbug(甲壳护盾)
+  models/aliens/shieldbug/gib_leg_claw.mdl  # 盾虫 Shieldbug(甲壳护盾)
+  models/aliens/shieldbug/gib_leg_l.mdl  # 盾虫 Shieldbug(甲壳护盾)
+  models/aliens/shieldbug/gib_leg_middle.mdl  # 盾虫 Shieldbug(甲壳护盾)
+  models/aliens/shieldbug/gib_leg_r.mdl  # 盾虫 Shieldbug(甲壳护盾)
+  models/aliens/shieldbug/gib_leg_upper.mdl  # 盾虫 Shieldbug(甲壳护盾)
+  models/aliens/shieldbug/shieldbug.mdl  # 盾虫 Shieldbug(甲壳护盾)
+  models/aliens/shieldbug/shieldbug_swarmopedia.mdl  # 盾虫 Shieldbug(甲壳护盾)
+  models/aliens/worm/pit_worm.mdl  # 巨虫 Pit Worm
+
+== 尸块/碎块 gibs (67) ==
+  models/gibs/agibs.mdl  # 外星人尸块(通用)
+  models/gibs/antlion_gib_large_1.mdl  # 蚁狮大碎块
+  models/gibs/antlion_gib_large_2.mdl
+  models/gibs/antlion_gib_large_3.mdl
+  models/gibs/antlion_gib_medium_1.mdl
+  models/gibs/antlion_gib_medium_2.mdl
+  models/gibs/antlion_gib_medium_3.mdl
+  models/gibs/antlion_gib_medium_3a.mdl
+  models/gibs/antlion_gib_small_1.mdl
+  models/gibs/antlion_gib_small_2.mdl
+  models/gibs/antlion_gib_small_3.mdl
+  models/gibs/antlion_worker_gibs_backlegl.mdl
+  models/gibs/antlion_worker_gibs_backlegr.mdl
+  models/gibs/antlion_worker_gibs_frontlegl.mdl
+  models/gibs/antlion_worker_gibs_frontlegr.mdl
+  models/gibs/antlion_worker_gibs_head.mdl
+  models/gibs/fast_zombie_legs.mdl  # 快僵尸腿
+  models/gibs/fast_zombie_torso.mdl  # 快僵尸躯干
+  models/gibs/glass_shard01.mdl  # 玻璃碎片
+  models/gibs/glass_shard02.mdl
+  models/gibs/glass_shard03.mdl
+  models/gibs/glass_shard04.mdl
+  models/gibs/glass_shard05.mdl
+  models/gibs/glass_shard06.mdl
+  models/gibs/gunship_gibs_engine.mdl  # 直升机碎片-引擎
+  models/gibs/gunship_gibs_eye.mdl
+  models/gibs/gunship_gibs_headsection.mdl
+  models/gibs/gunship_gibs_midsection.mdl
+  models/gibs/gunship_gibs_nosegun.mdl
+  models/gibs/gunship_gibs_sensorarray.mdl
+  models/gibs/gunship_gibs_tailsection.mdl
+  models/gibs/gunship_gibs_wing.mdl
+  models/gibs/helicopter_brokenpiece_01.mdl
+  models/gibs/helicopter_brokenpiece_02.mdl
+  models/gibs/helicopter_brokenpiece_03.mdl
+  models/gibs/helicopter_brokenpiece_04_cockpit.mdl
+  models/gibs/helicopter_brokenpiece_05_tailfan.mdl
+  models/gibs/helicopter_brokenpiece_06_body.mdl
+  models/gibs/hgibs.mdl  # 人类尸块(通用)
+  models/gibs/hgibs_scapula.mdl
+  models/gibs/hgibs_spine.mdl
+  models/gibs/metal_gib1.mdl  # 金属碎片
+  models/gibs/metal_gib2.mdl
+  models/gibs/metal_gib3.mdl
+  models/gibs/metal_gib4.mdl
+  models/gibs/metal_gib5.mdl
+  models/gibs/scanner_gib01.mdl  # 扫描机碎片
+  models/gibs/scanner_gib02.mdl
+  models/gibs/scanner_gib04.mdl
+  models/gibs/scanner_gib05.mdl
+  models/gibs/strider_back_leg.mdl
+  models/gibs/strider_gib1.mdl  # 巨型机甲碎片
+  models/gibs/strider_gib2.mdl
+  models/gibs/strider_gib3.mdl
+  models/gibs/strider_gib4.mdl
+  models/gibs/strider_gib5.mdl
+  models/gibs/strider_gib6.mdl
+  models/gibs/strider_gib7.mdl
+  models/gibs/strider_head.mdl
+  models/gibs/strider_left_leg.mdl
+  models/gibs/strider_right_leg.mdl
+  models/gibs/strider_weapon.mdl
+  models/gibs/wood_gib01a.mdl  # 木碎片
+  models/gibs/wood_gib01b.mdl
+  models/gibs/wood_gib01c.mdl
+  models/gibs/wood_gib01d.mdl
+  models/gibs/wood_gib01e.mdl
+
+== 废土道具 props_wasteland (58) ==
+  models/props_wasteland/barricade002a.mdl
+  models/props_wasteland/cargo_container01.mdl
+  models/props_wasteland/cargo_container01b.mdl
+  models/props_wasteland/cargo_container01c.mdl
+  models/props_wasteland/controlroom_filecabinet002a.mdl
+  models/props_wasteland/coolingtank01.mdl
+  models/props_wasteland/exterior_fence001a.mdl
+  models/props_wasteland/exterior_fence002b.mdl
+  models/props_wasteland/exterior_fence002c.mdl
+  models/props_wasteland/exterior_fence002d.mdl
+  models/props_wasteland/horizontalcoolingtank04.mdl
+  models/props_wasteland/interior_fence001a.mdl
+  models/props_wasteland/interior_fence001b.mdl
+  models/props_wasteland/interior_fence001c.mdl
+  models/props_wasteland/interior_fence001e.mdl
+  models/props_wasteland/interior_fence001g.mdl
+  models/props_wasteland/interior_fence002c.mdl
+  models/props_wasteland/interior_fence003d.mdl
+  models/props_wasteland/interior_fence004a.mdl
+  models/props_wasteland/interior_fence004b.mdl
+  models/props_wasteland/laundry_basket001.mdl
+  models/props_wasteland/laundry_dryer002.mdl
+  models/props_wasteland/laundry_washer001a.mdl
+  models/props_wasteland/light_spotlight01_base.mdl
+  models/props_wasteland/light_spotlight01_lamp.mdl
+  models/props_wasteland/pipecluster001c.mdl
+  models/props_wasteland/pipecluster002a.mdl
+  models/props_wasteland/powertower01.mdl
+  models/props_wasteland/prison_bracket001a.mdl
+  models/props_wasteland/prison_conduit001a.mdl
+  models/props_wasteland/prison_lamp001a.mdl
+  models/props_wasteland/prison_lamp001b.mdl
+  models/props_wasteland/prison_lamp001c.mdl
+  models/props_wasteland/prison_pipefaucet001a.mdl
+  models/props_wasteland/prison_pipes002a.mdl
+  models/props_wasteland/prison_sprinkler001a.mdl
+  models/props_wasteland/prison_sprinkler001b.mdl
+  models/props_wasteland/rockcliff_cluster02b.mdl
+  models/props_wasteland/rockcliff_cluster03b.mdl
+  models/props_wasteland/rockcliff01c.mdl
+  models/props_wasteland/rockgranite01a.mdl
+  models/props_wasteland/rockgranite01b.mdl
+  models/props_wasteland/rockgranite01c.mdl
+  models/props_wasteland/rockgranite03a.mdl
+  models/props_wasteland/rockgranite03b.mdl
+  models/props_wasteland/rockgranite03c.mdl
+  models/props_wasteland/rockgranite04a.mdl
+  models/props_wasteland/rockgranite04b.mdl
+  models/props_wasteland/shower_system001a.mdl
+  models/props_wasteland/tram_lever01.mdl
+  models/props_wasteland/tram_leverbase01.mdl
+  models/props_wasteland/wood_fence02a.mdl
+  models/props_wasteland/wood_fence02a_board01a.mdl
+  models/props_wasteland/wood_fence02a_board03a.mdl
+  models/props_wasteland/wood_fence02a_board05a.mdl
+  models/props_wasteland/wood_fence02a_board07a.mdl
+  models/props_wasteland/wood_fence02a_board09a.mdl
+  models/props_wasteland/wood_fence02a_shard01a.mdl
+
+== 武器 weapons (58) ==
+  models/weapons/50calmg/50calmg.mdl  # 50口径重机枪(炮台)
+  models/weapons/accessories/strange_device.mdl  # 武器配件
+  models/weapons/assaultrifle/assaultrifle.mdl  # 突击步枪 Assault Rifle
+  models/weapons/autogun/autogun.mdl  # 自动机枪 Autogun
+  models/weapons/buffgrenade/buffgrenade.mdl  # 增益手雷(团队加成)
+  models/weapons/chainsaw/chainsaw.mdl  # 电锯 Chainsaw
+  models/weapons/combatrifle/combatrifle.mdl  # 战斗步枪 Combat Rifle
+  models/weapons/cryocannon/cryocannon.mdl  # 冷冻炮 Cryo Cannon
+  models/weapons/deagle/deagle.mdl  # 沙鹰手枪 Deagle
+  models/weapons/devastator/devastator.mdl  # 毁灭者榴弹枪 Devastator
+  models/weapons/empty_clips/50cal_empty_clip.mdl  # 空弹夹
+  models/weapons/empty_clips/assaultrifle_empty_clip.mdl  # 空弹夹
+  models/weapons/empty_clips/autogun_empty_clip.mdl  # 空弹夹
+  models/weapons/empty_clips/combatrifle_empty_clip.mdl  # 空弹夹
+  models/weapons/empty_clips/devastator_empty_clip.mdl  # 空弹夹
+  models/weapons/empty_clips/flachette_empty_clip.mdl  # 空弹夹
+  models/weapons/empty_clips/flamethrower_empty_clip.mdl  # 空弹夹
+  models/weapons/empty_clips/healgun_empty_clip.mdl  # 空弹夹
+  models/weapons/empty_clips/heavyrifle_empty_clip.mdl  # 空弹夹
+  models/weapons/empty_clips/medrifle_empty_clip.mdl  # 空弹夹
+  models/weapons/empty_clips/pdw_empty_clip.mdl  # 空弹夹
+  models/weapons/empty_clips/pistol_empty_clip.mdl  # 空弹夹
+  models/weapons/empty_clips/prototyperifle_empty_clip.mdl  # 空弹夹
+  models/weapons/empty_clips/railgun_empty_clip.mdl  # 空弹夹
+  models/weapons/empty_clips/shieldrifle_empty_clip.mdl  # 空弹夹
+  models/weapons/empty_clips/sniperrifle_empty_clip.mdl  # 空弹夹
+  models/weapons/empty_clips/teslagun_empty_clip.mdl  # 空弹夹
+  models/weapons/empty_clips/vindicator_empty_clip.mdl  # 空弹夹
+  models/weapons/flamethrower/flamethrower.mdl  # 火焰喷射器 Flamethrower
+  models/weapons/flechette/flechette.mdl  # 箭枪 Flechette
+  models/weapons/grenadelauncher/grenadelauncher.mdl  # 榴弹发射器 GL
+  models/weapons/hackpad/hackpad.mdl  # 破解面板 Hackpad
+  models/weapons/healgun/healgun.mdl  # 治疗枪 Healgun
+  models/weapons/heavyrifle/heavyrifle.mdl  # 重步枪 Heavy Rifle
+  models/weapons/hunter_flechette.mdl
+  models/weapons/marksmanrifle/marksmanrifle.mdl  # 神射手步枪 Marksman
+  models/weapons/medrifle/medrifle.mdl  # 医疗步枪 Medrifle
+  models/weapons/minigun/minigun.mdl  # 迷你机枪 Minigun
+  models/weapons/mininglaser/mininglaser.mdl  # 采矿激光 Mining Laser
+  models/weapons/pdw/pdw.mdl  # PDW冲锋枪
+  models/weapons/pdw/pdw_single.mdl  # PDW冲锋枪
+  models/weapons/pistol/pistol.mdl  # 手枪 Pistol
+  models/weapons/pistol/pistol_single.mdl  # 手枪 Pistol
+  models/weapons/plasmalauncher/plasmalauncher.mdl  # 等离子发射器
+  models/weapons/prototype/prototyperifle.mdl  # 原型步枪 Prototype
+  models/weapons/railgun/railgun.mdl  # 磁轨炮 Railgun
+  models/weapons/revivetool/blackbox.mdl  # 复活工具 Blackbox
+  models/weapons/revivetool/blackbox_key.mdl  # 复活工具 Blackbox
+  models/weapons/ricochet/ricochet.mdl  # 弹射枪 Ricochet
+  models/weapons/rifleshell.mdl
+  models/weapons/shell.mdl
+  models/weapons/shieldrifle/shieldrifle.mdl  # 护盾步枪 Shield Rifle
+  models/weapons/shotgun/shotgun.mdl  # 霰弹枪 Shotgun
+  models/weapons/shotgun_shell.mdl
+  models/weapons/vindicator/vindicator.mdl  # 复仇者 Vindicator
+  models/weapons/w_bullet.mdl
+  models/weapons/w_grenade.mdl
+  models/weapons/w_irifle.mdl
+
+== 载具 props_vehicles (58) ==
+  models/props_vehicles/apc_tire001.mdl
+  models/props_vehicles/apc001.mdl
+  models/props_vehicles/army_truck.mdl
+  models/props_vehicles/bus01.mdl
+  models/props_vehicles/bus01_2.mdl
+  models/props_vehicles/car_glass.mdl
+  models/props_vehicles/car_white.mdl
+  models/props_vehicles/car001a_hatchback.mdl
+  models/props_vehicles/car001b_hatchback.mdl
+  models/props_vehicles/car002a.mdl
+  models/props_vehicles/car002b.mdl
+  models/props_vehicles/car003a.mdl
+  models/props_vehicles/car003b.mdl
+  models/props_vehicles/car004a.mdl
+  models/props_vehicles/car004b.mdl
+  models/props_vehicles/car005a.mdl
+  models/props_vehicles/car005b.mdl
+  models/props_vehicles/cara_82hatchback_wrecked.mdl
+  models/props_vehicles/cara_82hatchback_wrecked_glass.mdl
+  models/props_vehicles/cara_95sedan.mdl
+  models/props_vehicles/cara_95sedan_glass.mdl
+  models/props_vehicles/cara_95sedan_wrecked.mdl
+  models/props_vehicles/cara_95sedan_wrecked_glass.mdl
+  models/props_vehicles/carparts_axel01a.mdl
+  models/props_vehicles/carparts_door01a.mdl
+  models/props_vehicles/carparts_muffler01a.mdl
+  models/props_vehicles/carparts_tire01a.mdl
+  models/props_vehicles/carparts_wheel01a.mdl
+  models/props_vehicles/church_bus01.mdl
+  models/props_vehicles/generatortrailer01.mdl
+  models/props_vehicles/hmmwv.mdl
+  models/props_vehicles/hmmwv_glass.mdl
+  models/props_vehicles/hmmwv_supply.mdl
+  models/props_vehicles/hmmwv_supply_glass.mdl
+  models/props_vehicles/humvee.mdl
+  models/props_vehicles/humvee_glass.mdl
+  models/props_vehicles/humvee_lighton.mdl
+  models/props_vehicles/mining_car.mdl
+  models/props_vehicles/news_van.mdl
+  models/props_vehicles/pickup_load01.mdl
+  models/props_vehicles/pickup_load02.mdl
+  models/props_vehicles/pickup_load03.mdl
+  models/props_vehicles/pickup_truck_2004.mdl
+  models/props_vehicles/pickup_truck_2004_glass.mdl
+  models/props_vehicles/pickup_truck_78.mdl
+  models/props_vehicles/pickup_truck_78_glass.mdl
+  models/props_vehicles/semi_trailer_freestanding.mdl
+  models/props_vehicles/tanker001a.mdl
+  models/props_vehicles/tire001c_car.mdl
+  models/props_vehicles/trafficjam01.mdl
+  models/props_vehicles/train_enginecar.mdl
+  models/props_vehicles/train_flatcar_container_doorl.mdl
+  models/props_vehicles/train_flatcar_container_doorr.mdl
+  models/props_vehicles/train_flatcar_leveltop.mdl
+  models/props_vehicles/truck002a_cab.mdl
+  models/props_vehicles/truck003a.mdl
+  models/props_vehicles/van_glass.mdl
+  models/props_vehicles/van001a.mdl
+
+== 植物 props_foliage (50) ==
+  models/props_foliage/bramble001a.mdl
+  models/props_foliage/cattails.mdl
+  models/props_foliage/deadtree01.mdl
+  models/props_foliage/driftwood_01a.mdl
+  models/props_foliage/driftwood_02a.mdl
+  models/props_foliage/driftwood_03a.mdl
+  models/props_foliage/grass_01.mdl
+  models/props_foliage/grass_02.mdl
+  models/props_foliage/grass_02_cluster01.mdl
+  models/props_foliage/grass_02_cluster02.mdl
+  models/props_foliage/grass_02_detailmodel.mdl
+  models/props_foliage/hedge_128.mdl
+  models/props_foliage/hedge_256.mdl
+  models/props_foliage/hedge_small.mdl
+  models/props_foliage/joshuatree01.mdl
+  models/props_foliage/joshuatree02_skybox.mdl
+  models/props_foliage/mall_bigleaves_plant01.mdl
+  models/props_foliage/mall_bigleaves_plant03.mdl
+  models/props_foliage/mall_bigleaves_plant03_medium.mdl
+  models/props_foliage/mall_bush01.mdl
+  models/props_foliage/mall_bush02.mdl
+  models/props_foliage/mall_fern01.mdl
+  models/props_foliage/mall_grass_bush01.mdl
+  models/props_foliage/mall_palmplant02.mdl
+  models/props_foliage/mall_pot_square02.mdl
+  models/props_foliage/mall_pot_squarexl01.mdl
+  models/props_foliage/mall_pot_xlarge01.mdl
+  models/props_foliage/mall_small_palm01.mdl
+  models/props_foliage/mall_tree_medium01.mdl
+  models/props_foliage/rock_coast02c.mdl
+  models/props_foliage/rock_coast02g.mdl
+  models/props_foliage/rock_coast02h.mdl
+  models/props_foliage/shrub_01a.mdl
+  models/props_foliage/shrub_02a.mdl
+  models/props_foliage/shrub_03_cluster.mdl
+  models/props_foliage/shrub_03_cluster_skybox.mdl
+  models/props_foliage/shrub_03_cluster02.mdl
+  models/props_foliage/shrub_03a.mdl
+  models/props_foliage/shrub_03b.mdl
+  models/props_foliage/shrub_03c.mdl
+  models/props_foliage/spikeplant01.mdl
+  models/props_foliage/tree_deciduous_03b.mdl
+  models/props_foliage/tree_pine_01.mdl
+  models/props_foliage/tree_pine_02.mdl
+  models/props_foliage/tree_pine_03.mdl
+  models/props_foliage/tree_pine_cluster_01.mdl
+  models/props_foliage/urban_palm01.mdl
+  models/props_foliage/urban_palm01_medium.mdl
+  models/props_foliage/urban_palm01_small.mdl
+  models/props_foliage/urban_small_palm01.mdl
+
+== 矿井道具 props_mining (48) ==
+  models/props_mining/caverocks_cluster01.mdl
+  models/props_mining/caverocks_cluster02.mdl
+  models/props_mining/conduit_outdoor384.mdl
+  models/props_mining/control_lever01.mdl
+  models/props_mining/crank01.mdl
+  models/props_mining/diesel_generator.mdl
+  models/props_mining/elevator_winch.mdl
+  models/props_mining/elevator_winch_empty.mdl
+  models/props_mining/elevator_winch_shaft.mdl
+  models/props_mining/elevator01_cage.mdl
+  models/props_mining/elevator01_cagedoor.mdl
+  models/props_mining/elevator01_framework.mdl
+  models/props_mining/elevator02_cage.mdl
+  models/props_mining/junctionbox03.mdl
+  models/props_mining/lamps_cluster02.mdl
+  models/props_mining/oiltank01.mdl
+  models/props_mining/pickaxe01.mdl
+  models/props_mining/pipe_ceiling_1024.mdl
+  models/props_mining/pipe_ceiling_end.mdl
+  models/props_mining/pipe_cluster01.mdl
+  models/props_mining/rock_caves01.mdl
+  models/props_mining/rock_caves01a.mdl
+  models/props_mining/rock_caves01b.mdl
+  models/props_mining/rock_caves01c.mdl
+  models/props_mining/rock001.mdl
+  models/props_mining/rock002.mdl
+  models/props_mining/rock003.mdl
+  models/props_mining/rock004.mdl
+  models/props_mining/rock005.mdl
+  models/props_mining/rock006.mdl
+  models/props_mining/rock006b.mdl
+  models/props_mining/rock006c.mdl
+  models/props_mining/rock007.mdl
+  models/props_mining/struts_single01.mdl
+  models/props_mining/struts_tunnel192_01.mdl
+  models/props_mining/struts_tunnel192_03.mdl
+  models/props_mining/struts_tunnel320_01.mdl
+  models/props_mining/struts_tunnel320_02.mdl
+  models/props_mining/struts_tunnel320_03.mdl
+  models/props_mining/struts_wall02.mdl
+  models/props_mining/struts_wall03.mdl
+  models/props_mining/techgate01.mdl
+  models/props_mining/track_1024_01.mdl
+  models/props_mining/track_1664_01.mdl
+  models/props_mining/track_512_01.mdl
+  models/props_mining/track_rail_bent1.mdl
+  models/props_mining/track_rail_bent2.mdl
+  models/props_mining/track_rail_bent3.mdl
+
+== 杂物 props_junk (48) ==
+  models/props_junk/cardboard_box001a_gib01.mdl
+  models/props_junk/cardboard_box002a_gib01.mdl
+  models/props_junk/cardboard_box003a_gib01.mdl
+  models/props_junk/cardboard_box004a_gib01.mdl
+  models/props_junk/dumpster.mdl
+  models/props_junk/garbage_metalcan001a.mdl
+  models/props_junk/garbage_metalcan002a.mdl
+  models/props_junk/garbage_milkcarton001a.mdl
+  models/props_junk/garbage128_composite001d.mdl
+  models/props_junk/garbage256_composite001a.mdl
+  models/props_junk/garbage256_composite001b.mdl
+  models/props_junk/garbage256_composite002a.mdl
+  models/props_junk/garbage256_composite002b.mdl
+  models/props_junk/gascan001a.mdl
+  models/props_junk/ibeam01a.mdl
+  models/props_junk/ibeam01a_cluster01.mdl
+  models/props_junk/metalbucket01a.mdl
+  models/props_junk/metalgascan.mdl
+  models/props_junk/plasticbucket001a.mdl
+  models/props_junk/plasticcrate01a.mdl
+  models/props_junk/propanecanister001a.mdl
+  models/props_junk/pushcart01a.mdl
+  models/props_junk/trashcluster01a.mdl
+  models/props_junk/trashcluster01a_corner.mdl
+  models/props_junk/trashcluster01b.mdl
+  models/props_junk/trashcluster01b_corner.mdl
+  models/props_junk/trashdumpster02.mdl
+  models/props_junk/trashdumpster02b.mdl
+  models/props_junk/vent001_chunk1.mdl
+  models/props_junk/vent001_chunk2.mdl
+  models/props_junk/wood_crate001a_chunk01.mdl
+  models/props_junk/wood_crate001a_chunk02.mdl
+  models/props_junk/wood_crate001a_chunk03.mdl
+  models/props_junk/wood_crate001a_chunk04.mdl
+  models/props_junk/wood_crate001a_chunk05.mdl
+  models/props_junk/wood_crate001a_chunk07.mdl
+  models/props_junk/wood_crate001a_chunk09.mdl
+  models/props_junk/wood_crate001a_damaged.mdl
+  models/props_junk/wood_crate001a_damagedmax.mdl
+  models/props_junk/wood_crate002a.mdl
+  models/props_junk/wood_pallet001a.mdl
+  models/props_junk/wood_pallet001a_chunka.mdl
+  models/props_junk/wood_pallet001a_chunka1.mdl
+  models/props_junk/wood_pallet001a_chunka3.mdl
+  models/props_junk/wood_pallet001a_chunka4.mdl
+  models/props_junk/wood_pallet001a_chunkb2.mdl
+  models/props_junk/wood_pallet001a_chunkb3.mdl
+  models/props_junk/wood_pallet001a_shard01.mdl
+
+== 环境物件 env (46) ==
+  models/env/ryberg/outside/detonator/detonator.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/dumpster/dumpster.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/garagedoor/garagedoor.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/garagedoor/garagedoor_open.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/garagedoor/garagedoor_open_twosided.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outside_cementmixer/outside_cementmixer.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outside_floorpanel/outside_floorpanel.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outside_oilpipelinecap/outside_oilpipelinecap.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outside_oilpipelineconnector/outside_oilpipelineconnector.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outside_oilpipelinecurve/outside_oilpipelinecurve.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outside_oilpipelinecurve/outside_oilpipelinecurve45.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outside_oilpipelinecurve2/outside_oilpipelinecurve2.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outside_oilpipelinedrain/outside_oilpipelinedrain.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outside_oilpipelinestraight/outside_oilpipelinestraight.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outside_polerope/outside_polerope.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outside_polerope/outside_poleropeend.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outside_polesmall/outside_polesmall.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidemanhole/outsidemanhole.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidemanhole_lid/outsidemanhole_lid.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidepole/outsidepole.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidepowerbox/outsidepowerbox.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidepowerswitch/outsidepowerswitch.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidesupportbeam/outsidesupportbeam.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidesupportbeam2/outsidesupportbeam2.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidesupportbeam2/outsidesupportbeam2a.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidesupportbeam3/outsidesupportbeam3.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidevent/outsidevent.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsideventpanel/outsideventpanel.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidewall_128/outsidewall_128.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidewall_128_cable3/outsidecables3.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidewall_128_cablebundle/outsidewall_128_cablebundle.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidewall_128_panel/outsidewall_128_panel.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidewall_128_pipes/outsidewall_128_pipes.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidewall_128_thinpipe2/outsidewall_128_thinpipe2.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidewall_128_thinpipe3/outsidewall_128_thinpipe3.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidewall_128_thinpipe4/outsidewall_128_thinpipe4.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidewall_128_thinpipe5/outsidewall_128_thinpipe5.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidewall_128_window/outsidewall_128_window.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidewall_64/outsidewall_64.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidewall_curveout/outsidewall_curveout.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidewall_support/outsidewall_support.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidewallblock_64/outsidewallblock_64.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/outsidewallblocksmall_64/outsidewallblocksmall_64.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/ventbox/ventbox.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/ventpanel/ventpanel.mdl  # 环境物件(管线/墙板/通风口等)
+  models/env/ryberg/outside/ventpanel/ventpanel_broken.mdl  # 环境物件(管线/墙板/通风口等)
+
+== 城市17道具 props_c17 (41) ==
+  models/props_c17/concrete_barrier001a.mdl
+  models/props_c17/fence01a.mdl
+  models/props_c17/fence01b.mdl
+  models/props_c17/fence03a.mdl
+  models/props_c17/fence04a.mdl
+  models/props_c17/furniturecouch001a.mdl
+  models/props_c17/furnituresink001a.mdl
+  models/props_c17/furnituretoilet001a.mdl
+  models/props_c17/handrail04_brokencorner.mdl
+  models/props_c17/handrail04_brokenlong.mdl
+  models/props_c17/handrail04_brokensinglerise.mdl
+  models/props_c17/handrail04_cap.mdl
+  models/props_c17/handrail04_corner.mdl
+  models/props_c17/handrail04_doublerise.mdl
+  models/props_c17/handrail04_end.mdl
+  models/props_c17/handrail04_long.mdl
+  models/props_c17/handrail04_medium.mdl
+  models/props_c17/handrail04_short.mdl
+  models/props_c17/handrail04_singlerise.mdl
+  models/props_c17/lampfixture01a.mdl
+  models/props_c17/light_cagelight01_off.mdl
+  models/props_c17/light_cagelight01_on.mdl
+  models/props_c17/light_cagelight02_on.mdl
+  models/props_c17/light_decklight01_off.mdl
+  models/props_c17/light_decklight01_on.mdl
+  models/props_c17/lockers001a.mdl
+  models/props_c17/metalladder002.mdl
+  models/props_c17/metalladder002b.mdl
+  models/props_c17/overhaingcluster_001a.mdl
+  models/props_c17/pillarcluster_001a.mdl
+  models/props_c17/pillarcluster_001b.mdl
+  models/props_c17/pillarcluster_001c.mdl
+  models/props_c17/pillarcluster_001d.mdl
+  models/props_c17/pillarcluster_001f.mdl
+  models/props_c17/powerbox.mdl
+  models/props_c17/pulleyhook01.mdl
+  models/props_c17/substation_transformer01d.mdl
+  models/props_c17/substation_transformer01e.mdl
+  models/props_c17/truss02a.mdl
+  models/props_c17/truss02e.mdl
+  models/props_c17/utilityconnecter005.mdl
+
+== 火车站道具 props_trainstation (40) ==
+  models/props_trainstation/bench_indoor001a.mdl
+  models/props_trainstation/benchoutdoor01a.mdl
+  models/props_trainstation/boxcar.mdl
+  models/props_trainstation/boxcar2.mdl
+  models/props_trainstation/boxcar2_damaged1.mdl
+  models/props_trainstation/boxcar2a.mdl
+  models/props_trainstation/ceiling_arch001a.mdl
+  models/props_trainstation/ceiling_truss001a.mdl
+  models/props_trainstation/column_light001a.mdl
+  models/props_trainstation/column_light001b.mdl
+  models/props_trainstation/handrail_64decoration001a.mdl
+  models/props_trainstation/light_signal001a.mdl
+  models/props_trainstation/light_signal001b.mdl
+  models/props_trainstation/light_signal002a.mdl
+  models/props_trainstation/mount_connection001a.mdl
+  models/props_trainstation/payphone_reciever001a.mdl
+  models/props_trainstation/payphone001a.mdl
+  models/props_trainstation/tanker.mdl
+  models/props_trainstation/tanker_damaged1.mdl
+  models/props_trainstation/tracklight01.mdl
+  models/props_trainstation/tracksign03.mdl
+  models/props_trainstation/tracksign08.mdl
+  models/props_trainstation/tracksign09.mdl
+  models/props_trainstation/tracksign10.mdl
+  models/props_trainstation/trackswitch01.mdl
+  models/props_trainstation/train_engine.mdl
+  models/props_trainstation/train_wheels1.mdl
+  models/props_trainstation/train001.mdl
+  models/props_trainstation/train002.mdl
+  models/props_trainstation/train003.mdl
+  models/props_trainstation/train003_damaged1.mdl
+  models/props_trainstation/train005.mdl
+  models/props_trainstation/traintrack001c.mdl
+  models/props_trainstation/traintrack006b.mdl
+  models/props_trainstation/traintrack006c.mdl
+  models/props_trainstation/trashcan_indoor001a.mdl
+  models/props_trainstation/trashcan_indoor001b.mdl
+  models/props_trainstation/wrecked_boxcar_gate.mdl
+  models/props_trainstation/wrecked_boxcar_gate_door.mdl
+  models/props_trainstation/wrecked_boxcar_jump.mdl
+
+== 街道道具 props_street (25) ==
+  models/props_street/bridge_ironwork_01.mdl
+  models/props_street/bridge_ironwork_docks.mdl
+  models/props_street/building_trim_piece01_128.mdl
+  models/props_street/building_trim_piece01_128_corner.mdl
+  models/props_street/building_trim_piece02_128.mdl
+  models/props_street/building_trim_piece02_128_corner.mdl
+  models/props_street/building_trim_piece02_512_damaged.mdl
+  models/props_street/chainlinkfencedamage_01.mdl
+  models/props_street/chainlinkfencedamage_02.mdl
+  models/props_street/concertinawire128_rusty.mdl
+  models/props_street/concertinawire512_rusty.mdl
+  models/props_street/firehydrant.mdl
+  models/props_street/railing_steps01.mdl
+  models/props_street/railing_steps01_damaged.mdl
+  models/props_street/railing_street_128_01.mdl
+  models/props_street/railing_street_256_01.mdl
+  models/props_street/railing_street_512_01.mdl
+  models/props_street/railing_street_corner_01.mdl
+  models/props_street/railing_street_leftdamage_01.mdl
+  models/props_street/railing_street_rightdamage_01.mdl
+  models/props_street/roadsidereflector01.mdl
+  models/props_street/sign_broken1_frame.mdl
+  models/props_street/sign_broken2_frame.mdl
+  models/props_street/trafficlight01_off.mdl
+  models/props_street/trafficlightfallen01.mdl
+
+== 管道 props_pipes (24) ==
+  models/props_pipes/concrete_pipe001b.mdl
+  models/props_pipes/concrete_pipe001c.mdl
+  models/props_pipes/destroyedpipes01a.mdl
+  models/props_pipes/destroyedpipes01b.mdl
+  models/props_pipes/destroyedpipes01c.mdl
+  models/props_pipes/destroyedpipes01d.mdl
+  models/props_pipes/gutter_256_002a.mdl
+  models/props_pipes/gutter_384_001a.mdl
+  models/props_pipes/gutterlarge_512_001a.mdl
+  models/props_pipes/pipe02_90degree01.mdl
+  models/props_pipes/pipe02_lcurve02_short.mdl
+  models/props_pipes/pipe02_straight01_long.mdl
+  models/props_pipes/pipe02_straight01_short.mdl
+  models/props_pipes/pipe02_tjoint01.mdl
+  models/props_pipes/pipecluster08d_006a.mdl
+  models/props_pipes/pipecluster32d_001a.mdl
+  models/props_pipes/pipeset08d_128_001a.mdl
+  models/props_pipes/pipeset08d_256_001a.mdl
+  models/props_pipes/pipeset08d_512_001a.mdl
+  models/props_pipes/pipeset08d_64_001a.mdl
+  models/props_pipes/pipeset08d_corner128d_001a.mdl
+  models/props_pipes/pipeset32d_256_001a.mdl
+  models/props_pipes/pipeset32d_corner128d_001a.mdl
+  models/props_pipes/valve002.mdl
+
+== 人类NPC humans (24) ==
+  models/humans/female_gestures.mdl  # 人类NPC
+  models/humans/female_postures.mdl  # 人类NPC
+  models/humans/female_shared.mdl  # 人类NPC
+  models/humans/female_ss.mdl  # 人类NPC
+  models/humans/group00/female_01.mdl  # 人类NPC
+  models/humans/group00/female_02.mdl  # 人类NPC
+  models/humans/group00/female_03.mdl  # 人类NPC
+  models/humans/group00/female_04.mdl  # 人类NPC
+  models/humans/group00/female_06.mdl  # 人类NPC
+  models/humans/group00/female_07.mdl  # 人类NPC
+  models/humans/group00/male_01.mdl  # 人类NPC
+  models/humans/group00/male_02.mdl  # 人类NPC
+  models/humans/group00/male_03.mdl  # 人类NPC
+  models/humans/group00/male_04.mdl  # 人类NPC
+  models/humans/group00/male_05.mdl  # 人类NPC
+  models/humans/group00/male_06.mdl  # 人类NPC
+  models/humans/group00/male_07.mdl  # 人类NPC
+  models/humans/group00/male_08.mdl  # 人类NPC
+  models/humans/group00/male_09.mdl  # 人类NPC
+  models/humans/group01/female_01.mdl  # 人类NPC
+  models/humans/male_gestures.mdl  # 人类NPC
+  models/humans/male_postures.mdl  # 人类NPC
+  models/humans/male_shared.mdl  # 人类NPC
+  models/humans/male_ss.mdl  # 人类NPC
+
+== 2Fort道具 props_2fort (22) ==
+  models/props_2fort/coffeemachine.mdl
+  models/props_2fort/coffeepot.mdl
+  models/props_2fort/corrugated_metal005.mdl
+  models/props_2fort/corrugated_metal007.mdl
+  models/props_2fort/fire_extinguisher.mdl
+  models/props_2fort/hubcap.mdl
+  models/props_2fort/locker001.mdl
+  models/props_2fort/mop_and_bucket.mdl
+  models/props_2fort/nail001.mdl
+  models/props_2fort/nail002.mdl
+  models/props_2fort/oildrum.mdl
+  models/props_2fort/propane_tank_tall01.mdl
+  models/props_2fort/roof_metal001.mdl
+  models/props_2fort/roof_metal003.mdl
+  models/props_2fort/tank002.mdl
+  models/props_2fort/telephonepole001.mdl
+  models/props_2fort/telephonepole001_skybox.mdl
+  models/props_2fort/thermos.mdl
+  models/props_2fort/tire001.mdl
+  models/props_2fort/trainwheel003.mdl
+  models/props_2fort/wastebasket01.mdl
+  models/props_2fort/window004.mdl
+
+== 室内道具 props_interiors (21) ==
+  models/props_interiors/chair_cafeteria.mdl
+  models/props_interiors/chairs_airport.mdl
+  models/props_interiors/cubicle_shelf.mdl
+  models/props_interiors/desk_metal.mdl
+  models/props_interiors/industrial_table01.mdl
+  models/props_interiors/lightbulb01a.mdl
+  models/props_interiors/lightbulb03a.mdl
+  models/props_interiors/lights_florescent01a.mdl
+  models/props_interiors/lights_florescent01a_phys.mdl
+  models/props_interiors/refrigerator01a.mdl
+  models/props_interiors/refrigeratordoor01a.mdl
+  models/props_interiors/refrigeratordoor02a.mdl
+  models/props_interiors/sink_industrial01.mdl
+  models/props_interiors/sinkkitchen01a.mdl
+  models/props_interiors/stair_metal_01.mdl
+  models/props_interiors/stair_metal_02.mdl
+  models/props_interiors/stair_metal_03.mdl
+  models/props_interiors/stove03_industrial.mdl
+  models/props_interiors/stove04_industrial.mdl
+  models/props_interiors/toilet_b_breakable01_base.mdl
+  models/props_interiors/toilet_d.mdl
+
+== ACE ace (20) ==
+  models/ace/sw/rh/cgi_console_01.mdl  # ACE
+  models/ace/sw/rh/cgi_console_02.mdl  # ACE
+  models/ace/sw/rh/cgi_console_03.mdl  # ACE
+  models/ace/sw/rh/cgi_console_04.mdl  # ACE
+  models/ace/sw/rh/cgi_console_05.mdl  # ACE
+  models/ace/sw/rh/cgi_console_06.mdl  # ACE
+  models/ace/sw/rh/cgi_console_07.mdl  # ACE
+  models/ace/sw/rh/cgi_console_08.mdl  # ACE
+  models/ace/sw/rh/cgi_console_09.mdl  # ACE
+  models/ace/sw/rh/cgi_console_10.mdl  # ACE
+  models/ace/sw/rh/cgi_console_11.mdl  # ACE
+  models/ace/sw/rh/cgi_console_12.mdl  # ACE
+  models/ace/sw/rh/cgi_hackconsole_01.mdl  # ACE
+  models/ace/sw/rh/cgi_hackconsole_02.mdl  # ACE
+  models/ace/sw/rh/cgi_holotable_bottom.mdl  # ACE
+  models/ace/sw/rh/cgi_holotable_top.mdl  # ACE
+  models/ace/sw/rh/cgi_panel_01.mdl  # ACE
+  models/ace/sw/rh/cgi_panel_02.mdl  # ACE
+  models/ace/sw/rh/cgi_port_01.mdl  # ACE
+  models/ace/sw/rh/cgi_screen_01.mdl  # ACE
+
+== 工地道具 props_construction (16) ==
+  models/props_construction/barricade_one_panel.mdl
+  models/props_construction/barricade_three_panel.mdl
+  models/props_construction/barricade_two_panel.mdl
+  models/props_construction/demolition_spoolfat.mdl
+  models/props_construction/excavator.mdl
+  models/props_construction/powerdrill.mdl
+  models/props_construction/rubble001.mdl
+  models/props_construction/rubble002.mdl
+  models/props_construction/rubble003.mdl
+  models/props_construction/rubble008.mdl
+  models/props_construction/rubble009.mdl
+  models/props_construction/rubble010.mdl
+  models/props_construction/rubble011.mdl
+  models/props_construction/rubble012.mdl
+  models/props_construction/rubble014.mdl
+  models/props_construction/sandbagged_sign.mdl
+
+== 道具 items (15) ==
+  models/items/ammobag/ammobag.mdl  # 弹药袋
+  models/items/ammobag/ammobag_dynamic.mdl  # 弹药袋
+  models/items/itembox/itemboxlarge.mdl  # 道具箱
+  models/items/itembox/itemboxlarge_7a.mdl  # 道具箱
+  models/items/itembox/itemboxsmall.mdl  # 道具箱
+  models/items/itembox/itemboxsmall_7a.mdl  # 道具箱
+  models/items/mine/mine.mdl  # 地雷 Mine
+  models/items/personalmedkit/personalmedkit.mdl  # 个人医疗包
+  models/items/shield_bubble/rifle_shield.mdl  # 护盾泡泡
+  models/items/shield_bubble/shield_bubble.mdl  # 护盾泡泡
+  models/items/shield_bubble/shield_bubble_arena.mdl  # 护盾泡泡
+  models/items/shield_bubble/shield_bubble_arena_low.mdl  # 护盾泡泡
+  models/items/shield_generator/shield_generator.mdl  # 护盾发生器
+  models/items/teslacoil/tesla.mdl  # 特斯拉线圈
+  models/items/teslacoil/teslacoil.mdl  # 特斯拉线圈
+
+== 独特道具 props_unique (14) ==
+  models/props_unique/jukebox01.mdl
+  models/props_unique/jukebox01_body.mdl
+  models/props_unique/jukebox01_menu.mdl
+  models/props_unique/spawn_apartment/lantern.mdl
+  models/props_unique/tft3-airlocksuit.mdl
+  models/props_unique/tft3-baggageclaimlights.mdl
+  models/props_unique/tft3-bracedwindow.mdl
+  models/props_unique/tft3-hangarlights.mdl
+  models/props_unique/tft3-innerbridgeprops.mdl
+  models/props_unique/tft3-innerbridgeprops_small.mdl
+  models/props_unique/tft3-outerbridgedetail.mdl
+  models/props_unique/tft3-secondairlockdetail.mdl
+  models/props_unique/tft3-subwaycoverdetail.mdl
+  models/props_unique/tft3-subwaytrainprops.mdl
+
+== 城市道具 props_urban (14) ==
+  models/props_urban/bench002.mdl
+  models/props_urban/curb_drain001_32.mdl
+  models/props_urban/dumpster001.mdl
+  models/props_urban/fire_escape_lower.mdl
+  models/props_urban/fire_escape_upper.mdl
+  models/props_urban/gas_meter.mdl
+  models/props_urban/highway_barrel001.mdl
+  models/props_urban/outhouse001.mdl
+  models/props_urban/porch_light003.mdl
+  models/props_urban/skylight.mdl
+  models/props_urban/stoop003_48.mdl
+  models/props_urban/telephone_pole001.mdl
+  models/props_urban/telephone_pole002.mdl
+  models/props_urban/telephone_streetlight001.mdl
+
+== 实验室道具 props_lab (14) ==
+  models/props_lab/citizenradio.mdl
+  models/props_lab/generatorhose.mdl
+  models/props_lab/lab_flourescentlight001a.mdl
+  models/props_lab/lab_flourescentlight001b.mdl
+  models/props_lab/lab_flourescentlight002b.mdl
+  models/props_lab/lockerdoorleft.mdl
+  models/props_lab/lockerdoorright.mdl
+  models/props_lab/lockers.mdl
+  models/props_lab/monitor02.mdl
+  models/props_lab/pipesystem02e.mdl
+  models/props_lab/powerbox01a.mdl
+  models/props_lab/securitybank.mdl
+  models/props_lab/teleportframe.mdl
+  models/props_lab/walllight001a.mdl
+
+== 岩石9800 prop_rock9800 (13) ==
+  models/prop_rock9800/bigrock_01.mdl
+  models/prop_rock9800/bigrock_02.mdl
+  models/prop_rock9800/flatrock_01.mdl
+  models/prop_rock9800/flatrock_02.mdl
+  models/prop_rock9800/flatrock_03.mdl
+  models/prop_rock9800/highrock_01.mdl
+  models/prop_rock9800/rockpillar_01.mdl
+  models/prop_rock9800/rockwall_01.mdl
+  models/prop_rock9800/rockwall_02.mdl
+  models/prop_rock9800/rockwall_03.mdl
+  models/prop_rock9800/rockwall_04.mdl
+  models/prop_rock9800/rockwall_05.mdl
+  models/prop_rock9800/rockwall_06.mdl
+
+== 哨戒炮 sentry_gun (13) ==
+  models/sentry_gun/flame_top.mdl  # 哨戒炮
+  models/sentry_gun/freeze_top.mdl  # 哨戒炮
+  models/sentry_gun/grenade_top.mdl  # 哨戒炮
+  models/sentry_gun/machinegun_top.mdl  # 哨戒炮
+  models/sentry_gun/railgun_top.mdl  # 哨戒炮
+  models/sentry_gun/sentry_base.mdl  # 哨戒炮
+  models/sentry_gun/sentry_gibs/sentry_base_gib.mdl  # 哨戒炮
+  models/sentry_gun/sentry_gibs/sentry_cam_gib.mdl  # 哨戒炮
+  models/sentry_gun/sentry_gibs/sentry_holder_gib.mdl  # 哨戒炮
+  models/sentry_gun/sentry_gibs/sentry_left_arm_gib.mdl  # 哨戒炮
+  models/sentry_gun/sentry_gibs/sentry_left_backleg_gib.mdl  # 哨戒炮
+  models/sentry_gun/sentry_gibs/sentry_right_backleg_gib.mdl  # 哨戒炮
+  models/sentry_gun/sentry_gibs/sentry_top_gib.mdl  # 哨戒炮
+
+== 僵尸 zombie (12) ==
+  models/zombie/classic.mdl  # 僵尸
+  models/zombie/classic_legs.mdl  # 僵尸
+  models/zombie/classic_torso.mdl  # 僵尸
+  models/zombie/fallen_marine.mdl  # 僵尸
+  models/zombie/fallen_marine_animations.mdl  # 僵尸
+  models/zombie/fast.mdl  # 僵尸
+  models/zombie/fast_torso.mdl  # 僵尸
+  models/zombie/poison.mdl  # 僵尸
+  models/zombie/zombie_soldier.mdl  # 僵尸
+  models/zombie/zombie_soldier_animations.mdl  # 僵尸
+  models/zombie/zombie_soldier_legs.mdl  # 僵尸
+  models/zombie/zombie_soldier_torso.mdl  # 僵尸
+
+== 杂项道具 props_misc (12) ==
+  models/props_misc/bodybag_01/bodybag_01.mdl
+  models/props_misc/bodybag_02/bodybag_02.mdl
+  models/props_misc/bodybag_03/bodybag_03.mdl
+  models/props_misc/bodybag_04/bodybag_04.mdl
+  models/props_misc/bodybag_05/bodybag_05.mdl
+  models/props_misc/standing_tarp_narrow.mdl
+  models/props_misc/standing_tarp_short.mdl
+  models/props_misc/standing_tarp_tall.mdl
+  models/props_misc/tarp_car.mdl
+  models/props_misc/tarp_hanging.mdl
+  models/props_misc/tarp_lean.mdl
+  models/props_misc/tarp_roof.mdl
+
+== 煤矿道具 props_coalmines (11) ==
+  models/props_coalmines/boulder_pile1.mdl
+  models/props_coalmines/boulder_pile2.mdl
+  models/props_coalmines/boulder1.mdl
+  models/props_coalmines/boulder2.mdl
+  models/props_coalmines/boulder3.mdl
+  models/props_coalmines/boulder4.mdl
+  models/props_coalmines/boulder5.mdl
+  models/props_coalmines/boulder5_large.mdl
+  models/props_coalmines/boulder5_medium.mdl
+  models/props_coalmines/boulder6.mdl
+  models/props_coalmines/boulder7.mdl
+
+== 户外道具 props_exteriors (11) ==
+  models/props_exteriors/door_metal01.mdl
+  models/props_exteriors/guardrail_broken.mdl
+  models/props_exteriors/guardrail_end_l.mdl
+  models/props_exteriors/guardrail_end_r.mdl
+  models/props_exteriors/guardrail128a.mdl
+  models/props_exteriors/guardrail128a_bent.mdl
+  models/props_exteriors/guardrail128b.mdl
+  models/props_exteriors/guardrail128b_bent.mdl
+  models/props_exteriors/guardrail512.mdl
+  models/props_exteriors/guardrail512_bent.mdl
+  models/props_exteriors/oil_tank_large01.mdl
+
+== 工业道具 props_industrial (11) ==
+  models/props_industrial/brick_debris.mdl
+  models/props_industrial/chemical_container.mdl
+  models/props_industrial/pallet_barrels_water01_docks.mdl
+  models/props_industrial/pallet_barrels_water01_single.mdl
+  models/props_industrial/pallet_stack_docks.mdl
+  models/props_industrial/pumpstation_pipes01.mdl
+  models/props_industrial/pumpvertical01.mdl
+  models/props_industrial/warehouse_shelf001.mdl
+  models/props_industrial/warehouse_shelf002.mdl
+  models/props_industrial/warehouse_shelf003.mdl
+  models/props_industrial/warehouse_shelf004.mdl
+
+== 运河道具 props_canal (11) ==
+  models/props_canal/canal_bars001.mdl
+  models/props_canal/canal_bars002.mdl
+  models/props_canal/canal_bars002b.mdl
+  models/props_canal/canal_bars004.mdl
+  models/props_canal/canal_bridge_railing01.mdl
+  models/props_canal/canal_bridge_railing02.mdl
+  models/props_canal/canal_bridge01.mdl
+  models/props_canal/canal_bridge02.mdl
+  models/props_canal/canal_cap001.mdl
+  models/props_canal/canalmap001.mdl
+  models/props_canal/pipe_bracket001.mdl
+
+== 装备道具 props_equipment (11) ==
+  models/props_equipment/cargo_container01.mdl
+  models/props_equipment/cargo_container02.mdl
+  models/props_equipment/cargo_container02_doors_open_both.mdl
+  models/props_equipment/cargo_container03.mdl
+  models/props_equipment/fountain_drinks.mdl
+  models/props_equipment/sleeping_bag1.mdl
+  models/props_equipment/sleeping_bag2.mdl
+  models/props_equipment/sleeping_bag3.mdl
+  models/props_equipment/snack_machine2.mdl
+  models/props_equipment/tablegreenhouse01.mdl
+  models/props_equipment/toolchest_01.mdl
+
+== 农场道具 props_farm (11) ==
+  models/props_farm/gutter_pipe_128.mdl
+  models/props_farm/gutter_pipe_connect.mdl
+  models/props_farm/gutter_pipe_end.mdl
+  models/props_farm/metal_pile.mdl
+  models/props_farm/oilcan01.mdl
+  models/props_farm/pallet001.mdl
+  models/props_farm/roof_vent001.mdl
+  models/props_farm/spool_rope.mdl
+  models/props_farm/spool_wire.mdl
+  models/props_farm/tools_shovel.mdl
+  models/props_farm/wood_pile.mdl
+
+== 水晶 crystals (9) ==
+  models/crystals/crystal01.mdl  # 水晶
+  models/crystals/crystal02.mdl  # 水晶
+  models/crystals/crystal03.mdl  # 水晶
+  models/crystals/crystal04.mdl  # 水晶
+  models/crystals/crystal05.mdl  # 水晶
+  models/crystals/crystal06.mdl  # 水晶
+  models/crystals/crystal07.mdl  # 水晶
+  models/crystals/crystal08.mdl  # 水晶
+  models/crystals/crystal09.mdl  # 水晶
+
+== props_silo (6) ==
+  models/props_silo/ladderrung.mdl
+  models/props_silo/silo_server_c.mdl
+  models/props_silo/silo_server_d.mdl
+  models/props_silo/silo_workspace1.mdl
+  models/props_silo/winch.mdl
+  models/props_silo/wirespout.mdl
+
+== 圆锥 unconid (6) ==
+  models/unconid/pc_models/monitors/lcd_acer_16x9.mdl  # 圆锥
+  models/unconid/pc_models/monitors/lcd_lg_4x3.mdl  # 圆锥
+  models/unconid/pc_models/monitors/lcd_super_ultrawide.mdl  # 圆锥
+  models/unconid/pc_models/monitors/lcd_ultrawide_curved.mdl  # 圆锥
+  models/unconid/pc_models/monitors/lcd_ultrawide_nc.mdl  # 圆锥
+  models/unconid/xmas/snowman_u_big.mdl  # 圆锥
+
+== 市中心道具 props_downtown (5) ==
+  models/props_downtown/sign_donotenter.mdl
+  models/props_downtown/sign_noparking.mdl
+  models/props_downtown/sign_oneway.mdl
+  models/props_downtown/sign_post.mdl
+  models/props_downtown/sign_stop.mdl
+
+== 防御工事 props_fortifications (5) ==
+  models/props_fortifications/concrete_block001_128_reference.mdl
+  models/props_fortifications/concrete_post001_48.mdl
+  models/props_fortifications/sandbags_corner2.mdl
+  models/props_fortifications/sandbags_corner3.mdl
+  models/props_fortifications/sandbags_line2.mdl
+
+== 太空港 spaceport (5) ==
+  models/spaceport/arch_metal01.mdl  # 太空港
+  models/spaceport/barrier02.mdl  # 太空港
+  models/spaceport/barrierpost_metal01.mdl  # 太空港
+  models/spaceport/bench_plastic001.mdl  # 太空港
+  models/spaceport/low_table_plastic001.mdl  # 太空港
+
+== 尸体 deadbodies (5) ==
+  models/deadbodies/dead_male_civilian_radio.mdl
+  models/deadbodies/human/deadbodies_pile_1.mdl
+  models/deadbodies/human/deadbodies_pile_2.mdl
+  models/deadbodies/human/deadbody_railing.mdl
+  models/deadbodies/human/deadbody_wall.mdl
+
+== 屋顶道具 props_rooftop (5) ==
+  models/props_rooftop/acunit01.mdl
+  models/props_rooftop/acvent01.mdl
+  models/props_rooftop/acvent02.mdl
+  models/props_rooftop/roof_dish001.mdl
+  models/props_rooftop/roof_vent004.mdl
+
+== 灯具 props_lighting (5) ==
+  models/props_lighting/corner_light_180.mdl
+  models/props_lighting/light_construction.mdl
+  models/props_lighting/lightfixture05.mdl
+  models/props_lighting/lightfixture05_off.mdl
+  models/props_lighting/lightfixture05_on.mdl
+
+== 新营地 newcamp (5) ==
+  models/newcamp/biomasshelix_red.mdl  # 新营地
+  models/newcamp/biomassl_red.mdl  # 新营地
+  models/newcamp/biomasss_red.mdl  # 新营地
+  models/newcamp/biomassu_red2.mdl  # 新营地
+  models/newcamp/biomassu_red4.mdl  # 新营地
+
+== 重制道具 swarmreworkedprops (5) ==
+  models/swarmreworkedprops/boomer/boomerparts_lower_leg.mdl
+  models/swarmreworkedprops/flashlight/flashlightpickup.mdl
+  models/swarmreworkedprops/panel02.mdl
+  models/swarmreworkedprops/panel02_nades.mdl
+  models/swarmreworkedprops/railing_straight_cap_64.mdl
+
+== 破坏道具 props_destruction (4) ==
+  models/props_destruction/dest_ceilingcollapsedvoid.mdl
+  models/props_destruction/dest_rubbletile01.mdl
+  models/props_destruction/dest_rubbletile02.mdl
+  models/props_destruction/dest_rubbletile03.mdl
+
+== BTS道具 props_bts (4) ==
+  models/props_bts/bts_chair.mdl
+  models/props_bts/bts_chair_static.mdl
+  models/props_bts/bts_clipboard.mdl
+  models/props_bts/bts_stool_static.mdl
+
+== 联合军道具 props_combine (4) ==
+  models/props_combine/headcrabcannister01a.mdl
+  models/props_combine/headcrabcannister01a_skybox.mdl
+  models/props_combine/headcrabcannister01b.mdl
+  models/props_combine/sphere.mdl
+
+== 灯 props_lights (4) ==
+  models/props_lights/hangingbulb.mdl
+  models/props_lights/spotlight001a.mdl
+  models/props_lights/spotlight001a_bracket.mdl
+  models/props_lights/stage_light01.mdl
+
+== 办公道具 props_office (4) ==
+  models/props_office/computer_cabinet01.mdl
+  models/props_office/office_light002.mdl
+  models/props_office/wall_column_128_ext_corner.mdl
+  models/props_office/wall_column_128_int_corner.mdl
+
+== 建筑道具 props_buildings (4) ==
+  models/props_buildings/building_brick_destroyed01.mdl
+  models/props_buildings/collapsedbuilding01a_w_collision.mdl
+  models/props_buildings/collapsedbuilding01awall.mdl
+  models/props_buildings/project_destroyedbuildings01.mdl
+
+== 虫巢道具 props_hive (3) ==
+  models/props_hive/nest_lrg_flat.mdl
+  models/props_hive/nest_med_flat.mdl
+  models/props_hive/nest_sm_flat.mdl
+
+== 植物 props_plants (3) ==
+  models/props_plants/hr_dead_plant.mdl
+  models/props_plants/plantairport01.mdl
+  models/props_plants/plantairport01_dead.mdl
+
+== 特效模型 effects (3) ==
+  models/effects/combineball.mdl  # 联合军能量球
+  models/effects/urban_puddle_model03a.mdl  # 城市水洼
+  models/effects/vol_light.mdl  # 体积光
+
+== 板条箱 props_crates (3) ==
+  models/props_crates/static_crate_40.mdl
+  models/props_crates/static_crate_48.mdl
+  models/props_crates/static_crate_64.mdl
+
+== 森林 props_forest (3) ==
+  models/props_forest/fence_barb_256.mdl
+  models/props_forest/fence_barb_512.mdl
+  models/props_forest/utilitypole01b.mdl
+
+== F18 f18 (3) ==
+  models/f18/f18.mdl  # F18
+  models/f18/f18_placeholder.mdl  # F18
+  models/f18/f18_sb.mdl  # F18
+
+== 悬崖 prop_cliff (3) ==
+  models/prop_cliff/cliff_large_001.mdl
+  models/prop_cliff/cliff_large_002.mdl
+  models/prop_cliff/cliff_large_004.mdl
+
+== 海滨大道 promenade (3) ==
+  models/promenade/escalator_double01.mdl  # 海滨大道
+  models/promenade/escalator_single01.mdl  # 海滨大道
+  models/promenade/escalator_triple01.mdl  # 海滨大道
+
+== 门9800 prop_door9800 (2) ==
+  models/prop_door9800/area_heavydoor_left.mdl
+  models/prop_door9800/area_heavydoor_right.mdl
+
+== 间谍科技 props_spytech (2) ==
+  models/props_spytech/bench001b.mdl
+  models/props_spytech/watercooler.mdl
+
+== 水电道具 props_hydro (2) ==
+  models/props_hydro/road_bumper01.mdl
+  models/props_hydro/water_barrel_cluster2.mdl
+
+== props_trainyard (2) ==
+  models/props_trainyard/beer_keg001.mdl
+  models/props_trainyard/train_loader001.mdl
+
+== 电台道具 props_radiostation (2) ==
+  models/props_radiostation/radio_station_roof.mdl
+  models/props_radiostation/radio_station_truss.mdl
+
+== 沼泽道具 props_swamp (2) ==
+  models/props_swamp/oildrum_open.mdl
+  models/props_swamp/river_sign01.mdl
+
+== 井 props_well (2) ==
+  models/props_well/hand_truck01.mdl
+  models/props_well/main_entrance_door_frame.mdl
+
+== 庄园道具 props_manor (2) ==
+  models/props_manor/deadtree01.mdl
+  models/props_manor/deadtree02.mdl
+
+== 磨坊道具 props_mill (2) ==
+  models/props_mill/tank_large01.mdl
+  models/props_mill/tank_molasses01.mdl
+
+== 恶地道具 props_badlands (2) ==
+  models/props_badlands/barrel_flatbed01.mdl
+  models/props_badlands/barrel01.mdl
+
+== 美式机车 us_loco (2) ==
+  models/us_loco/pere_marquette_1225/engine.mdl  # 美式机车
+  models/us_loco/pere_marquette_1225/tender.mdl  # 美式机车
+
+== 起重机 cranes (2) ==
+  models/cranes/crane_frame.mdl  # 起重机
+  models/cranes/crane_frame_interior.mdl  # 起重机
+
+== props_gameplay (2) ==
+  models/props_gameplay/door_grate001_frame.mdl
+  models/props_gameplay/door_slide_motor.mdl
+
+== 栏杆9800 prop_railing9800 (2) ==
+  models/prop_railing9800/area9800_railing_stair_v1_128.mdl
+  models/prop_railing9800/area9800_railing_v1_128.mdl
+
+== brokenglass_piece.mdl (1) ==
+  models/brokenglass_piece.mdl
+
+== 编辑器 editor (1) ==
+  models/editor/asw_spawner/asw_spawner.mdl
+
+== antlion_worker.mdl (1) ==
+  models/antlion_worker.mdl  # 蚁狮工人
+
+== 地下道具 props_underground (1) ==
+  models/props_underground/distillery_cables.mdl
+
+== 动画武器位 anim_wp (1) ==
+  models/anim_wp/framework/squarebeam_off_128.mdl  # 武器动画辅助
+
+== gunship.mdl (1) ==
+  models/gunship.mdl  # 武装直升机
+
+== Xeon133 xeon133 (1) ==
+  models/xeon133/racewheel/race-wheel-45.mdl  # Xeon133
+
+== buggy.mdl (1) ==
+  models/buggy.mdl  # 越野车
+
+== buggy_iaf.mdl (1) ==
+  models/buggy_iaf.mdl  # 越野车(IAF)
+
+== 建筑细节 props_building_details (1) ==
+  models/props_building_details/building_tem002_window01_bars.mdl
+
+== spitball_large.mdl (1) ==
+  models/spitball_large.mdl
+
+== 临时模块 tmp_mod (1) ==
+  models/tmp_mod/tmp_dumpster.mdl
+
+== spitball_small.mdl (1) ==
+  models/spitball_small.mdl
+
+== spitball_medium.mdl (1) ==
+  models/spitball_medium.mdl
+
+== 附加 extras (1) ==
+  models/extras/info_speech.mdl
+
+== antlion.mdl (1) ==
+  models/antlion.mdl  # 蚁狮
+
+== antlion_guard.mdl (1) ==
+  models/antlion_guard.mdl  # 蚁狮守卫
+
+== error.mdl (1) ==
+  models/error.mdl  # 错误模型(粉色/黑色棋盘)
+
+== seagull.mdl (1) ==
+  models/seagull.mdl  # 海鸥
+
+== vehicle.mdl (1) ==
+  models/vehicle.mdl  # 载具
+
+== props_weapons (1) ==
+  models/props_weapons/50cal_tripod.mdl
+
+== shield_scanner.mdl (1) ==
+  models/shield_scanner.mdl  # 盾牌扫描机
+
+== Shaklin shaklin (1) ==
+  models/shaklin/scp/096/scp_096.mdl
+
+== 宝石 gems (1) ==
+  models/gems/emerald.mdl  # 宝石
+
+== headcrab.mdl (1) ==
+  models/headcrab.mdl  # 猎头蟹
+
+== player.mdl (1) ==
+  models/player.mdl  # 玩家通用模型
+
+== 线缆 prop_cables (1) ==
+  models/prop_cables/cable_long_bundle_02.mdl
+
+== combine_soldier_anims.mdl (1) ==
+  models/combine_soldier_anims.mdl  # 联合军士兵动画
+
+== pigeon.mdl (1) ==
+  models/pigeon.mdl  # 鸽子
+
+== combine_soldier.mdl (1) ==
+  models/combine_soldier.mdl  # 联合军士兵
+
+== props_interior (1) ==
+  models/props_interior/flourcent_lamp.mdl
+
+== pickup.mdl (1) ==
+  models/pickup.mdl
+
+== 墙9800 prop_wall9800 (1) ==
+  models/prop_wall9800/area9800_metalwall_01.mdl
+
+== 谷仓突击 props_barnblitz (1) ==
+  models/props_barnblitz/track_switchbox_bb.mdl
+
+== 北极光号 props_borealis (1) ==
+  models/props_borealis/door_wheel001a.mdl
+
+== combine_super_soldier.mdl (1) ==
+  models/combine_super_soldier.mdl  # 联合军超级士兵
+
+== combine_strider_animations.mdl (1) ==
+  models/combine_strider_animations.mdl  # 巨型机甲动画
+
+== 码头道具 props_docks (1) ==
+  models/props_docks/marina_firehosebox.mdl
+
+== crow.mdl (1) ==
+  models/crow.mdl  # 乌鸦
+
+== combine_strider.mdl (1) ==
+  models/combine_strider.mdl  # 联合军巨型机甲
+
+== combine_dropship_animations.mdl (1) ==
+  models/combine_dropship_animations.mdl  # 运输船动画
+
+== 外域道具 props_outland (1) ==
+  models/props_outland/generator_static01a.mdl
+
+== hunter.mdl (1) ==
+  models/hunter.mdl  # 猎人 Hunter
+
+== headcrabclassic.mdl (1) ==
+  models/headcrabclassic.mdl  # 经典猎头蟹
+
+== 棚屋 props_shacks (1) ==
+  models/props_shacks/shack_boat02.mdl
+
+== headcrabblack.mdl (1) ==
+  models/headcrabblack.mdl  # 黑色猎头蟹
+
+== combine_dropship.mdl (1) ==
+  models/combine_dropship.mdl  # 运输船(/fh /smfh复活用)
+
+== combine_dropship_container.mdl (1) ==
+  models/combine_dropship_container.mdl  # 运输船集装箱
+
+== light.mdl (1) ==
+  models/light.mdl  # 灯模型
+
+== NPC人物 npcs (1) ==
+  models/npcs/rescue_pilot_01.mdl  # 救援飞行员NPC
+
+== combine_scanner.mdl (1) ==
+  models/combine_scanner.mdl  # 联合军扫描机(无人机/轨道支援信标用)
+
+== 混合物理 hybridphysx (1) ==
+  models/hybridphysx/lawnmower_bloodpool.mdl  # 混合物理道具
+
+== hunter_animations.mdl (1) ==
+  models/hunter_animations.mdl  # 猎人动画
+
+== combine_helicopter.mdl (1) ==
+  models/combine_helicopter.mdl  # 联合军直升机
+
+== 商场道具 props_mall (1) ==
+  models/props_mall/cage_light_fixture.mdl
+

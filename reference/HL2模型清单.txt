@@ -1,0 +1,962 @@
+﻿Half-Life 2 相关模型清单 (共 858 个 .mdl) - 中文注释版
+说明: 来自 reactivedrop/pak01_dir.vpk 的共享HL2内容
+============================================================
+
+== 碎片 props_debris (183) ==
+  models/props_debris/barricade_short02a.mdl
+  models/props_debris/barricade_short03a.mdl
+  models/props_debris/barricade_short04a.mdl
+  models/props_debris/barricade_tall01a.mdl
+  models/props_debris/barricade_tall02a.mdl
+  models/props_debris/barricade_tall03a.mdl
+  models/props_debris/barricade_tall04a.mdl
+  models/props_debris/beam01c.mdl
+  models/props_debris/broken_floor001a.mdl
+  models/props_debris/broken_pile001a.mdl
+  models/props_debris/building_brokenexterior001a.mdl
+  models/props_debris/building_brokenexterior001b.mdl
+  models/props_debris/building_brokenexterior001c.mdl
+  models/props_debris/building_brokenexterior002a.mdl
+  models/props_debris/building_brokenexterior002b.mdl
+  models/props_debris/building_brokenexterior002c.mdl
+  models/props_debris/building_brokenwindow001a.mdl
+  models/props_debris/building_brokenwindow001b.mdl
+  models/props_debris/burnt_building_corner_01.mdl
+  models/props_debris/burnt_building_corner_02.mdl
+  models/props_debris/burnt_building_debrispile_01.mdl
+  models/props_debris/burnt_building_debrispile_02.mdl
+  models/props_debris/burnt_building_rafters_01.mdl
+  models/props_debris/burnt_building_rafters_02.mdl
+  models/props_debris/burnt_building_wall_01.mdl
+  models/props_debris/burnt_building_wall_02.mdl
+  models/props_debris/burnt_building_wall_03.mdl
+  models/props_debris/burnt_building_wall_04.mdl
+  models/props_debris/burnt_building_wall_05.mdl
+  models/props_debris/burnt_building_wall_06.mdl
+  models/props_debris/burnt_building_wall_07.mdl
+  models/props_debris/concrete_chunk02a.mdl
+  models/props_debris/concrete_chunk03a.mdl
+  models/props_debris/concrete_chunk05g.mdl
+  models/props_debris/concrete_chunk06d.mdl
+  models/props_debris/concrete_chunk07a.mdl
+  models/props_debris/concrete_chunk08a.mdl
+  models/props_debris/concrete_chunk09a.mdl
+  models/props_debris/concrete_column001a_base.mdl
+  models/props_debris/concrete_column001a_top.mdl
+  models/props_debris/concrete_corner01a.mdl
+  models/props_debris/concrete_cornerpile01a.mdl
+  models/props_debris/concrete_debris128pile001a.mdl
+  models/props_debris/concrete_debris128pile001b.mdl
+  models/props_debris/concrete_debris256barricade001a.mdl
+  models/props_debris/concrete_debris256pile001a.mdl
+  models/props_debris/concrete_section128floor001a.mdl
+  models/props_debris/concrete_section128floor001b.mdl
+  models/props_debris/concrete_section128wall001a.mdl
+  models/props_debris/concrete_section128wall001b.mdl
+  models/props_debris/concrete_section128wall001c.mdl
+  models/props_debris/concrete_section64floor001a.mdl
+  models/props_debris/concrete_section64floor001b.mdl
+  models/props_debris/concrete_section64floor001c.mdl
+  models/props_debris/concrete_spawnchunk001j.mdl
+  models/props_debris/concrete_spawnchunk001k.mdl
+  models/props_debris/concrete_spawnhole001a.mdl
+  models/props_debris/concrete_spawnplug001a.mdl
+  models/props_debris/concrete_wall01a.mdl
+  models/props_debris/concrete_wall02a.mdl
+  models/props_debris/concrete_wallpile01a.mdl
+  models/props_debris/corner_rubble1.mdl
+  models/props_debris/corner_rubble2.mdl
+  models/props_debris/debris_brick01.mdl
+  models/props_debris/debris_brick02.mdl
+  models/props_debris/destroyed_floor_corner1.mdl
+  models/props_debris/destroyed_floor_corner2.mdl
+  models/props_debris/destroyed_floor_section1.mdl
+  models/props_debris/destroyedceiling01a.mdl
+  models/props_debris/destroyedceiling01b.mdl
+  models/props_debris/destroyedceiling01c.mdl
+  models/props_debris/destroyedceiling01d.mdl
+  models/props_debris/edge_rubble1.mdl
+  models/props_debris/flash_destroyed_foundation1.mdl
+  models/props_debris/flash_destroyed_foundation2.mdl
+  models/props_debris/flash_destroyed_foundation3.mdl
+  models/props_debris/floor_rubble1.mdl
+  models/props_debris/floor_rubble2.mdl
+  models/props_debris/floor_rubble3.mdl
+  models/props_debris/metal_panel01a.mdl
+  models/props_debris/metal_panel01a_breakable.mdl
+  models/props_debris/metal_panel02a.mdl
+  models/props_debris/metal_panelchunk01a.mdl
+  models/props_debris/metal_panelchunk01b.mdl
+  models/props_debris/metal_panelchunk01d.mdl
+  models/props_debris/metal_panelchunk01e.mdl
+  models/props_debris/metal_panelchunk01f.mdl
+  models/props_debris/metal_panelchunk01g.mdl
+  models/props_debris/metal_panelchunk02d.mdl
+  models/props_debris/metal_panelchunk02e.mdl
+  models/props_debris/metal_panelshard01a.mdl
+  models/props_debris/metal_panelshard01b.mdl
+  models/props_debris/metal_panelshard01c.mdl
+  models/props_debris/metal_panelshard01d.mdl
+  models/props_debris/metal_panelshard01e.mdl
+  models/props_debris/plaster_ceiling001a.mdl
+  models/props_debris/plaster_ceiling002a.mdl
+  models/props_debris/plaster_ceilingpile001a.mdl
+  models/props_debris/plaster_ceilingpile001b.mdl
+  models/props_debris/plaster_ceilingpile001c.mdl
+  models/props_debris/plaster_wall001a.mdl
+  models/props_debris/plaster_wall002a.mdl
+  models/props_debris/rebar_cluster001a.mdl
+  models/props_debris/rebar_cluster001b.mdl
+  models/props_debris/rebar_cluster002a.mdl
+  models/props_debris/rebar_cluster002b.mdl
+  models/props_debris/rebar_medthin01a.mdl
+  models/props_debris/rebar_medthin02a.mdl
+  models/props_debris/rebar_medthin02b.mdl
+  models/props_debris/rebar_medthin02c.mdl
+  models/props_debris/rebar_medthin03a.mdl
+  models/props_debris/rebar_smallnorm01a.mdl
+  models/props_debris/rebar_smallnorm01c.mdl
+  models/props_debris/rebar001a_32.mdl
+  models/props_debris/rebar001b_48.mdl
+  models/props_debris/rebar001c_64.mdl
+  models/props_debris/rebar001d_96.mdl
+  models/props_debris/rebar002a_32.mdl
+  models/props_debris/rebar002b_48.mdl
+  models/props_debris/rebar002c_64.mdl
+  models/props_debris/rebar002d_96.mdl
+  models/props_debris/rebar003a_32.mdl
+  models/props_debris/rebar003b_48.mdl
+  models/props_debris/rebar003c_64.mdl
+  models/props_debris/rebar004a_32.mdl
+  models/props_debris/rebar004b_48.mdl
+  models/props_debris/rebar004c_64.mdl
+  models/props_debris/rebar004d_96.mdl
+  models/props_debris/tile_walkway001a.mdl
+  models/props_debris/tile_walkway001b.mdl
+  models/props_debris/tile_walkwaypile001a.mdl
+  models/props_debris/tile_wall001a.mdl
+  models/props_debris/tile_wall001a_base.mdl
+  models/props_debris/tile_wall001a_core.mdl
+  models/props_debris/wall_brick_destroyed_bottom.mdl
+  models/props_debris/wall_brick_destroyed_corner_bl.mdl
+  models/props_debris/wall_brick_destroyed_edge.mdl
+  models/props_debris/wall_brick_destroyed_hole.mdl
+  models/props_debris/wall_brick_destroyed_side.mdl
+  models/props_debris/wall_rubble1.mdl
+  models/props_debris/wall_rubble2.mdl
+  models/props_debris/wall001a_base.mdl
+  models/props_debris/walldestroyed01a.mdl
+  models/props_debris/walldestroyed02a.mdl
+  models/props_debris/walldestroyed03a.mdl
+  models/props_debris/walldestroyed05a.mdl
+  models/props_debris/walldestroyed06b.mdl
+  models/props_debris/walldestroyed07b.mdl
+  models/props_debris/walldestroyed08a.mdl
+  models/props_debris/walldestroyed09a.mdl
+  models/props_debris/walldestroyed09c.mdl
+  models/props_debris/walldestroyed09e.mdl
+  models/props_debris/walldestroyed09f.mdl
+  models/props_debris/walldestroyed09g.mdl
+  models/props_debris/windowdestroyed01a.mdl
+  models/props_debris/windowdestroyed01b.mdl
+  models/props_debris/windowdestroyed01d.mdl
+  models/props_debris/wood_board04a.mdl
+  models/props_debris/wood_board05a.mdl
+  models/props_debris/wood_board07a.mdl
+  models/props_debris/wood_chunk04a.mdl
+  models/props_debris/wood_chunk04b.mdl
+  models/props_debris/wood_chunk04c.mdl
+  models/props_debris/wood_chunk04d.mdl
+  models/props_debris/wood_chunk04e.mdl
+  models/props_debris/wood_chunk04f.mdl
+  models/props_debris/wood_chunk05a.mdl
+  models/props_debris/wood_chunk05b.mdl
+  models/props_debris/wood_chunk05c.mdl
+  models/props_debris/wood_chunk05d.mdl
+  models/props_debris/wood_chunk05e.mdl
+  models/props_debris/wood_chunk05f.mdl
+  models/props_debris/wood_chunk07a.mdl
+  models/props_debris/wood_chunk07b.mdl
+  models/props_debris/wood_chunk07c.mdl
+  models/props_debris/wood_chunk07d.mdl
+  models/props_debris/wood_chunk07e.mdl
+  models/props_debris/wood_chunk07f.mdl
+  models/props_debris/wood_splinters01a.mdl
+  models/props_debris/wood_splinters01b.mdl
+  models/props_debris/wood_splinters01c.mdl
+  models/props_debris/wood_splinters01d.mdl
+  models/props_debris/wood_splinters01e.mdl
+
+== 尸块 gibs (67) ==
+  models/gibs/agibs.mdl  # 外星人尸块
+  models/gibs/antlion_gib_large_1.mdl
+  models/gibs/antlion_gib_large_2.mdl
+  models/gibs/antlion_gib_large_3.mdl
+  models/gibs/antlion_gib_medium_1.mdl
+  models/gibs/antlion_gib_medium_2.mdl
+  models/gibs/antlion_gib_medium_3.mdl
+  models/gibs/antlion_gib_medium_3a.mdl
+  models/gibs/antlion_gib_small_1.mdl
+  models/gibs/antlion_gib_small_2.mdl
+  models/gibs/antlion_gib_small_3.mdl
+  models/gibs/antlion_worker_gibs_backlegl.mdl
+  models/gibs/antlion_worker_gibs_backlegr.mdl
+  models/gibs/antlion_worker_gibs_frontlegl.mdl
+  models/gibs/antlion_worker_gibs_frontlegr.mdl
+  models/gibs/antlion_worker_gibs_head.mdl
+  models/gibs/fast_zombie_legs.mdl
+  models/gibs/fast_zombie_torso.mdl
+  models/gibs/glass_shard01.mdl
+  models/gibs/glass_shard02.mdl
+  models/gibs/glass_shard03.mdl
+  models/gibs/glass_shard04.mdl
+  models/gibs/glass_shard05.mdl
+  models/gibs/glass_shard06.mdl
+  models/gibs/gunship_gibs_engine.mdl
+  models/gibs/gunship_gibs_eye.mdl
+  models/gibs/gunship_gibs_headsection.mdl
+  models/gibs/gunship_gibs_midsection.mdl
+  models/gibs/gunship_gibs_nosegun.mdl
+  models/gibs/gunship_gibs_sensorarray.mdl
+  models/gibs/gunship_gibs_tailsection.mdl
+  models/gibs/gunship_gibs_wing.mdl
+  models/gibs/helicopter_brokenpiece_01.mdl
+  models/gibs/helicopter_brokenpiece_02.mdl
+  models/gibs/helicopter_brokenpiece_03.mdl
+  models/gibs/helicopter_brokenpiece_04_cockpit.mdl
+  models/gibs/helicopter_brokenpiece_05_tailfan.mdl
+  models/gibs/helicopter_brokenpiece_06_body.mdl
+  models/gibs/hgibs.mdl  # 人类尸块
+  models/gibs/hgibs_scapula.mdl
+  models/gibs/hgibs_spine.mdl
+  models/gibs/metal_gib1.mdl
+  models/gibs/metal_gib2.mdl
+  models/gibs/metal_gib3.mdl
+  models/gibs/metal_gib4.mdl
+  models/gibs/metal_gib5.mdl
+  models/gibs/scanner_gib01.mdl
+  models/gibs/scanner_gib02.mdl
+  models/gibs/scanner_gib04.mdl
+  models/gibs/scanner_gib05.mdl
+  models/gibs/strider_back_leg.mdl
+  models/gibs/strider_gib1.mdl
+  models/gibs/strider_gib2.mdl
+  models/gibs/strider_gib3.mdl
+  models/gibs/strider_gib4.mdl
+  models/gibs/strider_gib5.mdl
+  models/gibs/strider_gib6.mdl
+  models/gibs/strider_gib7.mdl
+  models/gibs/strider_head.mdl
+  models/gibs/strider_left_leg.mdl
+  models/gibs/strider_right_leg.mdl
+  models/gibs/strider_weapon.mdl
+  models/gibs/wood_gib01a.mdl
+  models/gibs/wood_gib01b.mdl
+  models/gibs/wood_gib01c.mdl
+  models/gibs/wood_gib01d.mdl
+  models/gibs/wood_gib01e.mdl
+
+== 载具 props_vehicles (58) ==
+  models/props_vehicles/apc_tire001.mdl
+  models/props_vehicles/apc001.mdl  # 联合军装甲运兵车
+  models/props_vehicles/army_truck.mdl  # 军用卡车
+  models/props_vehicles/bus01.mdl  # 公交车
+  models/props_vehicles/bus01_2.mdl  # 公交车2
+  models/props_vehicles/car_glass.mdl
+  models/props_vehicles/car_white.mdl
+  models/props_vehicles/car001a_hatchback.mdl  # 掀背车1a
+  models/props_vehicles/car001b_hatchback.mdl
+  models/props_vehicles/car002a.mdl  # 轿车2a
+  models/props_vehicles/car002b.mdl
+  models/props_vehicles/car003a.mdl
+  models/props_vehicles/car003b.mdl
+  models/props_vehicles/car004a.mdl
+  models/props_vehicles/car004b.mdl
+  models/props_vehicles/car005a.mdl
+  models/props_vehicles/car005b.mdl
+  models/props_vehicles/cara_82hatchback_wrecked.mdl  # 掀背车(残骸)
+  models/props_vehicles/cara_82hatchback_wrecked_glass.mdl
+  models/props_vehicles/cara_95sedan.mdl
+  models/props_vehicles/cara_95sedan_glass.mdl
+  models/props_vehicles/cara_95sedan_wrecked.mdl
+  models/props_vehicles/cara_95sedan_wrecked_glass.mdl
+  models/props_vehicles/carparts_axel01a.mdl
+  models/props_vehicles/carparts_door01a.mdl
+  models/props_vehicles/carparts_muffler01a.mdl
+  models/props_vehicles/carparts_tire01a.mdl
+  models/props_vehicles/carparts_wheel01a.mdl
+  models/props_vehicles/church_bus01.mdl
+  models/props_vehicles/generatortrailer01.mdl  # 发电机拖车
+  models/props_vehicles/hmmwv.mdl  # 军用悍马
+  models/props_vehicles/hmmwv_glass.mdl
+  models/props_vehicles/hmmwv_supply.mdl  # 军用悍马(补给)
+  models/props_vehicles/hmmwv_supply_glass.mdl
+  models/props_vehicles/humvee.mdl  # 民用悍马
+  models/props_vehicles/humvee_glass.mdl
+  models/props_vehicles/humvee_lighton.mdl
+  models/props_vehicles/mining_car.mdl  # 矿车
+  models/props_vehicles/news_van.mdl  # 新闻车
+  models/props_vehicles/pickup_load01.mdl
+  models/props_vehicles/pickup_load02.mdl
+  models/props_vehicles/pickup_load03.mdl
+  models/props_vehicles/pickup_truck_2004.mdl  # 皮卡2004款
+  models/props_vehicles/pickup_truck_2004_glass.mdl
+  models/props_vehicles/pickup_truck_78.mdl  # 皮卡78款
+  models/props_vehicles/pickup_truck_78_glass.mdl
+  models/props_vehicles/semi_trailer_freestanding.mdl  # 半挂车
+  models/props_vehicles/tanker001a.mdl  # 油罐车
+  models/props_vehicles/tire001c_car.mdl
+  models/props_vehicles/trafficjam01.mdl
+  models/props_vehicles/train_enginecar.mdl  # 火车机车
+  models/props_vehicles/train_flatcar_container_doorl.mdl
+  models/props_vehicles/train_flatcar_container_doorr.mdl
+  models/props_vehicles/train_flatcar_leveltop.mdl
+  models/props_vehicles/truck002a_cab.mdl  # 卡车驾驶室
+  models/props_vehicles/truck003a.mdl  # 卡车3
+  models/props_vehicles/van_glass.mdl
+  models/props_vehicles/van001a.mdl
+
+== 废土 props_wasteland (58) ==
+  models/props_wasteland/barricade002a.mdl  # 废土路障
+  models/props_wasteland/cargo_container01.mdl  # 货运集装箱
+  models/props_wasteland/cargo_container01b.mdl
+  models/props_wasteland/cargo_container01c.mdl
+  models/props_wasteland/controlroom_filecabinet002a.mdl
+  models/props_wasteland/coolingtank01.mdl  # 冷却塔
+  models/props_wasteland/exterior_fence001a.mdl  # 外部围栏
+  models/props_wasteland/exterior_fence002b.mdl
+  models/props_wasteland/exterior_fence002c.mdl
+  models/props_wasteland/exterior_fence002d.mdl
+  models/props_wasteland/horizontalcoolingtank04.mdl
+  models/props_wasteland/interior_fence001a.mdl
+  models/props_wasteland/interior_fence001b.mdl
+  models/props_wasteland/interior_fence001c.mdl
+  models/props_wasteland/interior_fence001e.mdl
+  models/props_wasteland/interior_fence001g.mdl
+  models/props_wasteland/interior_fence002c.mdl
+  models/props_wasteland/interior_fence003d.mdl
+  models/props_wasteland/interior_fence004a.mdl
+  models/props_wasteland/interior_fence004b.mdl
+  models/props_wasteland/laundry_basket001.mdl
+  models/props_wasteland/laundry_dryer002.mdl
+  models/props_wasteland/laundry_washer001a.mdl
+  models/props_wasteland/light_spotlight01_base.mdl
+  models/props_wasteland/light_spotlight01_lamp.mdl
+  models/props_wasteland/pipecluster001c.mdl
+  models/props_wasteland/pipecluster002a.mdl
+  models/props_wasteland/powertower01.mdl  # 高压电塔
+  models/props_wasteland/prison_bracket001a.mdl
+  models/props_wasteland/prison_conduit001a.mdl
+  models/props_wasteland/prison_lamp001a.mdl
+  models/props_wasteland/prison_lamp001b.mdl
+  models/props_wasteland/prison_lamp001c.mdl
+  models/props_wasteland/prison_pipefaucet001a.mdl
+  models/props_wasteland/prison_pipes002a.mdl
+  models/props_wasteland/prison_sprinkler001a.mdl
+  models/props_wasteland/prison_sprinkler001b.mdl
+  models/props_wasteland/rockcliff_cluster02b.mdl
+  models/props_wasteland/rockcliff_cluster03b.mdl
+  models/props_wasteland/rockcliff01c.mdl
+  models/props_wasteland/rockgranite01a.mdl  # 花岗岩1a
+  models/props_wasteland/rockgranite01b.mdl
+  models/props_wasteland/rockgranite01c.mdl
+  models/props_wasteland/rockgranite03a.mdl
+  models/props_wasteland/rockgranite03b.mdl
+  models/props_wasteland/rockgranite03c.mdl
+  models/props_wasteland/rockgranite04a.mdl
+  models/props_wasteland/rockgranite04b.mdl
+  models/props_wasteland/shower_system001a.mdl
+  models/props_wasteland/tram_lever01.mdl
+  models/props_wasteland/tram_leverbase01.mdl
+  models/props_wasteland/wood_fence02a.mdl
+  models/props_wasteland/wood_fence02a_board01a.mdl
+  models/props_wasteland/wood_fence02a_board03a.mdl
+  models/props_wasteland/wood_fence02a_board05a.mdl
+  models/props_wasteland/wood_fence02a_board07a.mdl
+  models/props_wasteland/wood_fence02a_board09a.mdl
+  models/props_wasteland/wood_fence02a_shard01a.mdl
+
+== 植物 props_foliage (50) ==
+  models/props_foliage/bramble001a.mdl
+  models/props_foliage/cattails.mdl
+  models/props_foliage/deadtree01.mdl
+  models/props_foliage/driftwood_01a.mdl
+  models/props_foliage/driftwood_02a.mdl
+  models/props_foliage/driftwood_03a.mdl
+  models/props_foliage/grass_01.mdl
+  models/props_foliage/grass_02.mdl
+  models/props_foliage/grass_02_cluster01.mdl
+  models/props_foliage/grass_02_cluster02.mdl
+  models/props_foliage/grass_02_detailmodel.mdl
+  models/props_foliage/hedge_128.mdl
+  models/props_foliage/hedge_256.mdl
+  models/props_foliage/hedge_small.mdl
+  models/props_foliage/joshuatree01.mdl
+  models/props_foliage/joshuatree02_skybox.mdl
+  models/props_foliage/mall_bigleaves_plant01.mdl
+  models/props_foliage/mall_bigleaves_plant03.mdl
+  models/props_foliage/mall_bigleaves_plant03_medium.mdl
+  models/props_foliage/mall_bush01.mdl
+  models/props_foliage/mall_bush02.mdl
+  models/props_foliage/mall_fern01.mdl
+  models/props_foliage/mall_grass_bush01.mdl
+  models/props_foliage/mall_palmplant02.mdl
+  models/props_foliage/mall_pot_square02.mdl
+  models/props_foliage/mall_pot_squarexl01.mdl
+  models/props_foliage/mall_pot_xlarge01.mdl
+  models/props_foliage/mall_small_palm01.mdl
+  models/props_foliage/mall_tree_medium01.mdl
+  models/props_foliage/rock_coast02c.mdl
+  models/props_foliage/rock_coast02g.mdl
+  models/props_foliage/rock_coast02h.mdl
+  models/props_foliage/shrub_01a.mdl
+  models/props_foliage/shrub_02a.mdl
+  models/props_foliage/shrub_03_cluster.mdl
+  models/props_foliage/shrub_03_cluster_skybox.mdl
+  models/props_foliage/shrub_03_cluster02.mdl
+  models/props_foliage/shrub_03a.mdl
+  models/props_foliage/shrub_03b.mdl
+  models/props_foliage/shrub_03c.mdl
+  models/props_foliage/spikeplant01.mdl
+  models/props_foliage/tree_deciduous_03b.mdl
+  models/props_foliage/tree_pine_01.mdl
+  models/props_foliage/tree_pine_02.mdl
+  models/props_foliage/tree_pine_03.mdl
+  models/props_foliage/tree_pine_cluster_01.mdl
+  models/props_foliage/urban_palm01.mdl
+  models/props_foliage/urban_palm01_medium.mdl
+  models/props_foliage/urban_palm01_small.mdl
+  models/props_foliage/urban_small_palm01.mdl
+
+== 杂物 props_junk (48) ==
+  models/props_junk/cardboard_box001a_gib01.mdl
+  models/props_junk/cardboard_box002a_gib01.mdl
+  models/props_junk/cardboard_box003a_gib01.mdl
+  models/props_junk/cardboard_box004a_gib01.mdl
+  models/props_junk/dumpster.mdl
+  models/props_junk/garbage_metalcan001a.mdl
+  models/props_junk/garbage_metalcan002a.mdl
+  models/props_junk/garbage_milkcarton001a.mdl
+  models/props_junk/garbage128_composite001d.mdl
+  models/props_junk/garbage256_composite001a.mdl
+  models/props_junk/garbage256_composite001b.mdl
+  models/props_junk/garbage256_composite002a.mdl
+  models/props_junk/garbage256_composite002b.mdl
+  models/props_junk/gascan001a.mdl
+  models/props_junk/ibeam01a.mdl
+  models/props_junk/ibeam01a_cluster01.mdl
+  models/props_junk/metalbucket01a.mdl
+  models/props_junk/metalgascan.mdl
+  models/props_junk/plasticbucket001a.mdl
+  models/props_junk/plasticcrate01a.mdl
+  models/props_junk/propanecanister001a.mdl
+  models/props_junk/pushcart01a.mdl
+  models/props_junk/trashcluster01a.mdl
+  models/props_junk/trashcluster01a_corner.mdl
+  models/props_junk/trashcluster01b.mdl
+  models/props_junk/trashcluster01b_corner.mdl
+  models/props_junk/trashdumpster02.mdl
+  models/props_junk/trashdumpster02b.mdl
+  models/props_junk/vent001_chunk1.mdl
+  models/props_junk/vent001_chunk2.mdl
+  models/props_junk/wood_crate001a_chunk01.mdl
+  models/props_junk/wood_crate001a_chunk02.mdl
+  models/props_junk/wood_crate001a_chunk03.mdl
+  models/props_junk/wood_crate001a_chunk04.mdl
+  models/props_junk/wood_crate001a_chunk05.mdl
+  models/props_junk/wood_crate001a_chunk07.mdl
+  models/props_junk/wood_crate001a_chunk09.mdl
+  models/props_junk/wood_crate001a_damaged.mdl
+  models/props_junk/wood_crate001a_damagedmax.mdl
+  models/props_junk/wood_crate002a.mdl
+  models/props_junk/wood_pallet001a.mdl
+  models/props_junk/wood_pallet001a_chunka.mdl
+  models/props_junk/wood_pallet001a_chunka1.mdl
+  models/props_junk/wood_pallet001a_chunka3.mdl
+  models/props_junk/wood_pallet001a_chunka4.mdl
+  models/props_junk/wood_pallet001a_chunkb2.mdl
+  models/props_junk/wood_pallet001a_chunkb3.mdl
+  models/props_junk/wood_pallet001a_shard01.mdl
+
+== 城市17 props_c17 (41) ==
+  models/props_c17/concrete_barrier001a.mdl
+  models/props_c17/fence01a.mdl
+  models/props_c17/fence01b.mdl
+  models/props_c17/fence03a.mdl
+  models/props_c17/fence04a.mdl
+  models/props_c17/furniturecouch001a.mdl
+  models/props_c17/furnituresink001a.mdl
+  models/props_c17/furnituretoilet001a.mdl
+  models/props_c17/handrail04_brokencorner.mdl
+  models/props_c17/handrail04_brokenlong.mdl
+  models/props_c17/handrail04_brokensinglerise.mdl
+  models/props_c17/handrail04_cap.mdl
+  models/props_c17/handrail04_corner.mdl
+  models/props_c17/handrail04_doublerise.mdl
+  models/props_c17/handrail04_end.mdl
+  models/props_c17/handrail04_long.mdl
+  models/props_c17/handrail04_medium.mdl
+  models/props_c17/handrail04_short.mdl
+  models/props_c17/handrail04_singlerise.mdl
+  models/props_c17/lampfixture01a.mdl
+  models/props_c17/light_cagelight01_off.mdl
+  models/props_c17/light_cagelight01_on.mdl
+  models/props_c17/light_cagelight02_on.mdl
+  models/props_c17/light_decklight01_off.mdl
+  models/props_c17/light_decklight01_on.mdl
+  models/props_c17/lockers001a.mdl
+  models/props_c17/metalladder002.mdl
+  models/props_c17/metalladder002b.mdl
+  models/props_c17/overhaingcluster_001a.mdl
+  models/props_c17/pillarcluster_001a.mdl
+  models/props_c17/pillarcluster_001b.mdl
+  models/props_c17/pillarcluster_001c.mdl
+  models/props_c17/pillarcluster_001d.mdl
+  models/props_c17/pillarcluster_001f.mdl
+  models/props_c17/powerbox.mdl
+  models/props_c17/pulleyhook01.mdl
+  models/props_c17/substation_transformer01d.mdl
+  models/props_c17/substation_transformer01e.mdl
+  models/props_c17/truss02a.mdl
+  models/props_c17/truss02e.mdl
+  models/props_c17/utilityconnecter005.mdl
+
+== 火车站 props_trainstation (40) ==
+  models/props_trainstation/bench_indoor001a.mdl
+  models/props_trainstation/benchoutdoor01a.mdl
+  models/props_trainstation/boxcar.mdl
+  models/props_trainstation/boxcar2.mdl
+  models/props_trainstation/boxcar2_damaged1.mdl
+  models/props_trainstation/boxcar2a.mdl
+  models/props_trainstation/ceiling_arch001a.mdl
+  models/props_trainstation/ceiling_truss001a.mdl
+  models/props_trainstation/column_light001a.mdl
+  models/props_trainstation/column_light001b.mdl
+  models/props_trainstation/handrail_64decoration001a.mdl
+  models/props_trainstation/light_signal001a.mdl
+  models/props_trainstation/light_signal001b.mdl
+  models/props_trainstation/light_signal002a.mdl
+  models/props_trainstation/mount_connection001a.mdl
+  models/props_trainstation/payphone_reciever001a.mdl
+  models/props_trainstation/payphone001a.mdl
+  models/props_trainstation/tanker.mdl
+  models/props_trainstation/tanker_damaged1.mdl
+  models/props_trainstation/tracklight01.mdl
+  models/props_trainstation/tracksign03.mdl
+  models/props_trainstation/tracksign08.mdl
+  models/props_trainstation/tracksign09.mdl
+  models/props_trainstation/tracksign10.mdl
+  models/props_trainstation/trackswitch01.mdl
+  models/props_trainstation/train_engine.mdl
+  models/props_trainstation/train_wheels1.mdl
+  models/props_trainstation/train001.mdl
+  models/props_trainstation/train002.mdl
+  models/props_trainstation/train003.mdl
+  models/props_trainstation/train003_damaged1.mdl
+  models/props_trainstation/train005.mdl
+  models/props_trainstation/traintrack001c.mdl
+  models/props_trainstation/traintrack006b.mdl
+  models/props_trainstation/traintrack006c.mdl
+  models/props_trainstation/trashcan_indoor001a.mdl
+  models/props_trainstation/trashcan_indoor001b.mdl
+  models/props_trainstation/wrecked_boxcar_gate.mdl
+  models/props_trainstation/wrecked_boxcar_gate_door.mdl
+  models/props_trainstation/wrecked_boxcar_jump.mdl
+
+== 街道 props_street (25) ==
+  models/props_street/bridge_ironwork_01.mdl
+  models/props_street/bridge_ironwork_docks.mdl
+  models/props_street/building_trim_piece01_128.mdl
+  models/props_street/building_trim_piece01_128_corner.mdl
+  models/props_street/building_trim_piece02_128.mdl
+  models/props_street/building_trim_piece02_128_corner.mdl
+  models/props_street/building_trim_piece02_512_damaged.mdl
+  models/props_street/chainlinkfencedamage_01.mdl
+  models/props_street/chainlinkfencedamage_02.mdl
+  models/props_street/concertinawire128_rusty.mdl
+  models/props_street/concertinawire512_rusty.mdl
+  models/props_street/firehydrant.mdl
+  models/props_street/railing_steps01.mdl
+  models/props_street/railing_steps01_damaged.mdl
+  models/props_street/railing_street_128_01.mdl
+  models/props_street/railing_street_256_01.mdl
+  models/props_street/railing_street_512_01.mdl
+  models/props_street/railing_street_corner_01.mdl
+  models/props_street/railing_street_leftdamage_01.mdl
+  models/props_street/railing_street_rightdamage_01.mdl
+  models/props_street/roadsidereflector01.mdl
+  models/props_street/sign_broken1_frame.mdl
+  models/props_street/sign_broken2_frame.mdl
+  models/props_street/trafficlight01_off.mdl
+  models/props_street/trafficlightfallen01.mdl
+
+== 人类平民 humans (24) ==
+  models/humans/female_gestures.mdl
+  models/humans/female_postures.mdl
+  models/humans/female_shared.mdl
+  models/humans/female_ss.mdl
+  models/humans/group00/female_01.mdl  # 城市平民-女 female_01
+  models/humans/group00/female_02.mdl  # 城市平民-女 female_02
+  models/humans/group00/female_03.mdl  # 城市平民-女 female_03
+  models/humans/group00/female_04.mdl  # 城市平民-女 female_04
+  models/humans/group00/female_06.mdl  # 城市平民-女 female_06
+  models/humans/group00/female_07.mdl  # 城市平民-女 female_07
+  models/humans/group00/male_01.mdl  # 城市平民-男 male_01
+  models/humans/group00/male_02.mdl  # 城市平民-男 male_02
+  models/humans/group00/male_03.mdl  # 城市平民-男 male_03
+  models/humans/group00/male_04.mdl  # 城市平民-男 male_04
+  models/humans/group00/male_05.mdl  # 城市平民-男 male_05
+  models/humans/group00/male_06.mdl  # 城市平民-男 male_06
+  models/humans/group00/male_07.mdl  # 城市平民-男 male_07
+  models/humans/group00/male_08.mdl  # 城市平民-男 male_08
+  models/humans/group00/male_09.mdl  # 城市平民-男 male_09
+  models/humans/group01/female_01.mdl
+  models/humans/male_gestures.mdl
+  models/humans/male_postures.mdl
+  models/humans/male_shared.mdl
+  models/humans/male_ss.mdl
+
+== 管道 props_pipes (24) ==
+  models/props_pipes/concrete_pipe001b.mdl
+  models/props_pipes/concrete_pipe001c.mdl
+  models/props_pipes/destroyedpipes01a.mdl
+  models/props_pipes/destroyedpipes01b.mdl
+  models/props_pipes/destroyedpipes01c.mdl
+  models/props_pipes/destroyedpipes01d.mdl
+  models/props_pipes/gutter_256_002a.mdl
+  models/props_pipes/gutter_384_001a.mdl
+  models/props_pipes/gutterlarge_512_001a.mdl
+  models/props_pipes/pipe02_90degree01.mdl
+  models/props_pipes/pipe02_lcurve02_short.mdl
+  models/props_pipes/pipe02_straight01_long.mdl
+  models/props_pipes/pipe02_straight01_short.mdl
+  models/props_pipes/pipe02_tjoint01.mdl
+  models/props_pipes/pipecluster08d_006a.mdl
+  models/props_pipes/pipecluster32d_001a.mdl
+  models/props_pipes/pipeset08d_128_001a.mdl
+  models/props_pipes/pipeset08d_256_001a.mdl
+  models/props_pipes/pipeset08d_512_001a.mdl
+  models/props_pipes/pipeset08d_64_001a.mdl
+  models/props_pipes/pipeset08d_corner128d_001a.mdl
+  models/props_pipes/pipeset32d_256_001a.mdl
+  models/props_pipes/pipeset32d_corner128d_001a.mdl
+  models/props_pipes/valve002.mdl
+
+== 室内 props_interiors (21) ==
+  models/props_interiors/chair_cafeteria.mdl
+  models/props_interiors/chairs_airport.mdl
+  models/props_interiors/cubicle_shelf.mdl
+  models/props_interiors/desk_metal.mdl
+  models/props_interiors/industrial_table01.mdl
+  models/props_interiors/lightbulb01a.mdl
+  models/props_interiors/lightbulb03a.mdl
+  models/props_interiors/lights_florescent01a.mdl
+  models/props_interiors/lights_florescent01a_phys.mdl
+  models/props_interiors/refrigerator01a.mdl
+  models/props_interiors/refrigeratordoor01a.mdl
+  models/props_interiors/refrigeratordoor02a.mdl
+  models/props_interiors/sink_industrial01.mdl
+  models/props_interiors/sinkkitchen01a.mdl
+  models/props_interiors/stair_metal_01.mdl
+  models/props_interiors/stair_metal_02.mdl
+  models/props_interiors/stair_metal_03.mdl
+  models/props_interiors/stove03_industrial.mdl
+  models/props_interiors/stove04_industrial.mdl
+  models/props_interiors/toilet_b_breakable01_base.mdl
+  models/props_interiors/toilet_d.mdl
+
+== 工地 props_construction (16) ==
+  models/props_construction/barricade_one_panel.mdl
+  models/props_construction/barricade_three_panel.mdl
+  models/props_construction/barricade_two_panel.mdl
+  models/props_construction/demolition_spoolfat.mdl
+  models/props_construction/excavator.mdl
+  models/props_construction/powerdrill.mdl
+  models/props_construction/rubble001.mdl
+  models/props_construction/rubble002.mdl
+  models/props_construction/rubble003.mdl
+  models/props_construction/rubble008.mdl
+  models/props_construction/rubble009.mdl
+  models/props_construction/rubble010.mdl
+  models/props_construction/rubble011.mdl
+  models/props_construction/rubble012.mdl
+  models/props_construction/rubble014.mdl
+  models/props_construction/sandbagged_sign.mdl
+
+== 独特 props_unique (14) ==
+  models/props_unique/jukebox01.mdl
+  models/props_unique/jukebox01_body.mdl
+  models/props_unique/jukebox01_menu.mdl
+  models/props_unique/spawn_apartment/lantern.mdl
+  models/props_unique/tft3-airlocksuit.mdl
+  models/props_unique/tft3-baggageclaimlights.mdl
+  models/props_unique/tft3-bracedwindow.mdl
+  models/props_unique/tft3-hangarlights.mdl
+  models/props_unique/tft3-innerbridgeprops.mdl
+  models/props_unique/tft3-innerbridgeprops_small.mdl
+  models/props_unique/tft3-outerbridgedetail.mdl
+  models/props_unique/tft3-secondairlockdetail.mdl
+  models/props_unique/tft3-subwaycoverdetail.mdl
+  models/props_unique/tft3-subwaytrainprops.mdl
+
+== 城市 props_urban (14) ==
+  models/props_urban/bench002.mdl
+  models/props_urban/curb_drain001_32.mdl
+  models/props_urban/dumpster001.mdl
+  models/props_urban/fire_escape_lower.mdl
+  models/props_urban/fire_escape_upper.mdl
+  models/props_urban/gas_meter.mdl
+  models/props_urban/highway_barrel001.mdl
+  models/props_urban/outhouse001.mdl
+  models/props_urban/porch_light003.mdl
+  models/props_urban/skylight.mdl
+  models/props_urban/stoop003_48.mdl
+  models/props_urban/telephone_pole001.mdl
+  models/props_urban/telephone_pole002.mdl
+  models/props_urban/telephone_streetlight001.mdl
+
+== 实验室 props_lab (14) ==
+  models/props_lab/citizenradio.mdl
+  models/props_lab/generatorhose.mdl
+  models/props_lab/lab_flourescentlight001a.mdl
+  models/props_lab/lab_flourescentlight001b.mdl
+  models/props_lab/lab_flourescentlight002b.mdl
+  models/props_lab/lockerdoorleft.mdl
+  models/props_lab/lockerdoorright.mdl
+  models/props_lab/lockers.mdl
+  models/props_lab/monitor02.mdl
+  models/props_lab/pipesystem02e.mdl
+  models/props_lab/powerbox01a.mdl
+  models/props_lab/securitybank.mdl
+  models/props_lab/teleportframe.mdl
+  models/props_lab/walllight001a.mdl
+
+== 杂项 props_misc (12) ==
+  models/props_misc/bodybag_01/bodybag_01.mdl
+  models/props_misc/bodybag_02/bodybag_02.mdl
+  models/props_misc/bodybag_03/bodybag_03.mdl
+  models/props_misc/bodybag_04/bodybag_04.mdl
+  models/props_misc/bodybag_05/bodybag_05.mdl
+  models/props_misc/standing_tarp_narrow.mdl
+  models/props_misc/standing_tarp_short.mdl
+  models/props_misc/standing_tarp_tall.mdl
+  models/props_misc/tarp_car.mdl
+  models/props_misc/tarp_hanging.mdl
+  models/props_misc/tarp_lean.mdl
+  models/props_misc/tarp_roof.mdl
+
+== 僵尸 zombie (12) ==
+  models/zombie/classic.mdl  # 经典僵尸
+  models/zombie/classic_legs.mdl  # 经典僵尸腿
+  models/zombie/classic_torso.mdl  # 经典僵尸躯干
+  models/zombie/fallen_marine.mdl  # 阵亡陆战队员(僵尸)
+  models/zombie/fallen_marine_animations.mdl  # 阵亡陆战队员动画
+  models/zombie/fast.mdl  # 快僵尸
+  models/zombie/fast_torso.mdl  # 快僵尸躯干
+  models/zombie/poison.mdl  # 毒僵尸
+  models/zombie/zombie_soldier.mdl  # 僵尸士兵
+  models/zombie/zombie_soldier_animations.mdl  # 僵尸士兵动画
+  models/zombie/zombie_soldier_legs.mdl  # 僵尸士兵腿
+  models/zombie/zombie_soldier_torso.mdl  # 僵尸士兵躯干
+
+== 运河 props_canal (11) ==
+  models/props_canal/canal_bars001.mdl
+  models/props_canal/canal_bars002.mdl
+  models/props_canal/canal_bars002b.mdl
+  models/props_canal/canal_bars004.mdl
+  models/props_canal/canal_bridge_railing01.mdl
+  models/props_canal/canal_bridge_railing02.mdl
+  models/props_canal/canal_bridge01.mdl
+  models/props_canal/canal_bridge02.mdl
+  models/props_canal/canal_cap001.mdl
+  models/props_canal/canalmap001.mdl
+  models/props_canal/pipe_bracket001.mdl
+
+== 工业 props_industrial (11) ==
+  models/props_industrial/brick_debris.mdl
+  models/props_industrial/chemical_container.mdl
+  models/props_industrial/pallet_barrels_water01_docks.mdl
+  models/props_industrial/pallet_barrels_water01_single.mdl
+  models/props_industrial/pallet_stack_docks.mdl
+  models/props_industrial/pumpstation_pipes01.mdl
+  models/props_industrial/pumpvertical01.mdl
+  models/props_industrial/warehouse_shelf001.mdl
+  models/props_industrial/warehouse_shelf002.mdl
+  models/props_industrial/warehouse_shelf003.mdl
+  models/props_industrial/warehouse_shelf004.mdl
+
+== 煤矿(EP1) props_coalmines (11) ==
+  models/props_coalmines/boulder_pile1.mdl
+  models/props_coalmines/boulder_pile2.mdl
+  models/props_coalmines/boulder1.mdl
+  models/props_coalmines/boulder2.mdl
+  models/props_coalmines/boulder3.mdl
+  models/props_coalmines/boulder4.mdl
+  models/props_coalmines/boulder5.mdl
+  models/props_coalmines/boulder5_large.mdl
+  models/props_coalmines/boulder5_medium.mdl
+  models/props_coalmines/boulder6.mdl
+  models/props_coalmines/boulder7.mdl
+
+== 户外 props_exteriors (11) ==
+  models/props_exteriors/door_metal01.mdl
+  models/props_exteriors/guardrail_broken.mdl
+  models/props_exteriors/guardrail_end_l.mdl
+  models/props_exteriors/guardrail_end_r.mdl
+  models/props_exteriors/guardrail128a.mdl
+  models/props_exteriors/guardrail128a_bent.mdl
+  models/props_exteriors/guardrail128b.mdl
+  models/props_exteriors/guardrail128b_bent.mdl
+  models/props_exteriors/guardrail512.mdl
+  models/props_exteriors/guardrail512_bent.mdl
+  models/props_exteriors/oil_tank_large01.mdl
+
+== 装备 props_equipment (11) ==
+  models/props_equipment/cargo_container01.mdl
+  models/props_equipment/cargo_container02.mdl
+  models/props_equipment/cargo_container02_doors_open_both.mdl
+  models/props_equipment/cargo_container03.mdl
+  models/props_equipment/fountain_drinks.mdl
+  models/props_equipment/sleeping_bag1.mdl
+  models/props_equipment/sleeping_bag2.mdl
+  models/props_equipment/sleeping_bag3.mdl
+  models/props_equipment/snack_machine2.mdl
+  models/props_equipment/tablegreenhouse01.mdl
+  models/props_equipment/toolchest_01.mdl
+
+== 农场 props_farm (11) ==
+  models/props_farm/gutter_pipe_128.mdl
+  models/props_farm/gutter_pipe_connect.mdl
+  models/props_farm/gutter_pipe_end.mdl
+  models/props_farm/metal_pile.mdl
+  models/props_farm/oilcan01.mdl
+  models/props_farm/pallet001.mdl
+  models/props_farm/roof_vent001.mdl
+  models/props_farm/spool_rope.mdl
+  models/props_farm/spool_wire.mdl
+  models/props_farm/tools_shovel.mdl
+  models/props_farm/wood_pile.mdl
+
+== 灯具 props_lighting (5) ==
+  models/props_lighting/corner_light_180.mdl
+  models/props_lighting/light_construction.mdl
+  models/props_lighting/lightfixture05.mdl
+  models/props_lighting/lightfixture05_off.mdl
+  models/props_lighting/lightfixture05_on.mdl
+
+== 屋顶(EP1) props_rooftop (5) ==
+  models/props_rooftop/acunit01.mdl
+  models/props_rooftop/acvent01.mdl
+  models/props_rooftop/acvent02.mdl
+  models/props_rooftop/roof_dish001.mdl
+  models/props_rooftop/roof_vent004.mdl
+
+== 尸体 deadbodies (5) ==
+  models/deadbodies/dead_male_civilian_radio.mdl  # 男性平民尸体(抱收音机)
+  models/deadbodies/human/deadbodies_pile_1.mdl  # 尸体堆1
+  models/deadbodies/human/deadbodies_pile_2.mdl  # 尸体堆2
+  models/deadbodies/human/deadbody_railing.mdl  # 栏杆挂尸
+  models/deadbodies/human/deadbody_wall.mdl  # 墙上尸体
+
+== 办公 props_office (4) ==
+  models/props_office/computer_cabinet01.mdl
+  models/props_office/office_light002.mdl
+  models/props_office/wall_column_128_ext_corner.mdl
+  models/props_office/wall_column_128_int_corner.mdl
+
+== 破坏 props_destruction (4) ==
+  models/props_destruction/dest_ceilingcollapsedvoid.mdl
+  models/props_destruction/dest_rubbletile01.mdl
+  models/props_destruction/dest_rubbletile02.mdl
+  models/props_destruction/dest_rubbletile03.mdl
+
+== BTS props_bts (4) ==
+  models/props_bts/bts_chair.mdl
+  models/props_bts/bts_chair_static.mdl
+  models/props_bts/bts_clipboard.mdl
+  models/props_bts/bts_stool_static.mdl
+
+== 建筑 props_buildings (4) ==
+  models/props_buildings/building_brick_destroyed01.mdl
+  models/props_buildings/collapsedbuilding01a_w_collision.mdl
+  models/props_buildings/collapsedbuilding01awall.mdl
+  models/props_buildings/project_destroyedbuildings01.mdl
+
+== 联合军 props_combine (4) ==
+  models/props_combine/headcrabcannister01a.mdl
+  models/props_combine/headcrabcannister01a_skybox.mdl
+  models/props_combine/headcrabcannister01b.mdl
+  models/props_combine/sphere.mdl
+
+== 灯 props_lights (4) ==
+  models/props_lights/hangingbulb.mdl
+  models/props_lights/spotlight001a.mdl
+  models/props_lights/spotlight001a_bracket.mdl
+  models/props_lights/stage_light01.mdl
+
+== 植物 props_plants (3) ==
+  models/props_plants/hr_dead_plant.mdl
+  models/props_plants/plantairport01.mdl
+  models/props_plants/plantairport01_dead.mdl
+
+== 森林 props_forest (3) ==
+  models/props_forest/fence_barb_256.mdl
+  models/props_forest/fence_barb_512.mdl
+  models/props_forest/utilitypole01b.mdl
+
+== 特效模型 effects (3) ==
+  models/effects/combineball.mdl  # 联合军能量球
+  models/effects/urban_puddle_model03a.mdl  # 城市水洼
+  models/effects/vol_light.mdl  # 体积光
+
+== 板条箱 props_crates (3) ==
+  models/props_crates/static_crate_40.mdl
+  models/props_crates/static_crate_48.mdl
+  models/props_crates/static_crate_64.mdl
+
+== 庄园(EP2) props_manor (2) ==
+  models/props_manor/deadtree01.mdl
+  models/props_manor/deadtree02.mdl
+
+== 磨坊(EP2) props_mill (2) ==
+  models/props_mill/tank_large01.mdl
+  models/props_mill/tank_molasses01.mdl
+
+== 矿井(EP1) props_well (2) ==
+  models/props_well/hand_truck01.mdl
+  models/props_well/main_entrance_door_frame.mdl
+
+== 恶地(EP2) props_badlands (2) ==
+  models/props_badlands/barrel_flatbed01.mdl
+  models/props_badlands/barrel01.mdl
+
+== 沼泽(EP2) props_swamp (2) ==
+  models/props_swamp/oildrum_open.mdl
+  models/props_swamp/river_sign01.mdl
+
+== 电台(EP2) props_radiostation (2) ==
+  models/props_radiostation/radio_station_roof.mdl
+  models/props_radiostation/radio_station_truss.mdl
+
+== 水电(EP2) props_hydro (2) ==
+  models/props_hydro/road_bumper01.mdl
+  models/props_hydro/water_barrel_cluster2.mdl
+
+== 商场 props_mall (1) ==
+  models/props_mall/cage_light_fixture.mdl
+
+== 建筑细节 props_building_details (1) ==
+  models/props_building_details/building_tem002_window01_bars.mdl
+
+== 地下 props_underground (1) ==
+  models/props_underground/distillery_cables.mdl
+
+== 外域 props_outland (1) ==
+  models/props_outland/generator_static01a.mdl
+
+== 北极光号(EP2) props_borealis (1) ==
+  models/props_borealis/door_wheel001a.mdl
+
+== 棚屋 props_shacks (1) ==
+  models/props_shacks/shack_boat02.mdl
+

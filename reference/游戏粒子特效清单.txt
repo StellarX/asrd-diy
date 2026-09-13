@@ -1,0 +1,2227 @@
+﻿Alien Swarm Reactive Drop 粒子特效清单 (按 pcf 文件分组) - 详细中文注释版
+来源: reactivedrop/particles/*.pcf , 系统名可直接用于 Precache/particle 指令
+============================================================
+
+## antlion_blood.pcf - 蚁狮血液飞溅
+    AntlionGib
+    AntlionGibTrails
+    cec
+    DmeElement
+
+## antlion_gib_01.pcf - 蚁狮碎块1
+    antlion_gib_01
+    antlion_gib_01_juice
+    antlion_gib_01_trailsA  # 拖尾
+    antlion_gib_01_trailsb  # 拖尾
+    DmeElement
+
+## antlion_gib_02.pcf - 蚁狮碎块2
+    antlion_gib_02
+    antlion_gib_02_blood
+    antlion_gib_02_floaters
+    antlion_gib_02_gas
+    antlion_gib_02_juice
+    antlion_gib_02_slime
+    antlion_gib_02_trailsA  # 拖尾
+    antlion_gib_02_trailsB  # 拖尾
+    DmeElement
+    gkj6
+    ppp
+
+## antlion_worker.pcf - 蚁狮工人(喷吐)
+    antlion_spit
+    antlion_spit_02
+    antlion_spit_03
+    antlion_spit_05
+    antlion_spit_player
+    antlion_spit_player_splat
+    antlion_spit_trail  # 拖尾
+    DmeElement
+
+## ap_particles.pcf - Aperture实验室(反应堆)
+    reactor_capsules_efx  # 反应堆胶囊
+    reactor_core_cont_large  # 反应堆核心
+
+## asw_environmental_fx.pcf - 环境特效(尘土/蒸汽/岩浆烟/苍蝇/滴水/洒水器)
+    abg
+    ate
+    debris_generic_random_2
+    debris_generic_random_2_b
+    dic
+    Dust_Ceiling_Rumble_256Line  # 天花板尘落
+    Dust_Ceiling_Rumble_256Line_Debris  # 天花板尘落碎片
+    Flies_child2  # 苍蝇子2
+    ibx
+    j0t
+    jy1p
+    koj
+    landingbay_lift_fog_volume  # 着陆舱雾气
+    landingbay_lift_start_dust  # 着陆舱启动尘土
+    landingbay_lift_start_dust_debris  # 着陆舱启动尘屑
+    landingbay_lift_steam_jet  # 着陆舱蒸汽喷流
+    landingbay_lift_steam_jet_steam
+    landingbay_slime_gas_bottom  # 着陆舱黏液气(下)
+    landingbay_slime_gas_top  # 着陆舱黏液气(上)
+    lava_smoke_256x256  # 岩浆烟
+    lava_smoke_embers_256x256  # 岩浆余烬
+    lava_smoke_fire_256x256  # 岩浆火焰
+    lava_smoke_warp_256x256  # 岩浆扭曲
+    leaky_pipe_light_172h  # 漏水管(灯)
+    leaky_pipe_light_ground_splash_172h  # 漏水管地面水花
+    leaky_pipe_light_rings_172h  # 漏水管水环
+    leaky_pipe_light_spray_172h  # 漏水管喷射
+    leaky_roof_sml_180h  # 漏水屋顶
+    leaky_roof_sml_ring_180h  # 漏水屋顶水环
+    leaky_roof_sml_splash_180h  # 漏水屋顶水花
+    max
+    min
+    nnn
+    pipe_drips_a_180x256  # 管道滴水
+    pipe_drips_a_ring_180x256  # 管道滴水环
+    pipe_drips_a_splash_180x256  # 管道滴水花
+    qw1
+    r05
+    snow_drift_through_door_1  # 雪飘进门
+    sprinker_system_180_180h  # 洒水器180
+    sprinker_system_360_180h  # 洒水器360
+    sprinker_system_ground_1_180_180h
+    sprinker_system_ground_1_360_180h_copy
+    sprinker_system_ground_2_180_180h
+    sprinker_system_ground_2_360_180h
+    sprinker_system_mist_180_180h
+    sprinker_system_mist_360_180h
+    sprinker_system_spray_180_180h
+    sprinker_system_spray_360_180h
+    sprinkler_system_rain_180_180h  # 洒水器雨水180
+    sprinkler_system_rain_360_180h  # 洒水器雨水360
+    steam_jet_50  # 蒸汽喷流50
+    steam_jet_50_steam
+    steam_jet_80  # 蒸汽喷流80
+    steam_jet_80_steam
+    steam_jet_drips  # 蒸汽滴落
+    steam_low_vent_1  # 低位蒸汽口
+    steam_simple_directional_sml  # 小型方向蒸汽
+    steam_test_1  # 蒸汽测试
+    uuu
+    vent_steam_light_64x64  # 通风口轻蒸汽
+    yaw2
+    zyt
+
+## asw_laser_sight_fx.pcf - 激光瞄准线
+    weapon_laser_sight  # 激光瞄准线
+    weapon_laser_sight_FF  # 激光瞄准线(友军)
+    weapon_laser_sight_other  # 激光瞄准线(他人)
+    weapon_laser_sight_ricochet  # 激光瞄准线(弹射)
+    weapon_laser_sight_ricochet_1  # 激光瞄准线(弹射1)
+    weapon_laser_sight_ricochet_2  # 激光瞄准线(弹射2)
+    weapon_laser_sight_ricochet_3  # 激光瞄准线(弹射3)
+    weapon_laser_sight_ricochet_4  # 激光瞄准线(弹射4)
+    weapon_laser_sight_ricochet_5  # 激光瞄准线(弹射5)
+
+## asw_leadership_fx.pcf - 领导力加成特效
+    bulge
+    leadership_proc_accuracy  # 领导力-精准
+    leadership_proc_resist  # 领导力-抗性
+    leadership_proc_zap  # 领导力-电击
+
+## asw_muzzle_fx.pcf - 枪口火光(全武器)
+    adg
+    C8YBqTV
+    ec8
+    muzzle_ar2  # AR2枪口火光
+    muzzle_autogun  # 自动机枪枪口火光
+    muzzle_autogun_glow  # 自动机枪枪口光晕
+    muzzle_charged_crit  # 充能暴击枪口
+    muzzle_charged_crit_flash  # 充能暴击闪光
+    muzzle_charged_crit_smoke  # 充能暴击烟雾
+    muzzle_default  # 默认枪口火光
+    muzzle_default_glow  # 默认枪口光晕
+    muzzle_pdw  # PDW枪口火光
+    muzzle_pdw_glow  # PDW枪口光晕
+    muzzle_pistol  # 手枪枪口火光
+    muzzle_proto_rifle  # 原型步枪枪口
+    muzzle_proto_rifle_glow  # 原型步枪枪口光晕
+    muzzle_proto_rifle_sparks  # 原型步枪枪口火花
+    muzzle_railgun  # 磁轨炮枪口
+    muzzle_railgun_glows  # 磁轨炮枪口光晕
+    muzzle_rifle  # 步枪枪口火光
+    muzzle_rifle_glow  # 步枪枪口光晕
+    muzzle_sentrygun  # 哨戒炮枪口
+    muzzle_shotgun  # 霰弹枪口火光
+    muzzle_shotgun_smoke  # 霰弹枪口烟雾
+    muzzle_sniper_rifle  # 狙击枪口
+    muzzle_sniper_rifle_sparks  # 狙击枪口火花
+    muzzle_sparks_light  # 枪口火花(轻)
+    muzzle_sparks_long  # 枪口火花(长)
+    muzzle_sparks_short  # 枪口火花(短)
+    muzzle_vindicator  # 复仇者枪口
+    muzzle_vindicator_glow  # 复仇者枪口光晕
+    muzzle_vindicator_smoke  # 复仇者枪口烟雾
+    random_speed_max
+    random_speed_min
+    SXZ6IDA
+
+## asw_order_fx.pcf - 命令/使用图标
+    invalid_destination  # 无效目的地
+    invalid_destination_icon  # 无效目的地图标
+    order_use_item  # 使用物品图标
+    order_use_item_icon  # 使用物品图标
+    order_use_item_icon_failed  # 使用物品图标(失败)
+
+## asw_precipitation.pcf - 降水(雨/雪)
+    asw_snow
+    asw_snow_drift
+    asw_snow_drift_impact
+    asw_snow_flakes
+    asw_snow_outer
+    cull_cost
+    drone_death_splat_lighting
+    max
+    min
+    p_db
+    test_line_lighting
+    test_spot_lighting
+    test_spot_lighting_puddle
+    test_square_lighting
+
+## asw_queen.pcf - 女王相关特效
+    cull_cost
+    Queen_Call
+    Queen_Call_shockwave  # 冲击波
+    Queen_Call_shockwave_pulse  # 冲击波
+    Queen_Call_shockwave_pulse2  # 冲击波
+    Queen_claw_swipe
+    Queen_claw_swipe_big
+    Queen_claw_swipe2
+    Queen_claw_swipe3
+    Queen_hatch_spawn
+    Queen_hatch_spawn_2
+    Queen_rage_eyes
+    Queen_spit
+    Queen_spit_orb
+
+## asw_spark_fx.pcf - 火花
+    asd
+    asw_env_sparks  # 火花
+    asw_env_sparks_burnglow  # 光晕
+    asw_env_sparks_fly  # 火花
+    asw_env_sparks_fly_col  # 火花
+    asw_env_sparks_glow  # 光晕
+    asw_env_sparks_glow_large  # 光晕
+
+## asw_tracer_fx.pcf - 曳光弹
+    attrib_impact_fx
+    attrib_tracer_fx  # 曳光
+    bhp
+    eee
+    gsd
+    impact_att_chem
+    impact_att_electric
+    impact_att_fire
+    impact_att_freeze
+    iyp
+    jha
+    keo
+    kuc
+    l4g
+    pru
+    qg7
+    random_speed_max
+    random_speed_min
+    rnh
+    texture_offset
+    tracer_ar2
+    tracer_att_chem
+    tracer_att_chem_trail  # 拖尾
+    tracer_att_electric
+    tracer_att_electric_trail  # 拖尾
+    tracer_att_explo
+    tracer_att_explo_trail  # 拖尾
+    tracer_att_fire
+    tracer_att_fire_trail  # 拖尾
+    tracer_att_freeze
+    tracer_att_freeze_trail  # 拖尾
+    tracer_autogun
+    tracer_autogun_trail  # 拖尾
+    tracer_critical_hit_2X
+    tracer_critical_hit_trailX  # 拖尾
+    tracer_default
+    tracer_minigun
+    tracer_minigun_trail  # 拖尾
+    tracer_pdw
+    tracer_pistol
+    tracer_proto_rifle
+    tracer_railgun
+    tracer_railgun_hit
+    tracer_railgun_post_trail  # 拖尾
+    tracer_railgun_rings
+    tracer_railgun_rings2
+    tracer_railgun_smoke  # 烟雾
+    tracer_railgun_trail  # 拖尾
+    tracer_rifle
+    tracer_shotgun
+    tracer_sniper_rifle
+    tracer_sniper_rifle_smoke  # 烟雾
+    tracer_sniper_rifle_trail  # 拖尾
+    tracer_sniper_rifle_trailx  # 拖尾
+    tracer_vindicator
+    tracer_vindicator_smoke  # 烟雾
+    u0n
+
+## asw_weapon_fx.pcf - 武器特效(主):电枪/手雷/采矿激光/照明弹/弹壳等
+    aheyp
+    ammo_satchel_take_lrg  # 弹药袋拾取(大)
+    ammo_satchel_take_med  # 弹药袋拾取(中)
+    ammo_satchel_take_sml  # 弹药袋拾取(小)
+    asw_fireextinguisher  # 灭火器喷射
+    asw_fireextinguisher_cloud  # 灭火器云雾
+    asw_fireextinguisher_droplets  # 灭火器液滴
+    asw_fireextinguisher_mist  # 灭火器水雾
+    asw_fireextinguisher_smoke_2  # 灭火器烟雾
+    asw_fireextinguisher_stream  # 灭火器喷流
+    asw_freezer_droplets  # 冷冻液滴
+    asw_freezer_smoke_2  # 冷冻烟雾
+    asw_freezer_spray  # 冷冻喷射
+    b_v
+    barrel_rad_gas_cloud  # 辐射桶气体云
+    barrel_rad_gas_cloud_warp  # 辐射桶气体扭曲
+    barrel_rad_gas_jet  # 辐射桶气体喷流
+    bulge
+    e5j
+    electrc_weapon_arcs2  # 特斯拉电弧
+    electric_weapon_continuous_TEST  # 特斯拉武器持续
+    electric_weapon_cp0  # 特斯拉控制点0
+    electric_weapon_cp1  # 特斯拉控制点1
+    electric_weapon_shot  # 特斯拉射击
+    electric_weapon_shot_continuous  # 特斯拉连续射击
+    electric_weapon_shot_continuous_off  # 特斯拉连续射击(关)
+    electric_weapon_sprite_arcs  # 特斯拉精灵电弧
+    electric_weapon_zap  # 特斯拉电击
+    electric_weapon_zap_arcs  # 特斯拉电击电弧
+    electric_weapon_zap_arcs_off  # 特斯拉电击电弧(关)
+    electric_weapon_zap_cp1  # 特斯拉电击控制点1
+    electric_weapon_zap_cp1_off  # 特斯拉电击控制点1(关)
+    electric_weapon_zap_glows  # 特斯拉电击光晕
+    electric_weapon_zap_muzzle  # 特斯拉电击枪口
+    electric_weapon_zap_muzzle_off  # 特斯拉电击枪口(关)
+    electric_weapon_zap_sparks  # 特斯拉电击火花
+    electric_weapon_zap_start  # 特斯拉电击起手
+    fast_reload  # 快速换弹
+    fast_reload_child_glow  # 快速换弹光晕
+    fast_reload_child_glow2  # 快速换弹光晕2
+    flare_fx_glow  # 照明弹光晕
+    flare_fx_main  # 照明弹主体
+    flare_fx_pulse2  # 照明弹脉动
+    flare_fx_smoke  # 照明弹烟雾
+    gl7
+    grenade_freeze_beam_trail  # 冰冻手雷光束尾
+    grenade_freeze_main_trail  # 冰冻手雷主尾
+    grenade_freeze_pulse  # 冰冻手雷脉动
+    grenade_freeze_trail1  # 冰冻手雷尾1
+    grenade_freeze_trail2  # 冰冻手雷尾2
+    grenade_glow  # 手雷光晕
+    grenade_main_trail  # 手雷主拖尾
+    grenade_radius  # 手雷半径
+    grenade_smoke  # 手雷烟雾
+    jxw
+    laser_mine  # 激光地雷
+    laser_mine_friendly  # 激光地雷(友军)
+    mining_laser_beam  # 采矿激光束
+    mining_laser_beam_b  # 采矿激光束B
+    mining_laser_beam_core  # 采矿激光核心
+    mining_laser_beam_cp0  # 采矿激光控制点0
+    mining_laser_beam_cp0_copy  # 采矿激光控制点0(复制)
+    mining_laser_beam_cp0_glow  # 采矿激光控制点0光晕
+    mining_laser_beam_cp1_glow  # 采矿激光控制点1光晕
+    mining_laser_charge_glows  # 采矿激光充能光晕
+    mining_laser_charging  # 采矿激光充能
+    mining_laser_charging_cp0_glow  # 采矿激光充能光晕
+    mining_laser_cp1_sparks  # 采矿激光火花
+    mining_laser_exhaust  # 采矿激光排气
+    mining_laser_start  # 采矿激光启动
+    muzzleflash_grenadelauncher_2  # 榴弹枪口2
+    muzzleflash_grenadelauncher_fire  # 榴弹开火
+    muzzleflash_grenadelauncher_glow  # 榴弹枪口光晕
+    muzzleflash_grenadelauncher_main  # 榴弹枪口主体
+    muzzleflash_grenadelauncher_sparks  # 榴弹枪口火花
+    muzzleflash_grenadelauncher_sparks2  # 榴弹枪口火花2
+    ntr
+    nx7
+    o09
+    o5f
+    omt
+    p0r
+    pee
+    piercing_spark  # 穿甲火花
+    piercing_spark_glow  # 穿甲火花光晕
+    piercing_spark_sparks_tight  # 穿甲火花(密集)
+    prifle_grenade_fx  # 步枪榴弹特效
+    prifle_grenade_smoke  # 步枪榴弹烟雾
+    prifle_grenade_sparks  # 步枪榴弹火花
+    prifle_grenade_trail  # 步枪榴弹拖尾
+    random_speed_max
+    random_speed_min
+    reload_fail  # 换弹失败
+    reload_fail_flare  # 换弹失败闪光
+    reload_fail_sparks  # 换弹失败火花
+    reload_fail_splash  # 换弹失败飞溅
+    rifle_grenade_fx  # 步枪榴弹特效
+    rifle_grenade_pulse  # 步枪榴弹脉动
+    rifle_grenade_smoke  # 步枪榴弹烟雾
+    rocket_trail_small  # 小型火箭拖尾
+    rocket_trail_small_flare  # 小型火箭火光
+    rocket_trail_small_glow  # 小型火箭光晕
+    SENTRYPROJ
+    tesla_trap_fx  # 特斯拉陷阱
+    tesla_trap_fx_core  # 特斯拉陷阱核心
+    tesla_trap_fx_electric  # 特斯拉陷阱电流
+    tesla_trap_fx_glows  # 特斯拉陷阱光晕
+    tesla_trap_fx_sparks  # 特斯拉陷阱火花
+    tesla_zap_fx  # 特斯拉电击
+    tesla_zap_fx_beam  # 特斯拉电击光束
+    tesla_zap_fx_cp0  # 特斯拉电击控制点0
+    tesla_zap_fx_cp1  # 特斯拉电击控制点1
+    tesla_zap_fx_start  # 特斯拉电击起手
+    thgq
+    weapon_shell_casing_rifle  # 步枪弹壳
+    weapon_shell_casing_rifle_fallback  # 步枪弹壳(备用)
+    weapon_shell_casing_shotgun  # 霰弹弹壳
+    weapon_shell_casing_shotgun_fallback  # 霰弹弹壳(备用)
+    ytg
+
+## asw_weapon_fx_7a.pcf - 武器特效(7A枪械)
+    bulge
+    c6x
+    dissolve
+    dissolve_ash
+    dissolve_ash_fallback
+    dissolve_ash_ground
+    dissolve_fallback
+    dissolve_fallback_2
+    dissolve_flashes  # 闪光
+    dissolve_glow  # 光晕
+    dissolve_tesla_arc
+    dissolve_trail  # 拖尾
+    egon2_airblast
+    egon2_airblast_flash  # 闪光
+    egon2_airblast_lines
+    egon2_airblast_warp
+    egon2_airblast_warp2
+    ehj
+    energy_shield_appear  # 能量
+    energy_shield_appear_fast  # 能量
+    energy_shield_dissipate  # 能量
+    energy_shield_dissipate_fast  # 能量
+    energy_shield_dissipate_violent  # 能量
+    energy_shield_dissipate_violent_spikes  # 能量
+    ggg
+    kkk
+    muzzle_egon2
+    muzzle_shieldrifle
+    muzzle_shieldrifle_first
+    muzzle_shieldrifle_glow  # 光晕
+    muzzle_shieldrifle_last
+    muzzle_shieldrifle_sparks  # 火花
+    n6m
+    p4l
+    rd_cryocannon
+    rd_cryocannon_cloud
+    rd_cryocannon_droplets
+    rd_cryocannon_explode
+    rd_cryocannon_mist
+    rd_cryocannon_smoke  # 烟雾
+    rd_cryocannon_stream
+    SENTRYPROJ
+    shieldrifle_overheat
+    shieldrifle_overheat_red
+    shieldrifle_overheat_smoke  # 烟雾
+    shieldrifle_project
+    srq
+    tracer_egon2
+    tracer_shieldrifle
+    tracer_shieldrifle_first
+    tracer_shieldrifle_last
+
+## asw_weapon_fx_ext.pcf - 武器特效(扩展)
+    gas_trail_small  # 拖尾
+    grenade_gas_cloud
+    grenade_gas_cloud_start
+    grenade_gas_marker
+
+## asw_welding_fx.pcf - 焊接火花
+    nqh
+    s43t
+    welding_cut_flame_back  # 火焰
+    welding_cut_glow  # 光晕
+    welding_cut_glow_back  # 光晕
+    welding_cut_smoke  # 烟雾
+    welding_cut_sparks_1  # 火花
+    welding_cut_sparks_1_back  # 火花
+    welding_cut_sparks_1_col  # 火花
+    welding_cut_sparks_tight  # 火花
+    welding_door_cut
+    welding_door_seal
+    welding_seal_flame  # 火焰
+    welding_seal_flame_back  # 火焰
+    welding_seal_glow  # 光晕
+    welding_seal_metal_glow  # 光晕
+    welding_seal_metal_glow_back  # 光晕
+    welding_seal_sparks_1  # 火花
+    welding_seal_sparks_1_col  # 火花
+    welding_seal_sparks_2  # 火花
+
+## blood_impact.pcf - 血液飞溅(通用)
+    a1g
+    blood_advisor_pierce_spray
+    blood_advisor_pierce_spray_b
+    blood_advisor_pierce_spray_c
+    blood_advisor_puncture
+    blood_advisor_puncture_withdraw
+    blood_advisor_shrapnel_impact
+    blood_advisor_shrapnel_spray_1
+    blood_advisor_shrapnel_spray_2
+    blood_advisor_shrapnel_spurt_1
+    blood_advisor_shrapnel_spurt_2
+    blood_antlionguard_injured_heavy
+    blood_antlionguard_injured_heavy_
+    blood_antlionguard_injured_heavy_tiny
+    blood_antlionguard_injured_light
+    blood_antlionguard_injured_light_tiny
+    blood_drip_synth_01  # 水滴
+    blood_drip_synth_01b  # 水滴
+    blood_drip_synth_01c  # 水滴
+    blood_impact_antlion_01
+    blood_impact_antlion_worker_01
+    blood_impact_green_01
+    blood_impact_green_01_chunk
+    blood_impact_green_01_droplets
+    blood_impact_green_02_chunk
+    blood_impact_green_02_droplets
+    blood_impact_green_02_glow  # 光晕
+    blood_impact_red_01
+    blood_impact_red_01_chunk
+    blood_impact_red_01_droplets
+    blood_impact_red_01_goop
+    blood_impact_red_01_mist
+    blood_impact_red_01_smalldroplets
+    blood_impact_synth_01
+    blood_impact_synth_01_arc
+    blood_impact_synth_01_arc_parent
+    blood_impact_synth_01_arc_parents
+    blood_impact_synth_01_arc2
+    blood_impact_synth_01_arc3
+    blood_impact_synth_01_arc4
+    blood_impact_synth_01_armor
+    blood_impact_synth_01_droplets
+    blood_impact_synth_01_dust
+    blood_impact_synth_01_short
+    blood_impact_synth_01_spurt
+    blood_impact_yellow_01
+    blood_impact_zombie_01
+    blood_spurt_synth_01
+    blood_spurt_synth_01b
+    blood_zombie_split
+    blood_zombie_split_spray
+    blood_zombie_split_spray_tiny
+    blood_zombie_split_spray_tiny2
+    bulge
+    DmeElement
+    f8vt
+    jxt
+    kvs
+    u24
+    vomit_barnacle
+    vomit_barnacle_b
+    xx7
+    zpt
+
+## boomer_fx.pcf - 自爆虫特效
+    b7w
+    boomer_death  # 自爆虫死亡
+    boomer_death_ground_goop
+    boomer_death_parts_1
+    boomer_death_splat
+    boomer_drop_explosion  # 爆炸
+    boomer_drop_fireball  # 火球
+    boomer_drop_flash  # 闪光
+    boomer_drop_FloatieEmbers
+    boomer_drop_ground_flash  # 闪光
+    boomer_drop_heat
+    boomer_drop_shockwave1  # 冲击波
+    boomer_explode
+    boomer_explode_C
+    boomer_explode_K
+    boomer_explode_OLD
+    boomer_explosion_fireballs  # 火球
+    boomer_explosion_flash  # 闪光
+    boomer_explosion_FloatieEmbers  # 爆炸
+    boomer_explosion_ground_flash  # 闪光
+    boomer_explosion_heat  # 爆炸
+    boomer_explosion_shockwave1  # 冲击波
+    boomer_explosion_smoke  # 烟雾
+    boomer_gib_blood_1
+    boomer_gib_part_GEN_nocol
+    boomer_gib_trails  # 拖尾
+    boomer_grenade_arcs
+    boomer_grenade_open
+    boomer_leg_gibs
+    boomer_projectile_glow  # 光晕
+    boomer_projectile_liquid
+    boomer_projectile_main_trail  # 拖尾
+    boomer_projectile_smoke  # 烟雾
+    cpi
+    cull_cost
+    exz
+    joint_goo
+    m8l
+    ppp
+    random_speed_max
+    random_speed_min
+    vxy
+    yaw_rate_degrees
+    yaw_rate_min
+    yaw_stop_time
+
+## buffgrenade_fx.pcf - 增益手雷
+    buffgrenade_arcs
+    buffgrenade_attach_arc
+    buffgrenade_attach_arc_cp0
+    buffgrenade_attach_arc_cp1
+    buffgrenade_attach_arc_perm
+    buffgrenade_center_light
+    buffgrenade_ground_display
+    buffgrenade_ground_display_timer
+    buffgrenade_pulse
+    buffgrenade_pulse_beams  # 光束
+    buffgrenade_pulse_echos
+    buffgrenade_pulse_glow  # 光晕
+    buffgrenade_pulse_glow2  # 光晕
+    buffgrenade_radius_ring
+    buffgrenade_sphere
+    buffgrenade_weapon_glow  # 光晕
+    buffgrenade_weapon_sparks  # 火花
+    bulge
+    crh
+    ih6
+    kwd
+    ou8i
+
+## buffgrenade_noconnect.pcf - 增益手雷(无连接)
+    buffgrenade_noconnect
+
+## buff_fx.pcf - 增益效果
+    heal_gun_cp1_glow  # 光晕
+    lifesteal
+    lifesteal_left_hand
+    lifesteal_left_hand2
+    lifesteal_stealhealth
+    lifesteal2
+    m5p
+    orm
+    random_speed_max
+    random_speed_min
+    shaman_heal_attach
+    shaman_heal_attach_arc_cp1
+    shaman_heal_bugs
+    shaman_heal_cp1_glow  # 光晕
+    shaman_heal_healing_fx
+    shaman_heal_noconnect
+    shaman_heal_tongue
+    vk3
+
+## buff_medic_fx.pcf - 医疗增益
+    bks
+    buffgrenade_weapon_glow  # 光晕
+    bulge
+    dd4to
+    disease_buff
+    disease_burst
+    disease_burst_b
+    disease_tracer  # 曳光
+    disease_tracer_trail  # 拖尾
+    drop_health_buff
+    drop_health_buff_glow  # 光晕
+    drop_health_tracer  # 曳光
+    drop_health_tracer_bubbles  # 曳光
+    drop_health_tracer_start  # 曳光
+    heal_gun_attach
+    heal_gun_attach_arc_cp1
+    heal_gun_cp1_glow  # 光晕
+    heal_gun_muzzle_arcs  # 枪口特效
+    heal_gun_noconnect
+    heal_gun_noconnect_warp
+    l3g
+    medgrenade_arcs
+    medgrenade_attach_arc
+    medgrenade_attach_arc_cp0
+    medgrenade_attach_arc_cp1
+    medgrenade_attach_arcx
+    medgrenade_cross
+    medgrenade_ground_display_timer
+    medgrenade_pulse
+    medgrenade_pulse_dome
+    medgrenade_pulse_glow  # 光晕
+    medgrenade_pulse_OLD
+    medgrenade_radius_ring
+    medgrenade_sphere
+    medgrenade_weapon_glow  # 光晕
+    p_4
+    qwv
+    random_speed_max
+    random_speed_min
+    t86
+    vnj
+    wyz
+
+## burningplayer.pcf - 玩家燃烧
+    burningplayer_blue
+    burningplayer_blueglow  # 光晕
+    burningplayer_corpse
+    burningplayer_corpseglow  # 光晕
+    burningplayer_flyingbits
+    burningplayer_glow  # 光晕
+    burningplayer_glow_blue  # 光晕
+    burningplayer_red
+    burningplayer_smoke  # 烟雾
+    burningplayer_smoke_blue  # 烟雾
+    DmeElement
+    k_o
+
+## burningplayer_dx80.pcf - 玩家燃烧(DX80)
+    burningplayer_blue
+    burningplayer_blueglow  # 光晕
+    burningplayer_corpse
+    burningplayer_corpseglow  # 光晕
+    burningplayer_flyingbits
+    burningplayer_glow  # 光晕
+    burningplayer_glow_blue  # 光晕
+    burningplayer_red
+    burningplayer_smoke  # 烟雾
+    burningplayer_smoke_blue  # 烟雾
+    DmeElement
+    fallback_dx80
+    k_o
+
+## burning_fx.pcf - 燃烧
+    burning_character
+    burning_character_b
+    burning_character_c
+    burning_character_d
+    burning_character_e
+    DmeElement
+    lvw8
+    w3i9j
+
+## buzzer_fx.pcf - 蜂虫特效
+    asd
+    buzzer_trail  # 拖尾
+    buzzer_trail_glow  # 光晕
+    buzzer_trail_L  # 拖尾
+    buzzer_trail_L_glow  # 光晕
+    buzzer_trail_R  # 拖尾
+    buzzer_trail_R_glow  # 光晕
+    q8o
+
+## egg_fx.pcf - 虫卵
+    acid_touch
+    acid_touch_bright_string
+    acid_touch_cp0
+    acid_touch_cp1
+    acid_touch_smoke  # 烟雾
+    ara
+    bulge
+    cull_cost
+    eg7
+    egg_death
+    egg_death_explode_bubbles
+    egg_death_ground_bubbles
+    egg_death_ground_bubbles2
+    egg_death_parts_1
+    egg_death_puddles
+    egg_death_splat_parts
+    egg_death_splat_sml
+    egg_death_stem_splatter
+    egg_explode_A_alt
+    egg_explode_K_sml
+    egg_gib_blood_light_1
+    egg_gib_part_light_1_nocol
+    egg_hatch
+    egg_hatch_fountain
+    egg_hatch_splat
+    egg_hatch_splatter
+    egg_open  # 虫卵打开
+    egg_open_bubbles
+    grubsack_death
+    grubsack_death_post_bubbles
+    grubsack_death_smoke  # 烟雾
+    grubsack_death_splat
+    l7x
+    lu8
+    ndp
+    nw9
+    o60
+    pjb
+    wsj
+    xt1
+    yaw_rate_degrees
+    yaw_rate_min
+    yaw_stop_time
+
+## electrical_fx.pcf - 电流
+    blink
+    bulge
+    electrc_weapon_arcs2  # 特斯拉电弧
+    electric_field_ground
+    electric_field_ground_glow  # 光晕
+    electric_field_ground_static
+    electric_weapon_beam  # 光束
+    electric_weapon_continuous
+    electric_weapon_hit_cp0
+    electric_weapon_hit_cp1
+    electric_weapon_sprite_arcs2
+    electrical_arc_01
+    electrical_arc_01_cp0
+    electrical_arc_01_cp1
+    electrical_arc_01_cp1_beam  # 光束
+    electrical_arc_01_cp1_beam2  # 光束
+    electrical_arc_01_cp1_beam3  # 光束
+    electrical_arc_01_cp1_beam4  # 光束
+    electrical_arc_01_cp1_beam5  # 光束
+    electrical_arc_01_cp1_beam6  # 光束
+    electrical_arc_01_cp1b
+    electrical_arc_01_parent
+    electrical_arc_01_system
+    electrical_jacobs_ladder
+    electrical_jacobs_ladder_b
+    electrified_armor_burst
+    electrified_armor_burst2
+    ElectroStun_arc_01
+    ElectroStun_arc_01_parent
+    ElectroStun_arc_01_system
+    ElectroStun_arc_1_cp0
+    ElectroStun_glow  # 光晕
+    izu
+    max
+    min
+    p2_
+    q1a5
+    r71l
+    st_elmos_fire
+    st_elmos_fire_cp0
+    st_elmos_fire_cp1
+    stungrenade_arc_sprites
+    stungrenade_arc_sprites_copy
+    stungrenade_core
+    stungrenade_core_arcs
+    stungrenade_core_arcs_copy
+    stungrenade_core_copy
+    tc5
+    thorns_marine_buff
+    thorns_marine_buff_arcs
+    thorns_marine_buff_arcs_rare
+    thorns_marine_buff_feet
+    thorns_marine_buff_start
+    thorns_marine_buff_start_glow  # 光晕
+    thorns_zap
+    thorns_zap_cp1
+    thorns_zap_crawl
+    thorns_zap_sparks  # 火花
+    wxxi
+    xha
+
+## elevatorshaftfire.pcf - 电梯井火焰
+    cull_control_point
+    cull_cost
+    ElevatorShaftFire
+    env_embers_small
+    env_fire_small_coverage
+    env_fire_small_coverage_c
+    env_fire_small_coverage_smoke  # 烟雾
+    gja
+    jbp
+
+## error.pcf - 报错占位
+    error
+
+## explosion_fx.pcf - 爆炸(环境/手雷/采矿/雪地)
+    aex
+    asw_env_explosion  # ASRD环境爆炸
+    asw_env_explosion_fireball  # 环境爆炸火球
+    asw_env_explosion_ground_flash  # 环境爆炸地面闪光
+    asw_env_explosion_heat  # 环境爆炸热浪
+    asw_env_explosion_shockwave1  # 环境爆炸冲击波
+    asw_env_explosion_smoke_post  # 环境爆炸余烟
+    b47s
+    bcd
+    eik
+    explosion_air_small  # 小型空中爆炸
+    explosion_air_small_burst  # 小型空中爆炸爆裂
+    explosion_air_small_chunks  # 小型空中爆炸碎片
+    explosion_air_small_fireballs  # 小型空中爆炸火球
+    explosion_air_small_flash  # 小型空中爆炸闪光
+    explosion_air_small_flash2  # 小型空中爆炸闪光2
+    explosion_air_small_heat  # 小型空中爆炸热浪
+    explosion_air_small_smoke  # 小型空中爆炸烟雾
+    explosion_air_small_sparks  # 小型空中爆炸火花
+    explosion_barrel  # 油桶爆炸
+    explosion_barrel_heat  # 油桶爆炸热浪
+    explosion_chunks  # 爆炸碎片
+    explosion_comets  # 爆炸火球(彗星)
+    explosion_debrisburst  # 爆炸碎片飞溅
+    explosion_fireball  # 爆炸火球
+    explosion_fireball_grenade  # 手雷爆炸火球
+    explosion_fireballs_small  # 小型爆炸火球
+    explosion_flash  # 爆炸闪光
+    explosion_flash2  # 爆炸闪光2
+    Explosion_Flashup  # 爆炸上冲闪光
+    Explosion_FloatieEmbers  # 爆炸漂浮余烬
+    Explosion_FlyingEmbers  # 爆炸飞散余烬
+    explosion_grenade  # 手雷爆炸
+    explosion_grenade_heat  # 手雷爆炸热浪
+    explosion_ground_flash  # 地面爆炸闪光
+    explosion_shockwave1  # 爆炸冲击波
+    explosion_smoke_post  # 爆炸余烟
+    explosion_smoke_post_grenade  # 手雷爆炸余烟
+    explosion_sparks  # 爆炸火花
+    f_i
+    f1b
+    l6hwt
+    linear
+    m3p
+    mrfo
+    ms_explosion  # 采矿爆炸
+    ms_explosion_debrisburst  # 采矿爆炸碎片
+    ms_explosion_glowsmoke  # 采矿爆炸光烟
+    ms_explosion_groundring  # 采矿爆炸地面环
+    ms_explosion_smoke_post  # 采矿爆炸余烟
+    ms_explosion_upwardblast  # 采矿爆炸上升气流
+    qryp
+    snow_explosion  # 雪地爆炸
+    snow_explosion_crater  # 雪地爆炸坑
+    snow_explosion_debris  # 雪地爆炸碎片
+    snow_explosion_debrisburst  # 雪地爆炸碎片飞溅
+    snow_explosion_shockwave  # 雪地爆炸冲击波
+    timor_rock_explosion  # 蒂莫尔岩石爆炸
+    timor_rock_explosion_debris  # 岩石爆炸碎片
+    timor_rock_explosion_debris_start  # 岩石爆炸碎片起手
+    timor_rock_explosion_debrisburst  # 岩石爆炸碎片飞溅
+    timor_rock_explosion_dust_linger  # 岩石爆炸余尘
+    timor_rock_explosion_rocks  # 岩石爆炸石块
+    timor_rock_explosion_shockwave  # 岩石爆炸冲击波
+    urv
+    v98g
+    x85
+    xnbs
+    xxx
+
+## fire_01.pcf - 火焰01
+    b7c
+    bulge
+    burning_engine_01
+    burning_engine_fire
+    burning_gib_01
+    burning_gib_01_drag
+    burning_gib_01_follower
+    burning_gib_01_follower1
+    burning_gib_01_follower2
+    burning_gib_01b
+    burning_vehicle
+    burning_wood_01
+    burning_wood_01b
+    burning_wood_01c
+    DmeElement
+    dzd1
+    embers_large_01
+    embers_large_02
+    embers_medium_01
+    embers_medium_03
+    embers_small_01
+    env_embers_large
+    env_embers_medium
+    env_embers_medium_spread
+    env_embers_small
+    env_embers_small_spread
+    env_embers_tiny
+    env_fire_large
+    env_fire_large_b
+    env_fire_large_smoke  # 烟雾
+    env_fire_large_smoke_b  # 烟雾
+    env_fire_medium
+    env_fire_medium_b
+    env_fire_medium_smoke  # 烟雾
+    env_fire_medium_spread
+    env_fire_medium_spread_b
+    env_fire_random_puff
+    env_fire_small
+    env_fire_small_b
+    env_fire_small_base
+    env_fire_small_coverage
+    env_fire_small_coverage_b
+    env_fire_small_coverage_base
+    env_fire_small_coverage_base_smoke  # 烟雾
+    env_fire_small_coverage_c
+    env_fire_small_coverage_smoke  # 烟雾
+    env_fire_small_smoke  # 烟雾
+    env_fire_tiny
+    env_fire_tiny_b
+    env_fire_tiny_smoke  # 烟雾
+    explosion_huge
+    explosion_huge_b
+    explosion_huge_burning_chunks
+    explosion_huge_c
+    explosion_huge_d
+    explosion_huge_e
+    explosion_huge_f
+    explosion_huge_flames  # 火焰
+    explosion_huge_flames_b  # 火焰
+    explosion_huge_g
+    explosion_huge_h
+    explosion_huge_i
+    explosion_huge_j
+    explosion_huge_k
+    explosion_huge_smoking_chunks
+    explosion_silo
+    f_9
+    fire_jet_01
+    fire_jet_01_flame  # 火焰
+    fire_large_01
+    fire_large_02
+    fire_large_02_filler
+    fire_large_02_fillerb
+    fire_large_base
+    fire_medium_01
+    fire_medium_01_glow  # 光晕
+    fire_medium_02
+    fire_medium_02_nosmoke  # 烟雾
+    fire_medium_03
+    fire_medium_03_brownsmoke  # 烟雾
+    fire_medium_base
+    fire_medium_burst
+    fire_medium_heatwave
+    fire_small_01
+    fire_small_02
+    fire_small_03
+    fire_small_base
+    fire_small_flameouts  # 火焰
+    fire_verysmall_01
+    lll
+    m9j
+    max
+    min
+    o0r
+    p_v
+    qtu
+    qws
+    r39
+    rlt
+    rrr
+    s4v
+    smoke_burning_engine_01  # 烟雾
+    smoke_exhaust_01  # 烟雾
+    smoke_exhaust_01a  # 烟雾
+    smoke_exhaust_01b  # 烟雾
+    smoke_gib_01  # 烟雾
+    smoke_large_01  # 烟雾
+    smoke_large_01b  # 烟雾
+    smoke_large_02  # 烟雾
+    smoke_large_02b  # 烟雾
+    smoke_medium_01  # 烟雾
+    smoke_medium_02  # 烟雾
+    Smoke_medium_02b  # 烟雾
+    smoke_medium_02c  # 烟雾
+    smoke_medium_02d  # 烟雾
+    smoke_small_01  # 烟雾
+    smoke_small_01b  # 烟雾
+    sz7
+    uaz
+    vyk
+
+## fire_fx.pcf - 火焰
+    asw_flamethrower  # 火焰
+    asw_flamethrower_drips  # 火焰
+    asw_flamethrower_drips_nocol  # 火焰
+    asw_flamethrower_fire_1  # 火焰
+    asw_flamethrower_fire_2  # 火焰
+    asw_flamethrower_glow  # 火焰
+    asw_flamethrower_pilot  # 火焰
+    asw_flamethrower_pilot_sml  # 火焰
+    biomass_dissolve
+    biomass_dissolve_drips  # 水滴
+    biomass_dissolve_smoke  # 烟雾
+    burned_alien_death
+    burned_alien_death_dust
+    burned_alien_death_dust2
+    burned_alien_death_embers
+    burned_alien_death_flash  # 闪光
+    burned_alien_death_gibs
+    burned_alien_death_smoke  # 烟雾
+    daq3
+    dropship_rear_engine_mini
+    dropship_rear_engine_mini_dots
+    dropship_rear_engine_mini_glow  # 光晕
+    ent_on_fire
+    ent_on_fire_embers
+    ent_on_fire_flames  # 火焰
+    ent_on_fire_glow  # 光晕
+    ent_on_fire_smoke  # 烟雾
+    fire_droppod_flame  # 火焰
+    fire_droppod_main
+    fo1
+    frf
+    ggg
+    ground_fire
+    ground_fire_burn
+    ground_fire_burn_large
+    ground_fire_burn_small
+    ground_fire_burn2
+    ground_fire_burn2_large
+    ground_fire_burn2_small
+    ground_fire_embers
+    ground_fire_embers_large
+    ground_fire_embers_small
+    ground_fire_glow  # 光晕
+    ground_fire_glow_large  # 光晕
+    ground_fire_glow_small  # 光晕
+    ground_fire_large
+    ground_fire_large_top
+    ground_fire_small
+    ground_fire_small_top
+    ground_fire_smoke  # 烟雾
+    ground_fire_smoke_large  # 烟雾
+    ground_fire_smoke_small  # 烟雾
+    ground_fire_top
+    immolate_hover_flash  # 闪光
+    immolate_hover_glow  # 光晕
+    immolate_hover_ground_fire
+    immolate_hover_ground_flash  # 闪光
+    immolate_hover_ground_smoke  # 烟雾
+    immolate_hover_main
+    immolate_hover_no_ground_fire
+    lli
+    mad
+    mine_fire
+    mine_fire_burn
+    mine_fire_burn_lowend
+    mine_fire_burn2
+    mine_fire_embers
+    mine_fire_glow  # 光晕
+    mine_fire_ignite
+    mine_fire_ignite_glow  # 光晕
+    mine_fire_liquid
+    mine_fire_liquid_lowend
+    mine_fire_lowend
+    q_6
+    qc0
+    qvr
+    qyqk
+    qzj
+    r6vr
+    random_speed_max
+    random_speed_min
+    SENTRYPROJ
+    vindicator_grenade
+    vindicator_grenade_fire
+    vindicator_grenade_fire_flash  # 闪光
+    vindicator_grenade_fire_smoke  # 烟雾
+    vindicator_grenade_flash  # 闪光
+    vindicator_grenade_flashes  # 闪光
+    vindicator_grenade_FloatieEmbers
+    vindicator_grenade_init_flash  # 闪光
+    vindicator_grenade_post_fire
+    vindicator_grenade_post_fire2
+    vindicator_grenade_sparks  # 火花
+    vindicator_grenade_sparks_smoke  # 烟雾
+    vindicator_grenade_warp
+    vvv
+    w5l
+    xug
+    y95
+    yg7
+    zs2
+
+## footprint_fx.pcf - 脚印
+    footstep_snow
+    footstep_snow_puff
+
+## freeze_fx.pcf - 冰冻
+    freeze_grenade_explosion  # 爆炸
+    freeze_grenade_explosion_flash  # 闪光
+    freeze_grenade_explosion_smoke  # 烟雾
+    freeze_grenade_explosion_warp  # 爆炸
+    freeze_grenade_sparkles  # 火花
+    freeze_statue_gibs
+    freeze_statue_mist
+    freeze_statue_mist2
+    freeze_statue_shatter
+    freeze_statue_sparkles  # 火花
+    freezeweapon_cloud
+    freezeweapon_droplets
+    freezeweapon_main
+    freezeweapon_minispray
+    freezeweapon_mist
+    freezeweapon_sparkles  # 火花
+    random_speed_max
+    random_speed_min
+    vvv
+    yp1
+
+## hunter_flechette.pcf - 猎人箭簇
+    DmeElement
+    flechette_halo
+    inner_sparks  # 火花
+
+## hunter_projectile.pcf - 猎人导弹
+    DmeElement
+    hunter_flechette_glow  # 光晕
+    hunter_flechette_glow_striderbuster  # 光晕
+    hunter_flechette_trail  # 拖尾
+    hunter_flechette_trail_striderbuster  # 拖尾
+    hunter_muzzle_flash  # 枪口特效
+    hunter_muzzle_flash_b  # 枪口特效
+    hunter_projectile_1
+    hunter_projectile_explosion_1  # 爆炸
+    hunter_projectile_explosion_2b  # 爆炸
+    hunter_projectile_explosion_2c  # 爆炸
+    hunter_projectile_explosion_2c_nocollide  # 爆炸
+    hunter_projectile_explosion_2d  # 爆炸
+    hunter_projectile_explosion_2d_nocollide  # 爆炸
+    hunter_projectile_explosion_2e  # 爆炸
+    hunter_projectile_explosion_2f  # 爆炸
+    hunter_projectile_explosion_2g  # 爆炸
+    hunter_projectile_explosion_2h  # 爆炸
+    hunter_projectile_explosion_2i  # 爆炸
+    hunter_projectile_explosion_2j  # 爆炸
+    hunter_projectile_explosion_2k  # 爆炸
+    hunter_projectile_explosion_3  # 爆炸
+    hunter_projectile_explosion_3b  # 爆炸
+    hunter_projectile_explosion_3c  # 爆炸
+    hunter_projectile_explosion_3d  # 爆炸
+    hunter_projectile_explosion_3e  # 爆炸
+    hunter_slide_dust
+    hunter_slide_rocks
+    mkm
+
+## impact_fx.pcf - 命中特效(通用,按材质)
+    a0hy0
+    acw0
+    ad0
+    ae0
+    bu0
+    ccc
+    cj0
+    cm0
+    cull_control_point
+    cull_cost
+    d7z
+    dh0
+    dj_
+    eee
+    er9
+    g3n
+    g40
+    gb0
+    ggg
+    gk30
+    guy
+    hc_
+    hhh
+    hy0
+    hy6
+    i1o5
+    idd
+    iff
+    impact_asphalt
+    impact_asphalt_cheap
+    impact_asphalt_child_base
+    impact_asphalt_child_smoke  # 烟雾
+    impact_brick
+    impact_brick_burst
+    impact_brick_cheap
+    impact_brick_child_base
+    impact_brick_child_smoke  # 烟雾
+    impact_burst_generic
+    impact_burst_generic_2
+    impact_cardboard
+    impact_cardboard_cheap
+    impact_cardboard_child_base
+    impact_cardboard_child_bits
+    impact_cardboard_child_smoke  # 烟雾
+    impact_carpet
+    impact_carpet_cheap
+    impact_carpet_child_burn
+    impact_carpet_child_smoke  # 烟雾
+    impact_clay
+    impact_clay_cheap
+    impact_clay_child_base
+    impact_clay_child_smoke  # 烟雾
+    impact_cloth
+    impact_cloth_cheap
+    impact_computer
+    impact_computer_cheap
+    impact_concrete
+    impact_concrete_cheap
+    impact_concrete_child_base
+    impact_concrete_child_smoke  # 烟雾
+    impact_dirt
+    impact_dirt_cheap
+    impact_dirt_child_base
+    impact_dirt_child_bounce
+    impact_dirt_child_burst
+    impact_dirt_child_burst2
+    impact_dirt_child_smoke  # 烟雾
+    impact_electronic
+    impact_electronic_cheap
+    impact_electronic_smoke  # 烟雾
+    impact_generic_burn
+    impact_generic_burst
+    impact_generic_burst_2
+    impact_generic_smoke  # 烟雾
+    impact_generic_smoke_small  # 烟雾
+    impact_glass
+    impact_glass_cheap
+    impact_glass_child_base
+    impact_glass_child_bits
+    impact_glass_child_smoke  # 烟雾
+    impact_grass
+    impact_grass_cheap
+    impact_grass_child_base
+    impact_grass_child_smoke  # 烟雾
+    impact_leaves
+    impact_leaves_cheap
+    impact_leaves_child_base
+    impact_leaves_child_bits
+    impact_leaves_child_smoke  # 烟雾
+    impact_metal
+    impact_metal_cheap
+    impact_metal_child_base
+    impact_metal_child_glow  # 光晕
+    impact_metal_child_glow2  # 光晕
+    impact_metal_child_smoke  # 烟雾
+    impact_mud
+    impact_mud_cheap
+    impact_paper
+    impact_paper_cheap
+    impact_physics_dust
+    impact_physics_sparks  # 火花
+    impact_physics_sparks_glow  # 光晕
+    impact_plaster
+    impact_plaster_cheap
+    impact_plaster_cheap_2
+    impact_plaster_child_base
+    impact_plaster_child_bits
+    impact_plaster_child_burst
+    impact_plaster_child_burst_2
+    impact_plaster_child_smoke  # 烟雾
+    impact_plaster_child_smoke2  # 烟雾
+    impact_plaster_child_smoke3  # 烟雾
+    impact_plaster_child_smoketrails  # 烟雾
+    impact_plaster_notrails
+    impact_plaster_notrails_cheap
+    impact_plastic
+    impact_plastic_cheap
+    impact_plastic_smoke  # 烟雾
+    impact_puddle
+    impact_puddle_cheap
+    impact_puddle_ring
+    impact_ricochet
+    impact_ricochet_sparks  # 火花
+    impact_rock
+    impact_rock_cheap
+    impact_rock_child_base
+    impact_rock_child_smoke  # 烟雾
+    impact_rubber
+    impact_rubber_cheap
+    impact_rubber_child_base
+    impact_rubber_child_smoke  # 烟雾
+    impact_sand
+    impact_sand_cheap
+    impact_sheetrock
+    impact_sheetrock_cheap
+    impact_sheetrock_cheap_2
+    impact_sheetrock_child_base
+    impact_sheetrock_child_bits
+    impact_sheetrock_child_bits2
+    impact_sheetrock_child_smoke  # 烟雾
+    impact_smoke_generic  # 烟雾
+    impact_steam
+    impact_steam_child_cloud
+    impact_steam_child_cloud_short
+    impact_steam_child_cloud_small
+    impact_steam_child_mist
+    impact_steam_child_mist_short
+    impact_steam_child_mist_small
+    impact_steam_short
+    impact_steam_small
+    impact_tile
+    impact_tile_cheap
+    impact_tile_child_base
+    impact_tile_child_smoke  # 烟雾
+    impact_upholstery
+    impact_upholstery_cheap
+    impact_upholstery_child_base
+    impact_upholstery_child_burn
+    impact_upholstery_child_burst
+    impact_upholstery_child_smoke  # 烟雾
+    impact_water
+    impact_water_cheap
+    impact_water_child_base
+    impact_water_child_bits
+    impact_water_child_froth
+    impact_water_child_refract
+    impact_water_child_rings
+    impact_water_child_smallrings
+    impact_water_child_splash  # 飞溅
+    impact_wet
+    impact_wet_cheap
+    impact_wet_child_splash  # 飞溅
+    impact_wood
+    impact_wood_cheap
+    impact_wood_child_base
+    impact_wood_child_burn
+    impact_wood_child_burst
+    impact_wood_child_chunks
+    impact_wood_child_smoke  # 烟雾
+    it5
+    j20
+    jjj
+    jmf0
+    k70
+    ksz
+    lb5
+    linear
+    lll
+    m30
+    m40
+    max
+    mgk
+    min
+    o40
+    ooo
+    pb0
+    pri
+    qqq
+    qz8sb
+    randomly_flip_direction
+    ricochet_sparks  # 火花
+    rotation_speed_constant
+    rotation_speed_random_exponent
+    rrr
+    sa0
+    sho
+    sk0
+    sq0
+    uuu
+    v30
+    vvf
+    wji
+    wl0
+    xb0
+    xw7
+    xxx
+    yaw_initial
+    yaw_random_exponent
+    yk2
+    yrl
+    yvj
+    z40
+    Z7fOhF0
+
+## infested_blood.pcf - 感染体血液
+    blood_zombie_split_spray_tiny2
+    bloodspray02
+    buzzer_death
+    buzzer_death_FloatieEmbers
+    buzzer_death_K
+    buzzer_death_liquid
+    buzzer_death_mist
+    buzzer_death_parts
+    cull_cost
+    drone_blood_goop
+    drone_blood_goop_backspray
+    drone_bloodspray_chainsaw
+    drone_death
+    drone_death_big
+    drone_death_big_fallback
+    drone_death_big_ground_goop
+    drone_death_directional
+    drone_death_fallback
+    drone_death_parts_1
+    drone_death_sml
+    drone_death_splat
+    drone_death_splat_sml
+    drone_explode_A_alt
+    drone_explode_C
+    drone_explode_K
+    drone_explode_K_sml
+    drone_gib_blood_1
+    drone_gib_blood_light_1
+    drone_gib_part_1
+    drone_gib_part_1_trail  # 拖尾
+    drone_gib_part_2
+    drone_gib_part_3
+    drone_gib_part_4
+    drone_gib_part_5_nocol
+    drone_gib_part_light_1_nocol
+    drone_gib_torso
+    drone_gib_torso_blood
+    drone_goo_fountain
+    drone_ragdoll_gib
+    drone_ragdoll_gib_puddles
+    drone_ragdoll_gib_splats
+    drone_shot
+    drone_shot_burst
+    drone_shot_exit
+    drone_shot_exit_burst
+    drone_shot_spark  # 火花
+    drone_show_exit_travel
+    ent_on_fire_smoke  # 烟雾
+    gib_fire_trail  # 拖尾
+    grub_death
+    grub_death_fire
+    grub_death_gib_bloodtrail_1
+    grub_death_gib1
+    grub_death_gib1_fire
+    grub_death_gib2
+    grub_death_gib2_fire
+    grub_death_juice
+    grub_death_upspray
+    iod
+    kxf
+    les_
+    marine_bloodsplat_heavy
+    marine_bloodsplat_light
+    marine_death_ragdoll
+    marine_death_ragdoll_mist
+    marine_death_ragdoll_splat
+    marine_gib
+    marine_gib_blood_trail  # 拖尾
+    marine_gib_body_spark  # 火花
+    marine_gib_body_splat
+    marine_gib_ground_goop
+    marine_gib_mist
+    marine_gib_part_3
+    marine_gib_part_head
+    marine_gib_part_spine
+    marine_gib_part_trail_sml  # 拖尾
+    marine_gib_parts_1
+    marine_gib_splat
+    marine_gib_upspray
+    marine_hit_bigspark_ff
+    marine_hit_blood
+    marine_hit_blood_ff
+    marine_hit_blood_ff_XX
+    marine_hit_blood_splat
+    marine_hit_burst
+    marine_hit_spark_flash  # 火花
+    marine_hit_spark_flash_ff  # 火花
+    marine_hit_spark_master  # 火花
+    marine_hit_spark_master_ff  # 火花
+    marine_hit_sparks  # 火花
+    marine_hit_sparks_ff  # 火花
+    n6b
+    pvj
+    ranger_death_big
+    ranger_death_big_fallback
+    ranger_death_big_ground_goop
+    ranger_death_FloatieEmbers
+    ranger_death_glows  # 光晕
+    ranger_death_liquid
+    ranger_explode_K
+    ranger_explode_mist
+    rgj
+    smallSplat
+    smallSplatBRIGHT
+    sprayblood
+    w23h
+    wdg
+    x50
+    xxx
+    y1y
+    yaw_rate_degrees
+    yaw_rate_min
+    yaw_stop_time
+
+## infested_damage.pcf - 感染体受击
+    criticalHealth
+    damage_numbers
+    damage_numbers_digits
+    damage_numbers_digits_noramp
+    damage_numbers_noramp
+    eee
+    floating_numbers
+    floating_numbers_noramp
+    forward_angle
+    heal_effect
+    heal_recharged
+    heal_recharged_glow  # 光晕
+    ie1
+    impact_mortar_preattack
+    ix6s
+    lhy
+    lowHealth
+    marine_resurrection
+    marine_resurrection_glow1  # 光晕
+    marine_resurrection_glow2  # 光晕
+    render_screen_velocity_rotate
+    sparks_heavy
+    sparks_heavy_master
+    sparks_light
+    sparks_light_master
+    suit_LED_dmg
+    suit_LED_dmg_1
+    suit_LED_dmg_2
+    suit_LED_dmg_3
+    suit_LED_dmg_heavy
+    suit_LED_dmg_heavy_R
+    suit_LED_dmg_light
+    x2eu
+
+## insects.pcf - 昆虫
+    bug_zapper_cloud
+    bug_zapper_fly_cloud
+    bug_zapper_zap
+    bug_zapper_zap_glow  # 光晕
+    bugs_swamp
+    ccc
+    Fireflies
+    Fireflies_cornfield
+    Fireflies_cornfield_old
+    Flies_child2  # 苍蝇子2
+    flies_large
+    flies_large_child
+    fly_child
+    forward_angle
+    fvy
+    gij
+    jjb
+    lll
+    lw6
+    moth
+    moths_smaller
+    moths_smallest
+    qd1
+    r6i
+    render_screen_velocity_rotate
+    roaches_few
+    roaches_lot
+    roaches_many
+    roaches_swarm_432_496
+    roaches_swarm_512
+    roaches_swarm_custom
+    sux
+
+## jumpjet_fx.pcf - 喷气背包
+    jj_ground_pound  # 落地重击
+    jj_ground_pound_b_rocks  # 落地重击碎石
+    jj_hit_ground_flash  # 落地闪光
+    jj_impact_contact_burst  # 落地接触爆裂
+    jj_trail_small  # 小型喷气拖尾
+    jj_trail_small_flare  # 小型喷气火光
+    jj_trail_small_glow  # 小型喷气光晕
+    JumpJet  # 喷气背包喷气
+    JumpJet_flash  # 喷气背包闪光
+    JumpJet_glow  # 喷气背包光晕
+    jumpjet_impact  # 喷气背包落地
+    jumpjet_impact_rocks  # 喷气背包落地碎石
+    jumpjet_smoke_trail  # 喷气背包烟雾拖尾
+    mot
+    xxx
+    zpp
+
+## largesteamjet.pcf - 大型蒸汽喷流
+    cull_control_point
+    cull_cost
+    DmeElement
+    steam_jet_80_steam
+
+## melee_fx.pcf - 近战
+    child_invis
+    claw_swipe_R
+    claw_swipe_R_a
+    claw_swipe_R_b
+    claw_swipe_R_c
+    drone_melee_trail_1  # 拖尾
+    gyq
+    melee_charged
+    melee_charged_flash1  # 闪光
+    melee_charging_XX
+    melee_contact
+    melee_contact_burst
+    melee_contact_flash  # 闪光
+    melee_ground_pound
+    melee_ground_pound_b_rocks
+    melee_hit_ground_flash  # 闪光
+    melee_hit_ground_flash2  # 闪光
+    melee_stun
+    melee_stun_continuous
+    melee_suck_in_release
+    melee_trail_1  # 拖尾
+    n1l
+    o2r
+    ptj
+    xxx
+    zpp
+
+## mite_attack.pcf - 螨虫攻击
+    cull_control_point
+    cull_cost
+    moteattack
+
+## mortarbug_fx.pcf - 炮虫特效
+    h_o
+    mortar_explosion  # 爆炸
+    mortar_explosion_debrisburst  # 碎片
+    mortar_explosion_fireball  # 火球
+    mortar_explosion_flash  # 闪光
+    mortar_Explosion_FloatieEmbers  # 爆炸
+    mortar_explosion_ground_flash  # 闪光
+    mortar_explosion_liquid  # 爆炸
+    mortar_explosion_shockwave1  # 冲击波
+    mortar_explosion_smoke_post_grenade  # 烟雾
+    mortar_grenade_main_trail  # 拖尾
+    mortar_grenade_open
+    mortar_grenade_open_glow  # 光晕
+    mortar_grenade_open_radius
+    mortar_launch
+    mortar_launch_glow  # 光晕
+    mortar_shell_aura
+    mortarbug_death
+    mortarshell_drip_01  # 水滴
+    mortarshell_drip_01b  # 水滴
+    q83
+    xxx
+
+## newcamp_particles.pcf - 新营地
+    jh_pipesteam
+    oij
+
+## playground_smoke.pcf - 游乐场烟雾
+    wispy_1
+    wispy_2
+    wispy_fire
+    wispy_small_smoke  # 烟雾
+
+## powerup_fx.pcf - 弹药加成(能量子弹)
+    e7k
+    k6b
+    powerup_arcs  # 加成电弧
+    powerup_chemical_bullets  # 加成-化学子弹
+    powerup_electric_bullets  # 加成-电击子弹
+    powerup_explosive_bullets  # 加成-爆炸子弹(战斗无人机用)
+    powerup_fire_bullets  # 加成-火焰子弹
+    powerup_freeze_bullets  # 加成-冰冻子弹
+    powerup_increased_speed  # 加成-加速
+    powerup_light_blink  # 加成-闪光
+    powerup_pickup_generic  # 加成拾取(通用)
+    powerup_pickup_generic_glow  # 加成拾取光晕
+    powerup_pulse  # 加成脉动
+    random_speed_max
+    random_speed_min
+
+## rain_fx.pcf - 下雨
+    ash
+    ash_burning
+    ash_burning_fire
+    ash_eddy
+    ash_eddy_b
+    ash_outer
+    ax_
+    dye
+    fff
+    hih
+    hqn
+    max
+    mc5
+    min
+    ooo
+    PRECIPITATIONBLOCKER
+    rain
+    rain_impact_03
+    rain_impact_04
+    rain_mist
+    rain_mist_02
+    rain_outer
+    rain_outer_mist
+    rain_puddle_ripples
+    rain_puddle_ripples_large
+    rain_puddle_ripples_small
+    rain_sheet
+    rain_sheet_mist
+    rain_spot
+    rain_storm
+    rain_storm_impact_03
+    rain_storm_impact_04
+    rain_storm_impact_04b
+    rain_storm_outer
+    rain_storm_outer_mist
+    rain_storm_screen
+    rain_stream_01
+    rain_stream_01_impact
+    rain_stream_01_impact_2
+    rain_stream_01_impact_3
+    rain_stream_01_streaks
+    rain_stream_02
+    rain_stream_03
+    rain_stream_04
+    rain_stream_04_impact_1
+    rain_stream_04_impact_2
+    sbz
+    snow
+    snow_drift
+    snow_outer
+    xxx
+    z3u
+
+## ranger_fx.pcf - 游侠特效
+    ranger_launch
+    ranger_launch_2
+    ranger_launch_glow  # 光晕
+    ranger_projectile_glow  # 光晕
+    ranger_projectile_hit
+    ranger_projectile_hit_splash  # 飞溅
+    ranger_projectile_liquid
+    ranger_projectile_main_trail  # 拖尾
+
+## rd-adanaxis_fx.pcf - ADANAXIS模组特效
+    ad_arrow
+    ad_arrow2
+    ad_black_tail
+    ad_black_tail2
+    ad_core_tailsfire
+    ad_eggs_particle_fountain_red
+    ad_eggs_particle_pulse_red
+    ad_eggs_particle_red
+    ad_electro_link_a
+    ad_electro_link_b
+    ad_electro_link_c
+    ad_electro_link_d
+    ad_electro_link_full
+    ad_fountain_cloud
+    ad_fountain_united
+    ad_insphere_plasma
+    ad_jump_particle
+    ad_jump_particle_fountain
+    ad_oralogo
+    ad_orange_tail
+    ad_orange_tails
+    ad_peff1
+    ad_pfire
+    ad_pflash
+    ad_pInit
+    ad_pInitFire
+    ad_pInitGlow  # 光晕
+    ad_pInitSmoke  # 烟雾
+    ad_psmoke  # 烟雾
+    ad_psmoke2  # 烟雾
+    ad_red_fountain
+    ad_red_smallfire
+    ad_rfire
+    ad_screen_particle1
+    ad_sigil
+    ad_sigil_huge
+    ad_smoke  # 烟雾
+    ad_smoke_huge  # 烟雾
+    ad_sphere_base
+    ad_sphere_edge
+    ad_sphere_edge_pulse
+    ad_sphere_pulse_sigil
+    ad_sphere_pulse_smoke  # 烟雾
+    ad_spike_sphere
+    ad_warp
+    adanaxis_penta
+    Adanaxis_portal
+    Adanaxis_portal_noedge
+    additive
+    bulge
+    kok
+    m99
+    max
+    min
+    rhi
+
+## rd-mod_dummy.pcf - 模组占位
+    mod_0
+    mod_1
+    mod_10
+    mod_11
+    mod_12
+    mod_13
+    mod_14
+    mod_15
+    mod_16
+    mod_17
+    mod_18
+    mod_19
+    mod_2
+    mod_20
+    mod_21
+    mod_22
+    mod_23
+    mod_24
+    mod_25
+    mod_26
+    mod_27
+    mod_28
+    mod_29
+    mod_3
+    mod_30
+    mod_31
+    mod_32
+    mod_33
+    mod_34
+    mod_35
+    mod_36
+    mod_37
+    mod_38
+    mod_39
+    mod_4
+    mod_40
+    mod_41
+    mod_42
+    mod_43
+    mod_44
+    mod_45
+    mod_46
+    mod_47
+    mod_48
+    mod_49
+    mod_5
+    mod_50
+    mod_51
+    mod_52
+    mod_53
+    mod_54
+    mod_55
+    mod_56
+    mod_57
+    mod_58
+    mod_59
+    mod_6
+    mod_60
+    mod_61
+    mod_62
+    mod_63
+    mod_7
+    mod_8
+    mod_9
+
+## rd-tarnor_fx.pcf - TARNOR模组特效
+    asd
+    asw_dust_drift_red
+    max
+    min
+    tarnor_airlock_steam_jet
+
+## rocket_fx.pcf - 火箭
+    Rocket_Smoke  # 火箭烟雾
+    Rocket_Smoke_Trail  # 火箭拖尾
+    uuu
+
+## sentry_fx.pcf - 哨戒炮
+    sentry_build_display  # 哨戒炮建造显示
+    sentry_build_display_project  # 哨戒炮建造投影
+    sentry_light_lowammo  # 哨戒炮低弹药灯
+    sentry_light_noammo  # 哨戒炮无弹药灯
+    sentry_radius_beam_inner1  # 哨戒炮范围光束内1
+    sentry_radius_beam_inner2  # 哨戒炮范围光束内2
+    sentry_radius_beam_L  # 哨戒炮范围光束左
+    sentry_radius_beam_M  # 哨戒炮范围光束中
+    sentry_radius_beam_R  # 哨戒炮范围光束右
+    sentry_radius_beam_sweep  # 哨戒炮范围扫射
+    sentry_radius_beam_sweep2  # 哨戒炮范围扫射2
+    sentry_radius_display_beam  # 哨戒炮范围显示光束
+    toaq
+    w4v
+
+## shieldbug_fx.pcf - 盾虫特效
+    body_explode
+    body_gibs
+    body_goo
+    body_shrapnel
+    body_smoke  # 烟雾
+    body_trail_goo  # 拖尾
+    body_trails  # 拖尾
+    boomer_explode_Jtemp1
+    brain_flash  # 闪光
+    brain_goo
+    brain_goo_shrapnel
+    brain_goo_small
+    brain_goo_splat
+    d3tw
+    g5b
+    gdp
+    goo_fountain
+    goo_fountain_small
+    goo_fountain_small_short
+    leg_goo
+    leg_goo_splatter
+    leg_rope
+    lrq
+    shieldBug_body_explode
+    shieldbug_brain_explode
+    shieldbug_fountain
+    shieldBug_legs
+
+## skybox_smoke.pcf - 天空盒烟雾
+    bhq
+    bulge
+    citadel_shockwave  # 冲击波
+    citadel_shockwave__  # 冲击波
+    citadel_shockwave_06  # 冲击波
+    citadel_shockwave_06_c  # 冲击波
+    citadel_shockwave_b  # 冲击波
+    citadel_shockwave_c  # 冲击波
+    citadel_shockwave_d  # 冲击波
+    citadel_shockwave_e  # 冲击波
+    citadel_shockwave_f  # 冲击波
+    citadel_shockwave_g  # 冲击波
+    citadel_shockwave_h  # 冲击波
+    citadel_shockwave_i  # 冲击波
+    citadel_shockwave_j  # 冲击波
+    citadel_shockwave_k  # 冲击波
+    citadel_shockwave_l  # 冲击波
+    cqn
+    cxi
+    dghr
+    DmeElement
+    f8b
+    gxb
+    gxu
+    iab
+    iny
+    lzh
+    oh8
+    ohu
+    oq7
+    portal_closure_01
+    portal_closure_01_core
+    portal_closure_01b
+    portal_closure_01c
+    portal_closure_01d
+    portal_closure_01e
+    portal_closure_02
+    portal_closure_02_branch
+    portal_closure_02b
+    portal_closure_02b_branch
+    portal_closure_03
+    portal_closure_03_branch
+    portal_closure_03b
+    portal_closure_03b_branch
+    portal_lightning_01
+    portal_lightning_01_06a
+    portal_lightning_01_core
+    portal_lightning_01_core_06a
+    portal_lightning_01b
+    portal_lightning_01c
+    portal_lightning_01d
+    portal_lightning_01e
+    portal_lightning_02
+    portal_lightning_02_branch
+    portal_lightning_02b
+    portal_lightning_02b_branch
+    portal_lightning_03
+    portal_lightning_03_branch
+    portal_lightning_03b
+    portal_lightning_03b_branch
+    portal_lightning_backblast
+    portal_lightning_closure_1
+    portal_rift_01
+    portal_rift_01b
+    portal_rift_01c
+    portal_rift_01d
+    portal_rift_01e
+    portal_rift_01f
+    portal_rift_01g
+    portal_rift_01h
+    portal_rift_02
+    portal_rift_02b
+    portal_rift_02c
+    portal_rift_02d
+    portal_rift_02e
+    portal_rift_03
+    portal_rift_03b
+    portal_rift_03c
+    portal_rift_03d
+    portal_rift_03e
+    portal_rift_03f
+    portal_rift_04
+    portal_rift_dust
+    portal_rift_flash_01  # 闪光
+    portal_rift_flash_01b  # 闪光
+    portal_ritf_flash_01c  # 闪光
+    skybox_cloud_01
+    skybox_cloud_01_b
+    skybox_cloud_01_c
+    skybox_cloud_glow  # 光晕
+    skybox_cloud_glow2  # 光晕
+    skybox_cloud_glow3  # 光晕
+    skybox_fire_01
+    Skybox_Fire_02
+    Skybox_Flash_02  # 闪光
+    Skybox_Flash_02b  # 闪光
+    Skybox_Haze_01
+    Skybox_Smoke_01  # 烟雾
+    Skybox_Smoke_03  # 烟雾
+    Skybox_Smoke_03_06a  # 烟雾
+    Skybox_Smoke_04  # 烟雾
+    Skybox_Smoke_05  # 烟雾
+    sqa
+    xx_
+    z7w
+
+## smoke_fx.pcf - 烟雾
+    smoke_breakwall_1  # 烟雾
+    xws
+
+## starfield.pcf - 星空
+    kh5
+    max
+    min
+    ogr
+    star_blackcloud_1
+    star_ring_1
+    star_ring_2
+    star_ring_nebula_1
+    star_ring_nebula_2
+    stars_1
+    yox
+    zc8
+
+## tracer_fx.pcf - 曳光
+    cull_control_point
+    cull_cost
+    weapon_tracers  # 曳光
+
+## vindincendgrenade.pcf - 复仇者燃烧弹
+    afl
+    cull_control_point
+    cull_cost
+    embers_medium_01
+    embers_medium_0New
+    explosion_huge_b
+    explosion_huge_burning_chunks
+    explosion_huge_c
+    explosion_huge_d
+    explosion_huge_e
+    explosion_huge_g
+    explosion_huge_h
+    explosion_huge_j
+    explosion_huge_k
+    explosion_huge_smoking_chunks
+    explosion_vind_a
+    HugeExplosion
+    llv
+    small_fire_burst
+    VindGrenade
+
+## vortigaunt_fx.pcf - Vortigaunt
+    bulge
+    DmeElement
+    lip
+    q_69
+    vortigaunt_beam  # 光束
+    vortigaunt_beam_arc_cp1_0  # 光束
+    vortigaunt_beam_arc_cp1_1  # 光束
+    vortigaunt_beam_arc_cp1_2  # 光束
+    vortigaunt_beam_arc_cp1_3  # 光束
+    vortigaunt_beam_arc_cp1_4  # 光束
+    vortigaunt_beam_arc_cp1_5  # 光束
+    vortigaunt_beam_arc_cp1_6  # 光束
+    vortigaunt_beam_b  # 光束
+    vortigaunt_beam_charge  # 光束
+    vortigaunt_charge_token
+    vortigaunt_charge_token_b
+    vortigaunt_charge_token_c
+    vortigaunt_charge_token_d
+    vortigaunt_glow_beam_cp0  # 光晕
+    vortigaunt_glow_beam_cp0b  # 光晕
+    vortigaunt_glow_beam_cp1  # 光晕
+    vortigaunt_glow_beam_cp1b  # 光晕
+    vortigaunt_glow_charge_cp0  # 光晕
+    vortigaunt_glow_charge_cp1  # 光晕
+    vortigaunt_glow_charge_cp1_beam  # 光晕
+    vortigaunt_glow_charge_cp1_beam2  # 光晕
+    vortigaunt_glow_charge_cp1_beam3  # 光晕
+    vortigaunt_glow_charge_cp1_beam4  # 光晕
+    vortigaunt_glow_charge_cp1_beam5  # 光晕
+    vortigaunt_glow_charge_cp1_beam6  # 光晕
+    vortigaunt_glow_charge_cp1b  # 光晕
+    vortigaunt_hand_glow  # 光晕
+    vortigaunt_hand_glow_b  # 光晕
+    vortigaunt_hand_glow_c  # 光晕
+
+## water_impact.pcf - 水花
+    b01
+    ccc
+    eee
+    if7
+    itu
+    jjj
+    ki6
+    mm0
+    sht
+    slime_splash_01  # 飞溅
+    slime_splash_01_droplets  # 飞溅
+    slime_splash_01_reversed  # 飞溅
+    slime_splash_01_surface  # 飞溅
+    slime_splash_02  # 飞溅
+    slime_splash_03  # 飞溅
+    t4i
+    txg
+    water_bubble_ambient_1
+    water_bubble_trail_1  # 拖尾
+    water_foam_01
+    water_foam_01b
+    water_foam_01c
+    water_foam_01d
+    water_foam_line_long
+    water_foam_line_longb
+    water_foam_line_longc
+    water_foam_line_longd
+    water_foam_line_short
+    water_foam_line_shortb
+    water_foam_line_shortc
+    water_foam_line_shortd
+    water_gunk_1
+    water_impact_bubbles_1
+    water_impact_bubbles_1b
+    water_impact_bubbles_1c
+    water_impact_bubbles_1d
+    water_splash_01  # 飞溅
+    water_splash_01_drops  # 飞溅
+    water_splash_01_refract  # 飞溅
+    water_splash_01_surface1  # 飞溅
+    water_splash_01_surface2  # 飞溅
+    water_splash_01_surface3  # 飞溅
+    water_splash_01_surface4  # 飞溅
+    water_splash_02  # 飞溅
+    water_splash_02_animated  # 飞溅
+    water_splash_02_continuous  # 飞溅
+    water_splash_02_droplets  # 飞溅
+    water_splash_02_drops  # 飞溅
+    water_splash_02_froth  # 飞溅
+    water_splash_02_froth2  # 飞溅
+    water_splash_02_refract  # 飞溅
+    water_splash_02_surface2  # 飞溅
+    water_splash_02_surface3  # 飞溅
+    water_splash_02_surface4  # 飞溅
+    water_splash_02_vertical  # 飞溅
+    water_splash_03  # 飞溅
+    water_splash_03_drops  # 飞溅
+    water_splash_03_smallrings  # 飞溅
+    water_splash_03_surface3  # 飞溅
+    water_splash_03_surface4  # 飞溅
+    water_splash_leakypipe_silo  # 飞溅
+    water_splash_leakypipe_silo_froth2  # 飞溅
+    water_splash_leakypipe_vertical  # 飞溅
+    water_trail_medium  # 拖尾
+    water_trail_medium_b  # 拖尾
+    wkj
+
+## weapon_fx_hl2.pcf - HL2武器特效
+    combine_ball_bounce
+    combine_ball_bounce_burn
+    cull_control_point
+    cull_cost
+    weapon_ar2_impact
+
