@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 陆战队员强化 (Marine Power)
- *  版本 1.4.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ * 版本 1.4.1  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ─────────────────────────────────────
  *  玩家按键实时调大/调小自己的 血量 / 体型 / 近战 / 移速:
@@ -10,7 +10,9 @@
  *    - 缩小(等级 -1~-3): 仅模型变小(0.8/0.6/0.4倍), 血量/近战/移速等属性不变
  *    - 等级0 = 恢复默认(100血 / 1.0倍体型 / 1.0倍移速)
  *    - **视角高度**: 放大等级每级把玩家相机距离调高 cam_step (默认 150, 世界单位),
- *      看到的地图更高更远; 缩小等级/0级不变(基准视野, 与游戏原生一致)
+ *      看到的地图更高更远; 缩小等级/0级不变(基准视野, 与游戏原生一致)。
+ *      **观战同步**: 正在观战该陆战队员的观战者也会同步感知同样的视角抬升
+ *      (仅观战者本人 + 目标玩家, 其他玩家不受影响)。
  *
  *  近战加成只作用于**普通近战**(徒手/踢击那套, 引擎伤害类型 DMG_CLUB),
  *  按**攻击者本人**的等级取倍率, 逐次命中时叠加。
@@ -63,6 +65,9 @@
  *   - 视角高度: 用 SendConVarValue 把 asw_cam_marine_dist 强制下发到客户端(无视
  *     客户端 sv_cheats, 与 asrd_camheight 同机制); 由放大等级驱动(每级 +cam_step),
  *     故单独的俯视高度插件无需再加载 —— 两者同时加载会抢写同一 ConVar 互抢。
+ *   - **观战同步**: 用引擎字段 m_hSpectating (SendPropEHandle) 探测某玩家正在观战的
+ *     陆战队员实体; 当目标玩家视角变化时, 向所有观战该陆战队员的观战者客户端下发
+ *     相同的相机距离/俯仰 (仅观战者+目标本人), 使其感知同样的视角抬升。
  *
  *  依赖: SourceMod 1.11+ (核心 API + sdktools + SDKHooks)
  * ============================================================================
@@ -76,7 +81,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Marine Power"
-#define PLUGIN_VERSION "1.4.0"
+#define PLUGIN_VERSION "1.4.1"
 
 // 重新断言周期(秒): 换陆战队员/复活后仍生效, 不回血
 #define REAPPLY_INTERVAL 1.0
@@ -523,6 +528,8 @@ public Action Cmd_PowerStatus(int client, int args)
 //  视角高度: 把某玩家的相机距离强制下发到其客户端
 //    放大等级每级 +cam_step; 缩小/0级回到 base (基准视野, 与游戏原生一致)。
 //    使用 SendConVarValue 走复制通道, 无视客户端 sv_cheats (与 asrd_camheight 同机制)。
+//    同时把同样的相机参数同步给所有正在观战该陆战队员的观战者,
+//    使观战者也能感知到目标玩家的视角抬升 (仅观战者+目标本人, 其他玩家不受影响)。
 // ============================================================================
 void ApplyCamera(int client)
 {
@@ -537,15 +544,55 @@ void ApplyCamera(int client)
     float fDist = g_cvCamBase.FloatValue + float(level) * g_cvCamStep.FloatValue;
     float fPitch = g_cvCamPitch.FloatValue;
 
+    PushCameraToClient(client, fDist, fPitch);
+
+    // 同步正在观战该陆战队员的观战者
+    int marine = GetPlayerMarine(client);
+    if (marine > 0)
+        SyncObserversCamera(client, marine, fDist, fPitch);
+
+    if (g_cvDebug.BoolValue)
+        PrintToServer("[强化] %N 视角距离=%.0f (等级 %d, base %.0f + step %.0f x%d)，已同步观战者",
+            client, fDist, level, g_cvCamBase.FloatValue, g_cvCamStep.FloatValue, level);
+}
+
+// 把相机 距离/俯仰 下发到某个客户端 (核心: 逐人 SendConVarValue)
+void PushCameraToClient(int tClient, float fDist, float fPitch)
+{
     char sDist[16], sPitch[16];
     FormatEx(sDist, sizeof(sDist), "%.0f", fDist);
     FormatEx(sPitch, sizeof(sPitch), "%.0f", fPitch);
-    SendConVarValue(client, g_hCamDist, sDist);
-    SendConVarValue(client, g_hCamPitch, sPitch);
+    SendConVarValue(tClient, g_hCamDist, sDist);
+    SendConVarValue(tClient, g_hCamPitch, sPitch);
+}
 
-    if (g_cvDebug.BoolValue)
-        PrintToServer("[强化] %N 视角距离=%.0f (等级 %d, base %.0f + step %.0f x%d)",
-            client, fDist, g_iLevel[client], g_cvCamBase.FloatValue, g_cvCamStep.FloatValue, level);
+// 读某玩家当前正在观战的 NPC 实体 (0=未观战)
+//   AS:RD CASW_Player 源码: SendPropEHandle(SENDINFO(m_hSpectating)) + DEFINE_FIELD(m_hSpectating)
+int GetSpectatingNPC(int client)
+{
+    char sNetClass[64];
+    if (GetEntityNetClass(client, sNetClass, sizeof(sNetClass))
+        && FindSendPropInfo(sNetClass, "m_hSpectating") > 0)
+        return GetEntPropEnt(client, Prop_Send, "m_hSpectating");
+
+    if (FindDataMapInfo(client, "m_hSpectating") > 0)
+        return GetEntPropEnt(client, Prop_Data, "m_hSpectating");
+
+    return 0;
+}
+
+// 把某陆战队员(ownerClient 所控)的相机参数同步给所有正在观战它的观战者
+void SyncObserversCamera(int ownerClient, int marine, float fDist, float fPitch)
+{
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsClientInGame(i) || IsFakeClient(i))
+            continue;
+        if (i == ownerClient)
+            continue;
+        if (GetSpectatingNPC(i) == marine)
+            PushCameraToClient(i, fDist, fPitch);
+    }
 }
 
 // ============================================================================
