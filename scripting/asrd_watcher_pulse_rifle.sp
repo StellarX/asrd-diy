@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 守望者标准型脉冲步枪 (Watcher Standard Pulse Rifle)
- *  版本 1.2.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.4.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ─────────────────────────────────────
  *  游戏里这把武器 (Overwatch Standard Issue Pulse Rifle / OSIPR / AR2 / 联合军脉冲步枪)
@@ -29,7 +29,7 @@
  *                                    对 ALL 受害者生效: 虫族 / 场景物体 / 队友; 设为 1.0 即不改; 上限 500)
  *   sm_asrd_watcher_alt_dmg_mult     副武器(能量球)伤害倍率 (默认 2.0; 同样对所有受害者生效; 上限 500)
  *   sm_asrd_watcher_drop_public      允许玩家用 sm_watcherdrop 自己掉步枪 (0=仅管理员, 默认 1)
- *   sm_asrd_watcher_alt_ammo         副武器(能量球)弹药数量 (默认 6; 0=不覆盖, 沿用游戏默认 3; 上限 2000)
+ *   sm_asrd_watcher_alt_ammo         副武器(能量球)弹药数量 (默认 10; 0=不覆盖, 沿用游戏默认 3; 上限 2000)
  *   sm_asrd_watcher_color_r/g/b      掉落步枪染色 RGB (各 0~255, 默认 0 200 255 = 青色, 一眼可辨)
  *   sm_asrd_watcher_color_a          染色透明度 (0~255, 默认 255=不透明)
  *   sm_asrd_watcher_debug            调试输出 (默认 0)
@@ -47,12 +47,26 @@
  *     队友 marine 都覆盖, 用 g_bDamageHooked[] 去重防止倍率叠加); 当伤害来源是
  *     本插件标记的 asw_weapon_ar2 (主武器) 或标记过的 prop_combine_ball (副武器) 时,
  *     把 damage 乘以对应倍率。该方案与 asrd_chainsaw_turbo.sp 同源。
- *   - 弹药: 主武器弹匣写死 200 (WATCHER_MAIN_AMMO), 副武器(能量球)数量由
- *     sm_asrd_watcher_alt_ammo 控制。两者都在"武器被 marine 拾取"时写入该 marine 的
+ *   - 弹药: 主武器弹匣写死 200 (WATCHER_MAIN_AMMO), 主武器备弹写死 600
+ *     (WATCHER_MAIN_RESERVE, 即 3 个备用弹匣), 副武器(能量球)数量由
+ *     sm_asrd_watcher_alt_ammo 控制。三者都在"武器被 marine 拾取"时写入该 marine 的
  *     m_iAmmo[对应弹药类型] 储备池 + 武器 m_iClip1/m_iClip2, 确保主/副弹夹与备弹都填满
  *     (AR2 副弹药类型由武器 m_iSecondaryAmmoType 读取, 不硬编码)。
- *     注意: m_iAmmo 在 asw_marine 上是 datamap 属性 (非 sendprop), 必须用 FindDataMapInfo
- *     走 Prop_Data 写, 用 FindSendPropInfo 查发送表会查不到导致写失败。
+ *     注意: m_iAmmo 在 asw_marine 上是 sendprop 数组 (DT_ASW_Marine, 非 datamap),
+ *     必须用 GetEntityNetClass + FindSendPropInfo + SetEntProp(带元素下标) 写, 写完读回验证;
+ *     读回不一致时再用 SetEntData 绝对偏移直写 (CNetworkArray 数据内联, 元素步长 4 字节)。
+ *   - 备弹上限同步: AR2 主/副弹药的 MaxCarry 由游戏 ConVar sk_max_ar2 (默认 180) /
+ *     sk_max_ar2_altfire (默认 3) 控制。弹匣 200 时 180/200=0 弹夹, HUD 显示"备弹 0",
+ *     且游戏内拾取弹药会被截断到 180。插件启动时强制 sk_max_ar2 = 弹匣+备弹 = 800、
+ *     sk_max_ar2_altfire = 副武器目标值, 保证 HUD 显示 4 个弹夹且上限足够。
+ *   - 弹药箱补给: 游戏自带弹药箱 (asw_ammo_drop) 的成本表不含 AR2 弹药,
+ *     GetAmmoUnitCost 返回 9999 导致弹药箱对 AR2 直接判定"无法补给"。本插件每 0.25 秒
+ *     检查持枪 marine 是否站在弹药箱补给半径内 (ASW_MARINE_USE_RADIUS=100), 是则从弹药箱
+ *     扣减单位数并补满主/副备弹。弹药箱 m_iAmmoUnitsRemaining 为 sendprop, 可直接读写。
+ *   - 换弹上限同步: 游戏换弹时 m_iClip1 补满到 GetMaxClip1()、m_iClip2 补满到 GetMaxClip2(),
+ *     二者来自装备定义 ConVar asw_ammo_count_ar2 (默认 30) / asw_ammo_count_ar2_grenade
+ *     (默认 3), 若不同步改大会把弹匣压回 30/3。插件启动时强制设为 200 / 副武器目标值,
+ *     并在 sm_asrd_watcher_alt_ammo 变化时跟随更新。
  *   - 视觉标记: 给掉落的步枪染上设定色 (m_clrRender); AS:RD 武器每帧会复位该属性,
  *     故 OnGameFrame 里对增强步枪持续重涂, 保证地上/手里都稳定是设定色。
  *
@@ -68,7 +82,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] 守望者标准型脉冲步枪 (Watcher Pulse Rifle)"
-#define PLUGIN_VERSION "1.2.0"
+#define PLUGIN_VERSION "1.4.0"
 
 // 武器实体类名: 游戏源码 scripts/asw_weapon_ar2.txt 对应实体 asw_weapon_ar2
 // (Overwatch Standard Issue Pulse Rifle / AR2 / 联合军脉冲步枪)
@@ -86,6 +100,21 @@
 
 // 主武器弹匣弹药: 按用户要求写死 200, 不再用 ConVar 调整
 #define WATCHER_MAIN_AMMO 200
+
+// 主武器备弹(储备池): 写死 600, 即 3 个备用弹匣, 加上弹匣 200 共 800 发。
+// 弹药箱补给也以"补满到该值"为目标。
+#define WATCHER_MAIN_RESERVE 600
+
+// 弹药箱补给判定半径: 对齐游戏 ASW_MARINE_USE_RADIUS (marine 按 E 使用实体的距离)
+#define WATCHER_BOX_RADIUS 100.0
+
+// 弹药箱补给节奏: 每 0.25 秒检查一次 (站在弹药箱旁约 1 秒补满一次)
+#define WATCHER_BOX_INTERVAL 0.25
+
+// 弹药箱单次补给量: 主武器每次 +100 发 (耗 50 单位), 能量球每次 +3 个 (免费, 对齐 rd_refill_secondary 风格)
+#define WATCHER_BOX_PRIMARY_GIVE 100
+#define WATCHER_BOX_PRIMARY_COST 50
+#define WATCHER_BOX_ALT_GIVE      3
 
 // 享受增强所需的管理员权限 (仅当 sm_asrd_watcher_drop_public 为 0 时要求)
 #define WATCHER_ADMIN_FLAG   ADMFLAG_GENERIC
@@ -117,6 +146,9 @@ bool  g_bDamageHooked[2049];
 
 //  已为哪个持枪 marine 补过弹: 避免每帧重复写 (仅在持枪者变化时补一次)
 int   g_iAppliedOwner[2049];
+
+//  弹药箱补给下次检查时刻 (游戏时间)
+float g_fNextBoxRefill;
 
 // ============================================================================
 //  插件信息
@@ -155,10 +187,11 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
     g_cvAltAmmo = CreateConVar(
-        "sm_asrd_watcher_alt_ammo", "6",
+        "sm_asrd_watcher_alt_ammo", "10",
         "副武器(能量球)弹药数量 (0=不覆盖, 沿用游戏默认 3; 设为其他值即强制给持枪者该数量的能量球; 上限 2000)",
         FCVAR_NOTIFY, true, 0.0, true, 2000.0
     );
+    HookConVarChange(g_cvAltAmmo, OnAltAmmoChanged);
     g_cvDebug = CreateConVar(
         "sm_asrd_watcher_debug", "0",
         "调试模式 (向服务器控制台输出检测/掉落/弹药日志)",
@@ -193,12 +226,91 @@ public void OnPluginStart()
     // 地图开始时横扫所有已存在的实体并补挂伤害钩子
     HookExistingEntities();
 
+    // 同步游戏弹药上限 ConVar:
+    //   asw_ammo_count_ar2            = 弹匣上限 (换弹补满目标, 默认 30, 不改成 200 则换弹后被压回 30)
+    //   asw_ammo_count_ar2_grenade    = 能量球上限 (换弹补满目标, 默认 3, 不改成 10 则能量球被压回 3)
+    SyncGameAmmoConVars();
+
     // 自动保存/读取配置到 cfg/sourcemod/asrd_watcher_pulse_rifle.cfg
     AutoExecConfig(true, "asrd_watcher_pulse_rifle");
 
     RegAdminCmd("sm_watcher_status", Command_WatcherStatus, ADMFLAG_GENERIC, "查看守望者脉冲步枪状态");
     RegAdminCmd("sm_watcher_color",  Command_WatcherColor,  ADMFLAG_GENERIC,
         "设置掉落步枪的染色: sm_watcher_color <R> <G> <B> [A] 或 <预设名>");
+}
+
+// ============================================================================
+//  游戏弹药 ConVar 同步 (服务器启动时执行):
+//     asw_ammo_count_ar2         弹匣上限(换弹补满目标)  -> WATCHER_MAIN_AMMO
+//     asw_ammo_count_ar2_grenade 能量球上限(换弹补满目标) -> sm_asrd_watcher_alt_ammo
+//     sk_max_ar2                 主武器备弹上限(MaxCarry) -> 弹匣+备弹 = 800
+//     sk_max_ar2_altfire         副武器备弹上限(MaxCarry) -> sm_asrd_watcher_alt_ammo
+//  (前两个是 AR2 装备定义指针, 见游戏源码 asw_equipment_list.cpp 508-509 行;
+//   后两个是 AR2/AR2G 弹药 MaxCarry, 见 gh_asw_gamerules.cpp 830-831/1443-1444 行。
+//   默认 180/3 会小于弹匣 200 / 能量球 10, 导致 HUD 备弹显示 0 弹夹且游戏内补弹被截断)
+// ============================================================================
+void SyncGameAmmoConVars()
+{
+    ConVar cvPri = FindConVar("asw_ammo_count_ar2");
+    if (cvPri != null)
+        cvPri.IntValue = WATCHER_MAIN_AMMO;
+    else if (g_cvDebug.BoolValue)
+        PrintToServer("[守望者步枪] 警告: 找不到游戏 ConVar asw_ammo_count_ar2");
+
+    int iAlt = g_cvAltAmmo.IntValue;
+
+    ConVar cvAlt = FindConVar("asw_ammo_count_ar2_grenade");
+    if (cvAlt != null)
+    {
+        // 副武器为 0(不覆盖)时恢复游戏默认 3
+        cvAlt.IntValue = (iAlt > 0) ? iAlt : 3;
+    }
+    else if (g_cvDebug.BoolValue)
+        PrintToServer("[守望者步枪] 警告: 找不到游戏 ConVar asw_ammo_count_ar2_grenade");
+
+    // 备弹上限(MaxCarry): 弹匣 200 + 备弹 600 = 800, 必须 ≥ 备弹目标值, 否则 HUD 弹夹显示为 0
+    ConVar cvMaxPri = FindConVar("sk_max_ar2");
+    if (cvMaxPri != null)
+        cvMaxPri.IntValue = WATCHER_MAIN_AMMO + WATCHER_MAIN_RESERVE;
+    else if (g_cvDebug.BoolValue)
+        PrintToServer("[守望者步枪] 警告: 找不到游戏 ConVar sk_max_ar2");
+
+    ConVar cvMaxAlt = FindConVar("sk_max_ar2_altfire");
+    if (cvMaxAlt != null)
+        cvMaxAlt.IntValue = (iAlt > 0) ? iAlt : 3;
+    else if (g_cvDebug.BoolValue)
+        PrintToServer("[守望者步枪] 警告: 找不到游戏 ConVar sk_max_ar2_altfire");
+}
+
+// sm_asrd_watcher_alt_ammo 变化时, 让游戏能量球上限跟着变, 避免换弹把能量球压回旧值;
+// 同时立即给所有当前持有增强步枪的玩家重补副弹, 确保新配置立刻生效
+public void OnAltAmmoChanged(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+    int iAlt = g_cvAltAmmo.IntValue;
+    ConVar cvAlt = FindConVar("asw_ammo_count_ar2_grenade");
+    if (cvAlt != null)
+        cvAlt.IntValue = (iAlt > 0) ? iAlt : 3;
+    ConVar cvMaxAlt = FindConVar("sk_max_ar2_altfire");
+    if (cvMaxAlt != null)
+        cvMaxAlt.IntValue = (iAlt > 0) ? iAlt : 3;
+
+    // 立即给所有正在使用增强步枪的玩家重补副弹 (让新配置立刻生效, 不用等下次换枪)
+    for (int w = MaxClients + 1; w < sizeof(g_bEnhancedWatcher); w++)
+    {
+        if (!g_bEnhancedWatcher[w])
+            continue;
+        int iMarine = GetWatcherMarine(w);
+        if (iMarine <= 0)
+            continue;
+        if (iAlt > 0)
+        {
+            SetWeaponClip2(w, iAlt);
+            int iSec = GetWeaponAmmoType(w, "m_iSecondaryAmmoType");
+            if (iSec < 0)
+                iSec = 1; // 回退 AR2G
+            SetMarineAmmo(iMarine, iSec, iAlt);
+        }
+    }
 }
 
 // ============================================================================
@@ -212,6 +324,14 @@ public void OnGameFrame()
     int iR, iG, iB, iA;
     GetEnhancedColor(iR, iG, iB, iA);
 
+    // 弹药箱补给: 每 0.25 秒检查一次 (站在弹药箱旁时补满主/副备弹)
+    float fNow = GetGameTime();
+    if (g_fNextBoxRefill <= fNow)
+    {
+        CheckAmmoBoxRefill();
+        g_fNextBoxRefill = fNow + WATCHER_BOX_INTERVAL;
+    }
+
     for (int w = MaxClients + 1; w < sizeof(g_bEnhancedWatcher); w++)
     {
         if (!g_bEnhancedWatcher[w])
@@ -219,17 +339,7 @@ public void OnGameFrame()
         ApplyEnhancedColor(w, iR, iG, iB, iA);
 
         // ── 弹药: 检测当前持枪者, 持枪者变化(含首次拾取)时补满主/副弹夹与备弹 ──
-        int iOwner = GetEntPropEnt(w, Prop_Send, "m_hOwnerEntity");
-        if (iOwner <= 0 || !IsValidEntity(iOwner))
-            iOwner = GetEntPropEnt(w, Prop_Data, "m_hOwner");
-        int iMarine = -1;
-        if (iOwner > 0 && IsValidEntity(iOwner))
-        {
-            if (IsMarine(iOwner))
-                iMarine = iOwner;
-            else if (IsClientInGame(iOwner))
-                iMarine = GetPlayerMarine(iOwner);
-        }
+        int iMarine = GetWatcherMarine(w);
         if (iMarine > 0)
         {
             if (w < sizeof(g_iAppliedOwner) && g_iAppliedOwner[w] != iMarine)
@@ -462,6 +572,23 @@ bool IsWatcherRifle(int entity)
     return StrEqual(sClass, WATCHER_CLASSNAME, false);
 }
 
+// 解析某把守望者步枪当前被哪个 marine 持有 (没有持有者返回 -1)
+int GetWatcherMarine(int iWeapon)
+{
+    if (iWeapon <= 0 || !IsValidEntity(iWeapon))
+        return -1;
+    int iOwner = GetEntPropEnt(iWeapon, Prop_Send, "m_hOwnerEntity");
+    if (iOwner <= 0 || !IsValidEntity(iOwner))
+        iOwner = GetEntPropEnt(iWeapon, Prop_Data, "m_hOwner");
+    if (iOwner <= 0 || !IsValidEntity(iOwner))
+        return -1;
+    if (IsMarine(iOwner))
+        return iOwner;
+    if (IsClientInGame(iOwner))
+        return GetPlayerMarine(iOwner);
+    return -1;
+}
+
 // 解析某 marine 当前手持武器实体
 int GetActiveWeapon(int iMarine)
 {
@@ -502,10 +629,27 @@ int SpawnWatcherRifleNear(int client)
     ActivateEntity(iWeapon);
 
     // 主武器弹匣: 落地即填满 (写死 WATCHER_MAIN_AMMO=200); 拾取时 OnGameFrame 还会再补一次
-    if (FindSendPropInfo(WATCHER_CLASSNAME, "m_iClip1") > 0)
+    int iClip1Off = GetEntitySendPropOff(iWeapon, "m_iClip1");
+    if (iClip1Off != -1)
         SetEntProp(iWeapon, Prop_Send, "m_iClip1", WATCHER_MAIN_AMMO);
-    else if (FindDataMapInfo(iWeapon, "m_iClip1") > 0)
-        SetEntData(iWeapon, FindDataMapInfo(iWeapon, "m_iClip1"), WATCHER_MAIN_AMMO, 4);
+    else
+    {
+        int dm = FindDataMapInfo(iWeapon, "m_iClip1");
+        if (dm != -1)
+            SetEntData(iWeapon, dm, WATCHER_MAIN_AMMO, 4, true);
+    }
+
+    // 主武器备弹: 写武器实体的 m_iPrimaryAmmoCount (datamap 字段, 拾取时通过 GiveAmmo
+    // 转移到 marine 的 m_iAmmo 储备池, 见 rd_asw_marine.cpp 3073 行)。
+    // 下面 4 个灰色弹夹就是备弹数的可视化 (备弹 / MaxClip1 = 弹夹数)
+    int iPriAmmo = FindDataMapInfo(iWeapon, "m_iPrimaryAmmoCount");
+    if (iPriAmmo != -1)
+        SetEntData(iWeapon, iPriAmmo, WATCHER_MAIN_RESERVE, 4, true);
+
+    // 副武器(能量球): 落地即填 m_iClip2 (AR2 副武器走 clip2)
+    int iAlt = g_cvAltAmmo.IntValue;
+    if (iAlt > 0)
+        SetWeaponClip2(iWeapon, iAlt);
 
     // 标记为"增强步枪": 仅此实体享受 sm_asrd_watcher_dmg_mult 倍率
     if (iWeapon >= 0 && iWeapon < sizeof(g_bEnhancedWatcher))
@@ -524,65 +668,101 @@ int SpawnWatcherRifleNear(int client)
     return iWeapon;
 }
 
+// 用实体实际网络类名查发送属性偏移 (GetEntityNetClass + FindSendPropInfo 两步,
+// 与官方 HasEntProp 同一套路; 网络类名来自实体 ServerClass, 不能拿实体类名字符串硬凑)
+int GetEntitySendPropOff(int entity, const char[] sProp)
+{
+    if (entity <= 0 || !IsValidEntity(entity))
+        return -1;
+    char sNetClass[64];
+    if (!GetEntityNetClass(entity, sNetClass, sizeof(sNetClass)) || !sNetClass[0])
+        return -1;
+    return FindSendPropInfo(sNetClass, sProp);
+}
+
 // 读取武器实体的弹药类型索引 (CBaseCombatWeapon 标准属性 m_iPrimaryAmmoType / m_iSecondaryAmmoType)
 //   先试 sendprop, 再试 datamap; 都查不到返回 -1
 int GetWeaponAmmoType(int iWeapon, const char[] sProp)
 {
-    int off = FindSendPropInfo(WATCHER_CLASSNAME, sProp);
-    if (off != -1)
+    if (iWeapon <= 0 || !IsValidEntity(iWeapon))
+        return -1;
+    if (GetEntitySendPropOff(iWeapon, sProp) != -1)
         return GetEntProp(iWeapon, Prop_Send, sProp);
-    if (FindDataMapInfo(iWeapon, sProp) != -1)
+    int dm = FindDataMapInfo(iWeapon, sProp);
+    if (dm != -1)
         return GetEntProp(iWeapon, Prop_Data, sProp);
     return -1;
 }
 
-// 给持枪 marine 的 m_iAmmo[弹药类型] 储备池写弹药数量
-//   关键: asw_marine 的 m_iAmmo 是 datamap 属性 (非 sendprop), 必须用 FindDataMapInfo + SetEntData 走 Prop_Data 写;
-//   用 FindSendPropInfo 查发送表会查不到 -> 写失败 (旧版副武器数量"没生效"就是这个原因)。
-//   回退: 找不到 marine 的 m_iAmmo 时再试玩家 client。
-void SetMarineAmmo(int iMarine, int iClient, int iAmmoType, int iCount)
+// 解析 marine 实体上 m_iAmmo 发送属性偏移。
+//   m_iAmmo 是 sendprop 数组 (DT_ASW_Marine 里的 SendPropArray3, 10bit 无符号, 见游戏源码
+//   rd_asw_marine.cpp 第 210 行), 不在 datamap 里, 必须走 Prop_Send。
+//   用 GetEntityNetClass 动态取网络类名再查, 与官方 HasEntProp 同一套路
+int GetMarineAmmoOffset(int iMarine)
+{
+    if (iMarine <= 0 || !IsValidEntity(iMarine))
+        return -1;
+    return GetEntitySendPropOff(iMarine, "m_iAmmo");
+}
+
+// 读取 marine.m_iAmmo[弹药类型] 当前储备量 (读不到返回 0)
+int GetMarineAmmo(int iMarine, int iAmmoType)
+{
+    if (iAmmoType < 0)
+        return 0;
+    int off = GetMarineAmmoOffset(iMarine);
+    if (off == -1)
+        return 0;
+    return GetEntProp(iMarine, Prop_Send, "m_iAmmo", 4, iAmmoType);
+}
+
+// 给持枪 marine 的 m_iAmmo[弹药类型] 储备池写弹药数量, 写完立即读回验证。
+//   关键1: asw_marine 的 m_iAmmo 是 sendprop 数组 (SendPropArray3, 非 datamap), 必须带元素下标走 Prop_Send。
+//   关键2: SetEntData 兜底时第5参数必须传 changeState=true —— 默认是 false,
+//          只改服务器内存不触发网络同步, 客户端 HUD 永远看不到新备弹 (见官方文档/entity.inc)。
+//   写失败或读回不一致时输出调试日志, 便于在真实服务器上定位。
+void SetMarineAmmo(int iMarine, int iAmmoType, int iCount)
 {
     if (iAmmoType < 0 || iCount < 0)
         return;
 
-    // 路径1: asw_marine 的 m_iAmmo (sendprop)
-    if (iMarine > 0 && IsValidEntity(iMarine))
+    int off = GetMarineAmmoOffset(iMarine);
+    if (off == -1)
     {
-        int off = FindSendPropInfo("asw_marine", "m_iAmmo");
-        if (off != -1)
-        {
-            SetEntProp(iMarine, Prop_Send, "m_iAmmo", iCount, 4, iAmmoType);
-            return;
-        }
-        // 路径2: asw_marine 的 m_iAmmo (datamap) —— 本游戏实际走这条
-        int dm = FindDataMapInfo(iMarine, "m_iAmmo");
-        if (dm != -1)
-        {
-            SetEntData(iMarine, dm + iAmmoType * 4, iCount, 4);
-            return;
-        }
+        if (g_cvDebug.BoolValue)
+            PrintToServer("[守望者步枪] 设置弹药失败: 找不到 marine(%d) 的 m_iAmmo 发送属性 (弹药类型=%d)",
+                iMarine, iAmmoType);
+        return;
     }
 
-    // 回退: 玩家 client 的 m_iAmmo
-    if (iClient > 0 && IsClientInGame(iClient))
+    // 方案1: SourceMod 标准 sendprop 数组写入 (自动按实体网络类名解析, 触发网络同步)
+    SetEntProp(iMarine, Prop_Send, "m_iAmmo", iCount, 4, iAmmoType);
+    int iNow = GetEntProp(iMarine, Prop_Send, "m_iAmmo", 4, iAmmoType);
+    if (iNow == iCount)
     {
-        int off = FindSendPropInfo("player", "m_iAmmo");
-        if (off != -1)
-        {
-            SetEntProp(iClient, Prop_Send, "m_iAmmo", iCount, 4, iAmmoType);
-            return;
-        }
-        int dm = FindDataMapInfo(iClient, "m_iAmmo");
-        if (dm != -1)
-        {
-            SetEntData(iClient, dm + iAmmoType * 4, iCount, 4);
-            return;
-        }
+        if (g_cvDebug.BoolValue)
+            PrintToServer("[守望者步枪] 已写 marine %d m_iAmmo[%d]=%d (偏移 %d)",
+                iMarine, iAmmoType, iCount, off);
+        return;
     }
 
+    // 方案2: 绝对偏移直写 (CNetworkArray 数据内联在 m_Value[count], 无前缀字段,
+    //        FindSendPropInfo 返回的偏移即数据起点, 元素步长 4 字节)
+    SetEntData(iMarine, off + iAmmoType * 4, iCount, 4, true);
+    int iNow2 = GetEntProp(iMarine, Prop_Send, "m_iAmmo", 4, iAmmoType);
+    if (iNow2 == iCount)
+    {
+        if (g_cvDebug.BoolValue)
+            PrintToServer("[守望者步枪] m_iAmmo[%d] SetEntProp 读回不一致, SetEntData(偏移 %d, changeState=true) 写入成功: %d",
+                iAmmoType, off + iAmmoType * 4, iCount);
+        return;
+    }
+
+    // 双方案都读回不一致: 用 GetEntData 直读确认服务器内存最终值
+    int iNow3 = GetEntData(iMarine, off + iAmmoType * 4, 4);
     if (g_cvDebug.BoolValue)
-        PrintToServer("[守望者步枪] 设置弹药失败: 找不到 m_iAmmo 属性 (marine=%d client=%d 弹药类型=%d)",
-            iMarine, iClient, iAmmoType);
+        PrintToServer("[守望者步枪] 警告: marine %d m_iAmmo[%d] 写入读回不一致 (期望 %d, SetEntProp后=%d, SetEntData后=%d, 内存直读=%d)",
+            iMarine, iAmmoType, iCount, iNow, iNow2, iNow3);
 }
 
 // 取控制该 marine 的玩家 client (用于弹药写入回退)
@@ -601,45 +781,182 @@ int GetMarineCommander(int iMarine)
 
 // 武器被 marine 拾取时调用: 填满主武器弹匣 + 主/副备弹储备池
 //   - 主武器弹匣 m_iClip1 = 200 (写死)
-//   - 主武器备弹: marine.m_iAmmo[主弹药类型] = 200 (换弹有子弹, 不再"弹夹空")
-//   - 副武器(能量球): marine.m_iAmmo[副弹药类型] = sm_asrd_watcher_alt_ammo; 同时填武器 m_iClip2 (若有)
+//   - 主武器备弹: marine.m_iAmmo[主弹药类型] = 600 (3 个备用弹匣, 换弹有子弹)
+//   - 副武器(能量球): 武器 m_iClip2 = sm_asrd_watcher_alt_ammo, 同时写 marine.m_iAmmo[副弹药类型]
 void ApplyWatcherAmmo(int iWeapon, int iMarine)
 {
     if (iWeapon <= 0 || !IsValidEntity(iWeapon) || iMarine <= 0 || !IsValidEntity(iMarine))
         return;
 
-    int iClient = GetMarineCommander(iMarine);
-
     // 主武器弹匣填满
-    if (FindSendPropInfo(WATCHER_CLASSNAME, "m_iClip1") > 0)
+    int iClip1Off = GetEntitySendPropOff(iWeapon, "m_iClip1");
+    if (iClip1Off != -1)
+    {
         SetEntProp(iWeapon, Prop_Send, "m_iClip1", WATCHER_MAIN_AMMO);
-    else if (FindDataMapInfo(iWeapon, "m_iClip1") != -1)
-        SetEntData(iWeapon, FindDataMapInfo(iWeapon, "m_iClip1"), WATCHER_MAIN_AMMO, 4);
+    }
+    else
+    {
+        int dm = FindDataMapInfo(iWeapon, "m_iClip1");
+        if (dm != -1)
+            SetEntData(iWeapon, dm, WATCHER_MAIN_AMMO, 4, true);
+    }
 
     // 主武器备弹(储备)填满, 让换弹后有子弹
+    // 回退 0 = AS:RD 弹药注册顺序第一个 "AR2" (见 gh_asw_gamerules.cpp GetAmmoDef 1443 行)
     int iPri = GetWeaponAmmoType(iWeapon, "m_iPrimaryAmmoType");
-    if (iPri >= 0)
-        SetMarineAmmo(iMarine, iClient, iPri, WATCHER_MAIN_AMMO);
+    if (iPri < 0)
+        iPri = 0;
+    SetMarineAmmo(iMarine, iPri, WATCHER_MAIN_RESERVE);
 
     // 副武器(能量球)弹药
     int iAlt = g_cvAltAmmo.IntValue;
+    int iSec = -1;
     if (iAlt > 0)
     {
-        int iSec = GetWeaponAmmoType(iWeapon, "m_iSecondaryAmmoType");
+        // 回退 1 = AS:RD 弹药注册顺序第二个 "AR2G" (gh_asw_gamerules.cpp 1444 行)
+        iSec = GetWeaponAmmoType(iWeapon, "m_iSecondaryAmmoType");
         if (iSec < 0)
-            iSec = 6; // 回退: HL2 AMMO_AR2_ALTFIRE 常见值, 仅当读不到属性时用
-        SetMarineAmmo(iMarine, iClient, iSec, iAlt);
-        // 顺便填满副武器 clip (部分武器用 m_iClip2 存副弹药)
-        if (FindSendPropInfo(WATCHER_CLASSNAME, "m_iClip2") > 0)
-            SetEntProp(iWeapon, Prop_Send, "m_iClip2", iAlt);
-        else if (FindDataMapInfo(iWeapon, "m_iClip2") != -1)
-            SetEntData(iWeapon, FindDataMapInfo(iWeapon, "m_iClip2"), iAlt, 4);
+            iSec = 1;
+        // 填武器 m_iClip2 (AR2 副武器实际走 clip2, UsesClipsForAmmo2)
+        SetWeaponClip2(iWeapon, iAlt);
+        // 同步写储备池 (换弹补 clip2 时从池子里扣, 两边数值保持一致)
+        SetMarineAmmo(iMarine, iSec, iAlt);
     }
 
     if (g_cvDebug.BoolValue)
-        PrintToServer("[守望者步枪] 已为 marine %d 补弹: 主弹匣=%d(备弹类型=%d) 副弹数=%d(副弹类型=%d) client=%d",
-            iMarine, WATCHER_MAIN_AMMO, iPri, iAlt,
-            (iAlt > 0) ? GetWeaponAmmoType(iWeapon, "m_iSecondaryAmmoType") : -1, iClient);
+        PrintToServer("[守望者步枪] 已为 marine %d 补弹: 主弹匣=%d 主备弹=%d(类型=%d) 副弹数=%d(类型=%d)",
+            iMarine, WATCHER_MAIN_AMMO, WATCHER_MAIN_RESERVE, iPri, iAlt, iSec);
+}
+
+// 读取武器 m_iClip2 (AR2 副武器能量球 clip; 发送表在嵌套表 DT_ASWLocalWeaponData)
+int GetWeaponClip2(int iWeapon)
+{
+    if (iWeapon <= 0 || !IsValidEntity(iWeapon))
+        return 0;
+    if (GetEntitySendPropOff(iWeapon, "m_iClip2") != -1)
+        return GetEntProp(iWeapon, Prop_Send, "m_iClip2");
+    int dm = FindDataMapInfo(iWeapon, "m_iClip2");
+    if (dm != -1)
+        return GetEntProp(iWeapon, Prop_Data, "m_iClip2");
+    return 0;
+}
+
+// 写武器 m_iClip2 (能量球 clip; 发送表在嵌套表 DT_ASWLocalWeaponData)
+void SetWeaponClip2(int iWeapon, int iValue)
+{
+    if (iWeapon <= 0 || !IsValidEntity(iWeapon))
+        return;
+    int off = GetEntitySendPropOff(iWeapon, "m_iClip2");
+    if (off != -1)
+    {
+        SetEntProp(iWeapon, Prop_Send, "m_iClip2", iValue);
+        int iNow = GetEntProp(iWeapon, Prop_Send, "m_iClip2");
+        if (iNow != iValue)
+        {
+            SetEntData(iWeapon, off, iValue, 4, true);
+            if (g_cvDebug.BoolValue)
+                PrintToServer("[守望者步枪] m_iClip2 读回不一致 (期望 %d 实际 %d), 已用 SetEntData(changeState=true) 兜底",
+                    iValue, iNow);
+        }
+        return;
+    }
+    int dm = FindDataMapInfo(iWeapon, "m_iClip2");
+    if (dm != -1)
+        SetEntData(iWeapon, dm, iValue, 4, true);
+}
+
+// ============================================================================
+//  弹药箱补给: 游戏自带弹药箱对 AR2 无效 (成本表不含 AR2 弹药, GetAmmoUnitCost=9999),
+//  本插件改为: 持枪 marine 站在弹药箱补给半径内且确实缺弹药时, 每 0.25 秒从弹药箱
+//  扣单位数并补主/副备弹。只有守望者步枪为当前武器时才补 (与游戏 GetAmmoUseUnits 行为一致)。
+// ============================================================================
+void CheckAmmoBoxRefill()
+{
+    if (!g_cvEnabled.BoolValue)
+        return;
+
+    for (int w = MaxClients + 1; w < sizeof(g_bEnhancedWatcher); w++)
+    {
+        if (!g_bEnhancedWatcher[w])
+            continue;
+
+        int iMarine = GetWatcherMarine(w);
+        if (iMarine <= 0)
+            continue;
+        // 仅当守望者步枪是当前武器 (玩家正端着它站在弹药箱旁)
+        if (GetActiveWeapon(iMarine) != w)
+            continue;
+
+        int iClient = GetMarineCommander(iMarine);
+        int iPri = GetWeaponAmmoType(w, "m_iPrimaryAmmoType");
+        int iSec = GetWeaponAmmoType(w, "m_iSecondaryAmmoType");
+        int iReserve = (iPri >= 0) ? GetMarineAmmo(iMarine, iPri) : 0;
+        int iAltTarget = g_cvAltAmmo.IntValue;
+        int iClip2 = GetWeaponClip2(w);
+
+        bool bNeedPrimary = (iPri >= 0) && (iReserve < WATCHER_MAIN_RESERVE);
+        bool bNeedAlt = (iAltTarget > 0) && (iClip2 < iAltTarget);
+        if (!bNeedPrimary && !bNeedAlt)
+            continue;
+
+        // 在补给半径内找有剩余单位的弹药箱
+        float fMarinePos[3];
+        GetEntPropVector(iMarine, Prop_Send, "m_vecOrigin", fMarinePos);
+
+        int iBox = -1;
+        while ((iBox = FindEntityByClassname(iBox, "asw_ammo_drop")) != -1)
+        {
+            if (GetEntProp(iBox, Prop_Send, "m_iAmmoUnitsRemaining") <= 0)
+                continue;
+
+            float fBoxPos[3];
+            GetEntPropVector(iBox, Prop_Send, "m_vecOrigin", fBoxPos);
+            float fDx = fMarinePos[0] - fBoxPos[0];
+            float fDy = fMarinePos[1] - fBoxPos[1];
+            float fDz = fMarinePos[2] - fBoxPos[2];
+            if (fDx * fDx + fDy * fDy + fDz * fDz > WATCHER_BOX_RADIUS * WATCHER_BOX_RADIUS)
+                continue;
+
+            // ── 补给主武器备弹 ──
+            if (bNeedPrimary)
+            {
+                int iGive = WATCHER_BOX_PRIMARY_GIVE;
+                if (iReserve + iGive > WATCHER_MAIN_RESERVE)
+                    iGive = WATCHER_MAIN_RESERVE - iReserve;
+                if (iGive > 0)
+                {
+                    SetMarineAmmo(iMarine, iPri, iReserve + iGive);
+                    int iUnits = GetEntProp(iBox, Prop_Send, "m_iAmmoUnitsRemaining");
+                    int iCost = (iGive * WATCHER_BOX_PRIMARY_COST) / WATCHER_BOX_PRIMARY_GIVE;
+                    if (iCost < 1)
+                        iCost = 1;
+                    int iLeft = iUnits - iCost;
+                    if (iLeft < 0)
+                        iLeft = 0;
+                    SetEntProp(iBox, Prop_Send, "m_iAmmoUnitsRemaining", iLeft);
+                    if (g_cvDebug.BoolValue)
+                        PrintToServer("[守望者步枪] 弹药箱补给: marine %d 主备弹 %d -> %d (弹药箱剩余 %d 单位, client %d)",
+                            iMarine, iReserve, iReserve + iGive, iLeft, iClient);
+                }
+            }
+
+            // ── 补给能量球 (clip2) ──
+            if (bNeedAlt)
+            {
+                int iNewClip2 = iClip2 + WATCHER_BOX_ALT_GIVE;
+                if (iNewClip2 > iAltTarget)
+                    iNewClip2 = iAltTarget;
+                SetWeaponClip2(w, iNewClip2);
+                if (iSec >= 0)
+                    SetMarineAmmo(iMarine, iSec, iNewClip2);
+                if (g_cvDebug.BoolValue)
+                    PrintToServer("[守望者步枪] 弹药箱补给: marine %d 能量球 %d -> %d (client %d)",
+                        iMarine, iClip2, iNewClip2, iClient);
+            }
+
+            break; // 每次只补给一个弹药箱
+        }
+    }
 }
 
 // 命令(管理员): 在身边掉落增强步枪
