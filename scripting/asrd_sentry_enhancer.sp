@@ -6,7 +6,7 @@
  *  ── 这个插件做什么 ─────────────────────────────────────
  *  1. 增强地图里的哨戒塔: 生命/射速/射程/弹药/伤害 乘以倍率,
  *     可选无敌、可选关闭对队友的误伤
- *  2. 把哨戒塔放到角色头顶, 当"随行炮台" (sm_sentryhat, 每人最多 3 座)
+ *  2. 把哨戒塔放到角色头顶, 当"随行炮台" (sm_sentryhat, 每人最多 1 座)
  *  3. 在画面右上角显示哨戒塔信息 HUD (sm_sentryhud)
  *  4. 一键补满地图上所有哨戒塔的生命与弹药 (sm_sentry_refill, 供积分插件 /buy 5 调用)
  *  5. 强制关闭无限弹药: 持续把引擎的 asw_sentry_infinite_ammo 压成 0,
@@ -69,7 +69,7 @@
 #define PLUGIN_VERSION "6.5.5"
 
 // 每个玩家头顶哨戒塔的数量上限 (写死, 不提供 ConVar 让挑战/玩家随意调整)
-#define SENTRY_HAT_LIMIT 3
+#define SENTRY_HAT_LIMIT 1
 
 // 子弹伤害倍率的基础伤害值 (来自官方源码 asw_sentry_top*.cpp 的默认伤害):
 //   机枪 GetSentryDamage=10*m_fDamageScale, 炮 fBaseGrenadeDamage=60, 喷火 GetSentryDamage=4*m_fDamageScale
