@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 积分机制 (Points)
- *  版本 1.22.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.23.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  引入一套全队共享的积分经济:
@@ -27,7 +27,7 @@
  *  Plugin_Continue 放行给原插件执行:
  *      sm_nukepub    → 扣 sm_asrd_points_nuke_cost   (需原插件 sm_asrd_nuke_public 1)
  *      sm_betraypub  → 扣 sm_asrd_points_betray_cost (需原插件 sm_asrd_betray_public 1)
- *      sm_power_up   → 扣 sm_asrd_points_power_cost  (需原插件 sm_asrd_power_public 1)
+ *      sm_power_up   → 扣 sm_asrd_points_power_cost, 购买一次全体在游戏玩家各升 1 级 (需原插件 sm_asrd_power_public 1)
  *      sm_power_down → 扣 sm_asrd_points_power_cost  (同上)
  *      sm_power_reset→ 免费 (只恢复默认, 不收积分)
  *      sm_sentrydrop → 扣 sm_asrd_points_sentry_cost (需哨戒塔插件 sm_asrd_sentry_drop_public 1)
@@ -55,11 +55,12 @@
  *
  *  ── 命令 ────────────────────────────────────────────────
  *   /buy [1] [2]      玩家: 聊天框购买 (唯一扣积分入口, 无控制台命令)
- *                        /buy = 显示格式; /buy 1=属性强化+1; /buy 2=核弹
+ *                        /buy = 显示格式; /buy 1=全队属性强化+1; /buy 2=核弹
  *                        (核弹购买后 nuke_cooldown 秒内不能再买, 默认 3);
  *                        /buy 3 [1-6]=叛变虫群 (/buy 3 无选项=drone×10)
- *                        (强化已满级时 /buy 1 转为加血: 血量<800 花
- *                        power_cost 恢复 200 血, 封顶最大血量)
+ *                        (强化等级全队共享: 任一玩家购买一次, 全体在游戏玩家
+ *                        各升 1 级 (观战者不升); 全部玩家满级后 /buy 1 转为
+ *                        全体加血: 各玩家无论当前血量一律 +200, 封顶各自最大血量)
  *                        /buy 4 [编号]=强化哨戒塔箱 (0机枪 1炮塔,
  *                        无选项默认 0=机枪; 喷火/冰冻暂不支持);
  *                        /buy 5=补充全部哨戒塔弹药
@@ -94,7 +95,7 @@
  *   sm_asrd_points_nuke_cooldown 核弹购买冷却秒数 (默认 3; 同一玩家购买后
  *                                此时间内不能再购买核弹; 0=不限制)
  *   sm_asrd_points_betray_cost 叛变虫群价格 (默认 100, 0=不设门槛)
- *   sm_asrd_points_power_cost 强化等级价格 (默认 400, 0=不设门槛)
+ *   sm_asrd_points_power_cost 强化等级价格 (默认 800, 0=不设门槛; 购买一次全队共享升级)
  *   sm_asrd_points_sentry_cost 强化哨戒塔价格 (默认 300, 0=不设门槛)
  *   sm_asrd_points_refill_cost 补充全部哨戒塔弹药价格 (默认 500, 0=不设门槛)
  *   sm_asrd_points_chainsaw_cost 增强电锯价格 (默认 300, 0=不设门槛)
@@ -123,7 +124,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Points"
-#define PLUGIN_VERSION "1.22.0"
+#define PLUGIN_VERSION "1.23.0"
 
 // 与 asrd_ammohead 联动: 玩家 /buy 7 经此 native 在"自己"头顶放置标准(游戏默认)弹药箱。
 // native 由 asrd_ammohead 注册; 本插件用 MarkNativeAsOptional 标记为可选,
@@ -159,9 +160,8 @@ native int ASRDAmmoHead_PlaceDefaultOnClient(int client);
 char g_sBetrayAlias[BUY_BETRAY_VARIANTS + 1][16] = { "", "drone", "buzzer", "ranger", "shield", "mortar", "shaman" };
 int  g_iBetrayCount[BUY_BETRAY_VARIANTS + 1] = { 0, 10, 20, 10, 5, 10, 5 };
 
-// ─── 满级加血 (强化满级后再购买 /buy 1): 血量低于阈值时可花积分治疗 ─
-#define MAX_LEVEL_HEAL_THRESHOLD 800   // 当前血量低于此值才可购买满级加血 (>=800 不操作)
-#define MAX_LEVEL_HEAL_AMOUNT   200    // 每次恢复量 (当前血量+200, 封顶最大血量)
+// ─── 满级加血 (全部玩家满级后再购买 /buy 1): 全体在游戏玩家统一加血 ─
+#define MAX_LEVEL_HEAL_AMOUNT   200    // 每次全体加血量 (每个玩家当前血量+200, 封顶其最大血量)
 #define MAX_POWER_LEVEL_MAXHP   1000   // 强化插件满级(L5)最大血量 (代码固定) — 满级判断以此为准
 
 // 友军虫统一 targetname (镜像 asrd_alien_civilwar 的 INFECTED_NAME)
@@ -305,7 +305,7 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 0.0
     );
     g_cvPowerCost = CreateConVar(
-        "sm_asrd_points_power_cost", "400",
+        "sm_asrd_points_power_cost", "800",
         "强化等级(sm_power_up/sm_power_down)积分价格 (0=不设积分门槛; sm_power_reset 免费)",
         FCVAR_NOTIFY, true, 0.0
     );
@@ -1161,17 +1161,16 @@ void BuyPowerFromChat(int client, bool bUp)
 {
     if (bUp)
     {
-        // 满级判断以实际最大血量为准 (IsMarineMaxLevel), 不再依赖镜像 g_iPlayerLevel:
-        // 镜像只随聊天框购买更新, 与 sm_power_set 指定 / 绑定键直调 sm_power_up 可能不同步,
-        // 旧逻辑会让满级玩家误走扣分放行(原插件不强化) → 扣分但血量不变
-        if (IsMarineMaxLevel(client))
+        // 强化等级全队共享: 只要有在游戏中的玩家还没满级, 购买一次就让
+        // 所有在游戏玩家各升 1 级 (满级判断以实际最大血量为准 IsMarineMaxLevel,
+        // 不依赖镜像 g_iPlayerLevel — 镜像可能被 sm_power_set / sm_power_reset 干扰)
+        if (!HasActiveNonMaxPlayer())
         {
+            // 全部满级 → 转为满级加血 (同样作用于全体在游戏玩家)
             BuyMaxLevelHeal(client);
             return;
         }
-        if (PurchaseFromChat(client, "sm_power_up", "", g_cvPowerCost,
-            "强化等级", "sm_asrd_power_enabled", "sm_asrd_power_public"))
-            g_iPlayerLevel[client]++;
+        BuyPowerLevelUpShared(client);
     }
     else
     {
@@ -1190,6 +1189,99 @@ void BuyPowerFromChat(int client, bool bUp)
         if (PurchaseFromChat(client, "sm_power_down", "", g_cvPowerCost,
             "强化等级", "sm_asrd_power_enabled", "sm_asrd_power_public"))
             g_iPlayerLevel[client]--;
+    }
+}
+
+// ============================================================================
+//  有没有在游戏中且未满级的玩家 (决定 /buy 1 走升级还是满级加血)
+// ============================================================================
+bool HasActiveNonMaxPlayer()
+{
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (IsActivePlayer(i) && !IsMarineMaxLevel(i))
+            return true;
+    }
+    return false;
+}
+
+// ============================================================================
+//  强化等级全队共享购买 (仅聊天框入口): 校验 → 扣分 → 让全体在游戏玩家各升 1 级
+//    - 满级玩家不再重复触发原插件升级 (sm_power_up 对其已无效果)
+//    - 价格/开关/积分不足等提示仅对购买者本人可见
+// ============================================================================
+void BuyPowerLevelUpShared(int client)
+{
+    // 不在游戏中 (未控制任何陆战队员) 的玩家不能消费积分
+    if (!IsActivePlayer(client))
+    {
+        PrintToChat(client, "\x04[积分]\x01 不在游戏中的玩家不能购买, 请先加入游戏");
+        return;
+    }
+
+    // 积分机制关闭: 禁止购买
+    if (!g_cvEnabled.BoolValue)
+    {
+        PrintToChat(client, "\x04[积分]\x01 积分机制已关闭, 暂时无法购买强化等级");
+        return;
+    }
+
+    // 原插件总开关
+    ConVar cvEnabled = FindConVar("sm_asrd_power_enabled");
+    if (cvEnabled != null && !cvEnabled.BoolValue)
+    {
+        PrintToChat(client, "\x04[积分]\x01 强化等级 功能已禁用");
+        return;
+    }
+    // 原插件 public 开关
+    ConVar cvPublic = FindConVar("sm_asrd_power_public");
+    if (cvPublic == null)
+    {
+        PrintToChat(client, "\x04[积分]\x01 强化等级 对应插件未加载, 无法购买");
+        return;
+    }
+    if (!cvPublic.BoolValue)
+    {
+        PrintToChat(client, "\x04[积分]\x01 强化等级 未对玩家开放 (管理员需设置 \x05sm_asrd_power_public\x01 1)");
+        return;
+    }
+
+    int iCost = GetScaledCost(g_cvPowerCost);
+    // 价格=0: 不设门槛, 直接全体升级, 不扣分
+    if (iCost <= 0)
+    {
+        LevelUpAllActive();
+        return;
+    }
+
+    if (g_iPoints < iCost)
+    {
+        PrintToChat(client, "\x04[积分]\x01 积分不足: 强化等级需要 \x05%d\x01 积分, 当前 \x05%d\x01 积分",
+            iCost, g_iPoints);
+        return;
+    }
+
+    g_iPoints -= iCost;
+    RefreshHud();
+    PrintToChatAll("\x04[积分]\x01 %N 花费 \x05%d\x01 积分购买【强化等级】, 全队等级 +1, 剩余 \x05%d\x01 积分",
+        client, iCost, g_iPoints);
+
+    LevelUpAllActive();
+}
+
+// ============================================================================
+//  让所有在游戏中且未满级的玩家各升 1 级 (全队共享强化核心)
+// ============================================================================
+void LevelUpAllActive()
+{
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsActivePlayer(i))
+            continue;
+        if (IsMarineMaxLevel(i))
+            continue;   // 已满级, 无需再升
+        FakeClientCommand(i, "sm_power_up");
+        g_iPlayerLevel[i]++;
     }
 }
 
@@ -1392,10 +1484,9 @@ bool IsMarineMaxLevel(int client)
 }
 
 // ============================================================================
-//  满级加血: 强化满级后再购买 /buy 1 的后续逻辑
-//    当前血量 >= 800            → 不做任何操作, 仅提示
-//    当前血量 < 800 且积分够    → 扣 power_cost, 当前血量 +200 (封顶最大血量)
-//    当前血量 < 800 但积分不足  → 不做任何操作, 仅提示
+//  满级加血: 全部玩家满级后再购买 /buy 1 的后续逻辑
+//    全体在游戏玩家 (含购买者) 无论当前血量多少, 一律各 +200 (封顶其最大血量)
+//    已阵亡 (m_iHealth<=0) 的玩家不治疗
 // ============================================================================
 void BuyMaxLevelHeal(int client)
 {
@@ -1407,34 +1498,16 @@ void BuyMaxLevelHeal(int client)
     }
 
     int iCostML = GetScaledCost(g_cvPowerCost);
-    // 价格=0: 不提供加血, 放行原插件自行处理 (会提示已达最高等级)
+    // 价格=0: 不提供加血
     if (iCostML <= 0)
     {
-        FakeClientCommand(client, "sm_power_up");
+        PrintToChat(client, "\x04[积分]\x01 强化加血未设积分门槛, 已满级无额外加血");
         return;
     }
 
     if (!IsActivePlayer(client))
     {
         PrintToChat(client, "\x04[积分]\x01 不在游戏中的玩家不能购买, 请先加入游戏");
-        return;
-    }
-
-    int marine = GetClientMarine(client);
-    if (marine <= 0)
-        return;
-
-    int iHealth = GetEntProp(marine, Prop_Data, "m_iHealth");
-    if (iHealth <= 0)
-    {
-        PrintToChat(client, "\x04[积分]\x01 你已阵亡, 无法购买满级加血");
-        return;
-    }
-
-    // 血量 >= 800: 不做任何操作, 仅提示
-    if (iHealth >= MAX_LEVEL_HEAL_THRESHOLD)
-    {
-        PrintToChat(client, "\x04[积分]\x01 强化已满级且血量充足, 无需购买");
         return;
     }
 
@@ -1448,16 +1521,28 @@ void BuyMaxLevelHeal(int client)
 
     g_iPoints -= iCostML;
     RefreshHud();
-    PrintToChatAll("\x04[积分]\x01 %N 花费 \x05%d\x01 积分购买【满级加血】, 剩余 \x05%d\x01 积分",
-        client, iCostML, g_iPoints);
+    PrintToChatAll("\x04[积分]\x01 %N 花费 \x05%d\x01 积分购买【满级加血】, 全队恢复 \x05%d\x01 血, 剩余 \x05%d\x01 积分",
+        client, iCostML, MAX_LEVEL_HEAL_AMOUNT, g_iPoints);
 
-    // 治疗: 当前血量 +200, 封顶最大血量
-    int iMaxHealth = GetEntProp(marine, Prop_Data, "m_iMaxHealth");
-    int iNew = iHealth + MAX_LEVEL_HEAL_AMOUNT;
-    if (iMaxHealth > 0 && iNew > iMaxHealth)
-        iNew = iMaxHealth;
-    SetEntProp(marine, Prop_Data, "m_iHealth", iNew);
-    PrintToChat(client, "\x04[积分]\x01 血量已恢复至 \x05%d/%d\x01", iNew, iMaxHealth);
+    // 全体在游戏玩家统一加血: 当前血量 +200, 封顶各自最大血量 (满级=1000)
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsActivePlayer(i))
+            continue;
+        int marine = GetClientMarine(i);
+        if (marine <= 0)
+            continue;
+        int iHealth = GetEntProp(marine, Prop_Data, "m_iHealth");
+        if (iHealth <= 0)
+            continue;   // 阵亡不治疗
+
+        int iMaxHealth = GetEntProp(marine, Prop_Data, "m_iMaxHealth");
+        int iNew = iHealth + MAX_LEVEL_HEAL_AMOUNT;
+        if (iMaxHealth > 0 && iNew > iMaxHealth)
+            iNew = iMaxHealth;
+        SetEntProp(marine, Prop_Data, "m_iHealth", iNew);
+        PrintToChat(i, "\x04[积分]\x01 血量已升至 \x05%d/%d\x01", iNew, iMaxHealth);
+    }
 }
 
 // ============================================================================
@@ -1517,7 +1602,7 @@ void ShowBuyHelp(int client)
     PrintToChat(client, "欢迎 \x05%N\x01! 当前总积分: \x05%d\x01   用法: \x05/buy <编号> [选项]", client, g_iPoints);
     if (g_cvCostMult.FloatValue != 1.0)
         PrintToChat(client, "  (当前购买倍率 \x05x%.2f\x01: 以下价格已按此倍率缩放)", g_cvCostMult.FloatValue);
-    PrintToChat(client, "  \x05/buy 1\x01  属性强化 +1 (%d 分; 满级后转为加血)", GetScaledCost(g_cvPowerCost));
+    PrintToChat(client, "  \x05/buy 1\x01  全队属性强化 +1 (%d 分; 全体满级后转为全体加血)", GetScaledCost(g_cvPowerCost));
     PrintToChat(client, "  \x05/buy 2\x01  战术核弹 (%d 分, 购买后 %d 秒内不能再买)", GetScaledCost(g_cvNukeCost), g_cvNukeCooldown.IntValue);
     PrintToChat(client, "  \x05/buy 3 [1-6]\x01  友军虫群 (%d 分): 1=工蜂 2=蜂群 3=游侠 4=盾甲虫 5=迫击炮虫 6=治疗虫", GetScaledCost(g_cvBetrayCost));
     PrintToChat(client, "  \x05/buy 4 <0/1>\x01  强化哨戒塔箱 (%d 分): 0=机枪 1=炮塔", GetScaledCost(g_cvSentryCost));
