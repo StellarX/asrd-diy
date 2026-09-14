@@ -1611,6 +1611,7 @@ void ShowBuyHelp(int client)
     PrintToChat(client, "  \x05/buy 6 2\x01  守望者脉冲步枪 (%d 分, 掉落在身边, 击杀计积分)", GetScaledCost(g_cvRifleCost));
     PrintToChat(client, "  \x05/buy 7\x01  头顶弹药箱 (%d 分, 标准弹药放到自己头顶, 游戏默认/有限/同时仅1个)", GetScaledCost(g_cvAmmoHeadCost));
     PrintToChat(client, "  \x05/buy 8\x01  弹药箱 (%d 分, 在身前地面掉落一个原版弹药箱, 走过去补弹)", GetScaledCost(g_cvAmmoDropCost));
+    PrintToChat(client, "  \x05/hat\x01  将哨戒塔置于头顶");
     PrintToChat(client, "  快捷指令: \x05/1\x01 强化   \x05/2\x01 核弹   \x05/3 [1-6]\x01 虫群   \x05/4 [0/1]\x01 哨戒塔箱   \x05/5\x01 补弹药   \x05/6 [1|2]\x01 武器箱(1=电锯 2=脉冲步枪)   \x05/7\x01 头顶弹药箱   \x05/8\x01 弹药箱");
     PrintToChat(client, "  例: \x05/3 2\x01 = /buy 3 2 (游侠)   \x05/4 1\x01 = /buy 4 1 (炮塔)   \x05/6 2\x01 = /buy 6 2 (脉冲步枪)");
     PrintToChat(client, "  积分: \x05通过击杀虫族获取\x01");

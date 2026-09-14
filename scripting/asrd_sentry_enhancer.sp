@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 哨戒塔增强 + 头顶哨戒塔 + 信息 HUD
- *  版本 6.5.5  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 6.6.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ─────────────────────────────────────
  *  1. 增强地图里的哨戒塔: 生命/射速/射程/弹药/伤害 乘以倍率,
@@ -13,6 +13,13 @@
  *     覆盖挑战(甚至其它插件)设置的"哨戒塔无线弹药", 保证弹药正常消耗
  *  6. 保留拆卸后的剩余弹药: 玩家部署/拆除/再部署哨戒塔时, 弹药不会被自动补满
  *     (插件不再覆盖引擎带回箱子的剩余量, 并把 rd_sentry_refilled_by_dismantling 压成 0)
+ *  7. 缩短部署/拆卸时间: 引擎把部署写死 7 秒 (asw_sentry_base.cpp 的
+ *     SENTRY_ASSEMBLE_TIME), 按住拆卸写死 2 秒 (asw_player_shared.h 的
+ *     ASW_USE_KEY_HOLD_SENTRY_TIME)。本插件通过直接推进网络属性压缩这两个
+ *     时间, 默认各 0.3 秒, 可用 ConVar 调整 (详见下方 ConVar 列表)。
+ *     ─ 部署: 按住使用键 0.2 秒后引擎才开始装配 (ASW_USE_HOLD_START),
+ *       该 0.2 秒延迟无法压缩, 实际部署 ≈ 0.2 + sm_asrd_sentry_deploy_time
+ *     ─ 拆卸: 按住达到 sm_asrd_sentry_dismantle_time 即走引擎原生拆卸流程
  *
  *  ── 玩家命令 (控制台输入, 或在聊天栏加 ! 前缀) ───────────
  *   sm_sentryhud      开关右上角信息 HUD (默认关)
@@ -53,6 +60,10 @@
  *                                     独立于总开关, 0=不干预, 1=持续压制)
  *   sm_asrd_sentry_no_dismantle_refill 拆除哨戒塔不补满弹药 (默认 1;
  *                                     强制 rd_sentry_refilled_by_dismantling=0)
+ *   sm_asrd_sentry_deploy_time         部署(装配)时间 秒 (默认 0.3;
+ *                                     0=立即部署, 7=引擎默认速度)
+ *   sm_asrd_sentry_dismantle_time      按住拆卸时间 秒 (默认 0.3;
+ *                                     0=按下即拆, 2=引擎默认速度)
  *   sm_asrd_sentry_debug              调试输出 (默认 0)
  *
  *  依赖: SourceMod 1.11+ (不依赖任何扩展)
@@ -66,7 +77,13 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Sentry Enhancer + Sentry Hat"
-#define PLUGIN_VERSION "6.5.5"
+#define PLUGIN_VERSION "6.6.0"
+
+// 引擎硬编码的部署/拆卸时间 (来自官方源码, 供对照, 不是插件能改的常量):
+//   asw_sentry_base.cpp  : SENTRY_ASSEMBLE_TIME = 7.0f      (部署/装配)
+//   asw_player_shared.h  : ASW_USE_KEY_HOLD_SENTRY_TIME = 2.0 (按住拆卸)
+#define SENTRY_ENGINE_ASSEMBLE_TIME       7.0
+#define SENTRY_ENGINE_HOLD_DISMANTLE_TIME 2.0
 
 // 每个玩家头顶哨戒塔的数量上限 (写死, 不提供 ConVar 让挑战/玩家随意调整)
 #define SENTRY_HAT_LIMIT 1
@@ -113,6 +130,8 @@ ConVar g_cvNoDismantleRefill;      // 拆除哨戒塔不补满弹药 开关
 ConVar g_cvEngineDismantleRefill;  // 引擎/挑战定义的 rd_sentry_refilled_by_dismantling (找到后缓存)
 bool   g_bFixingDismantleRefill;   // 正在压制拆除补弹 (防止与变更钩子互相递归)
 bool   g_bDismantleGuardWarned;    // 找不到引擎 ConVar 时只报错一次
+ConVar g_cvDeployTime;    // 部署(装配)时间 秒 (0=立即, 7=引擎默认)
+ConVar g_cvDismantleTime; // 按住拆卸时间 秒 (0=按下即拆, 2=引擎默认)
 
 // ============================================================================
 //  属性偏移缓存
@@ -131,6 +150,14 @@ int g_offBaseGunType      = -1;
 int g_offBaseSentryTop    = -1;
 int g_offBaseTakedamage   = -1;
 int g_offBaseCollisionGrp = -1;  // 网络属性, 用 FindSendPropInfo 查
+// 部署/拆卸加速用到的网络属性 (asw_sentry_base.cpp 的 SENDTABLE):
+int g_offBaseAssembled          = -1;  // m_bAssembled          是否已装配完成
+int g_offBaseIsInUse            = -1;  // m_bIsInUse            是否有角色正在使用(装配中)
+int g_offBaseAssembleProgress   = -1;  // m_fAssembleProgress   装配进度 0~1
+// 玩家按住使用键相关的网络属性 (asw_player.cpp 的 SENDTABLE):
+int g_offPlayerUseKeyDownTime = -1;    // m_flUseKeyDownTime  玩家按下使用键的游戏时刻
+int g_offPlayerUseKeyDownEnt  = -1;    // m_hUseKeyDownEnt    按下时刻瞄准的实体
+bool g_bPlayerUsePropsCached  = false; // 玩家偏移是否已缓存 (需要从在场玩家的网络类名查)
 // 炮口属性偏移 (这四项在哨戒塔的通用炮口基类里, 各类型塔通用)
 int g_offTopShootRange    = -1;
 int g_offTopNextFireTime  = -1;
@@ -302,6 +329,21 @@ public void OnPluginStart()
         "拆掉哨戒塔时不要补满弹药 (强制 rd_sentry_refilled_by_dismantling=0), 让重部署保留箱内剩余 (0=不干预, 1=持续压制)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
+
+    g_cvDeployTime = CreateConVar(
+        "sm_asrd_sentry_deploy_time", "0.3",
+        "哨戒塔部署(装配)时间 秒 (引擎默认7秒; 0=按住后立即部署, 0.3=约0.5秒实际部署, 7=不干预走引擎速度)",
+        FCVAR_NOTIFY, true, 0.0, true, SENTRY_ENGINE_ASSEMBLE_TIME
+    );
+    g_cvDismantleTime = CreateConVar(
+        "sm_asrd_sentry_dismantle_time", "0.3",
+        "哨戒塔按住拆卸时间 秒 (引擎默认2秒; 0=按下即拆, 0.3=按住约0.3秒拆卸, 2=不干预走引擎速度)",
+        FCVAR_NOTIFY, true, 0.0, true, SENTRY_ENGINE_HOLD_DISMANTLE_TIME
+    );
+
+    // 部署/拆卸加速的属性偏移不在这里查: 网络类名必须从实体实例动态获取,
+    // 硬编码类名可能匹配不上导致偏移全部 -1 (见 CacheBasePropOffsets /
+    // CachePlayerUsePropOffsets)。
 
     // 把以上 ConVar 的设置自动保存/读取到配置文件
     AutoExecConfig(true, "asrd_sentry_enhancer");
@@ -656,14 +698,62 @@ void CacheBasePropOffsets(int iBase)
     g_offBaseTakedamage   = FindDataMapInfo(iBase, "m_takedamage");
     g_offBaseCollisionGrp = FindSendPropInfo("asw_sentry_base", "m_CollisionGroup");
 
+    // 部署/拆卸加速属性: 网络属性, 必须用塔自己的网络类名查
+    // (GetEntityNetClass 从实体实例取网络类名, 和 FindSendPropInfo 内部匹配一致)
+    char sNetClass[64];
+    if (GetEntityNetClass(iBase, sNetClass, sizeof(sNetClass)))
+    {
+        g_offBaseAssembled        = FindSendPropInfo(sNetClass, "m_bAssembled");
+        g_offBaseIsInUse          = FindSendPropInfo(sNetClass, "m_bIsInUse");
+        g_offBaseAssembleProgress = FindSendPropInfo(sNetClass, "m_fAssembleProgress");
+    }
+
     g_bBasePropsCached = true;
 
     if (g_cvDebug.BoolValue)
     {
-        PrintToServer("[哨戒塔] base 属性偏移缓存完成:");
+        PrintToServer("[哨戒塔] base 属性偏移缓存完成 (%s):", sNetClass);
         PrintToServer("  MaxHealth=%d Health=%d Ammo=%d MaxAmmo=%d GunType=%d SentryTop=%d Takedamage=%d Coll=%d",
             g_offBaseMaxHealth, g_offBaseHealth, g_offBaseAmmo, g_offBaseMaxAmmo, g_offBaseGunType,
             g_offBaseSentryTop, g_offBaseTakedamage, g_offBaseCollisionGrp);
+        PrintToServer("  部署/拆卸: Assembled=%d IsInUse=%d Progress=%d",
+            g_offBaseAssembled, g_offBaseIsInUse, g_offBaseAssembleProgress);
+    }
+}
+
+// ============================================================================
+//  玩家按住使用键属性的偏移缓存: 从任意一个在场玩家的网络类名查
+//  (网络类名必须从实体实例获取, 硬编码 "player"/"CASW_Player" 可能匹配不上)
+// ============================================================================
+void CachePlayerUsePropOffsets()
+{
+    if (g_bPlayerUsePropsCached)
+        return;
+
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsClientInGame(i))
+            continue;
+
+        char sNetClass[64];
+        if (!GetEntityNetClass(i, sNetClass, sizeof(sNetClass)))
+            continue;
+
+        g_offPlayerUseKeyDownTime = FindSendPropInfo(sNetClass, "m_flUseKeyDownTime");
+        g_offPlayerUseKeyDownEnt  = FindSendPropInfo(sNetClass, "m_hUseKeyDownEnt");
+        g_bPlayerUsePropsCached = true;
+
+        if (g_offPlayerUseKeyDownTime < 0 || g_offPlayerUseKeyDownEnt < 0)
+        {
+            LogError("[AS:RD] 玩家使用键网络属性未找到 (%s: time=%d ent=%d), 拆卸加速被禁用",
+                sNetClass, g_offPlayerUseKeyDownTime, g_offPlayerUseKeyDownEnt);
+        }
+        else if (g_cvDebug.BoolValue)
+        {
+            PrintToServer("[哨戒塔] 玩家使用键偏移缓存完成 (%s): UseKeyDownTime=%d UseKeyDownEnt=%d",
+                sNetClass, g_offPlayerUseKeyDownTime, g_offPlayerUseKeyDownEnt);
+        }
+        return;
     }
 }
 
@@ -1117,6 +1207,100 @@ public void OnDismantleGuardCvarChanged(ConVar convar, const char[] oldValue, co
 }
 
 // ============================================================================
+//  部署时间压缩 (每帧)
+//  引擎把部署写死为 7 秒: 有陆战队员按住使用键时, asw_sentry_base.cpp 的
+//  NPCUsing 每帧把 m_fAssembleProgress 加上 deltatime/7。本函数在装配进行中
+//  (m_bIsInUse && !m_bAssembled) 额外推进进度, 让它按 sm_asrd_sentry_deploy_time
+//  的节奏走完, 到 1.0 后引擎下一帧会自动完成装配 (生成炮口、m_bAssembled=true)。
+//  注意: 按住使用键 0.2 秒后引擎才开始装配 (ASW_USE_HOLD_START), 无法压缩。
+// ============================================================================
+void Frame_ApplyDeployTime()
+{
+    float fDeployTime = g_cvDeployTime.FloatValue;
+    if (fDeployTime >= SENTRY_ENGINE_ASSEMBLE_TIME)   // 设到 7 秒=引擎默认, 不干预
+        return;
+
+    // 每帧要加的进度: 配置时间越短加得越多; 0=立即部署, 一帧拉满
+    float fAdd;
+    if (fDeployTime <= 0.0)
+        fAdd = 2.0;
+    else
+        fAdd = GetTickInterval() / fDeployTime;
+
+    int entity = -1;
+    while ((entity = FindEntityByClassname(entity, "asw_sentry_base")) != -1)
+    {
+        // 偏移还没缓存时, 用这座塔的网络类名建立 (有实体实例才能拿到正确类名)
+        CacheBasePropOffsets(entity);
+        if (g_offBaseAssembled < 0 || g_offBaseIsInUse < 0 || g_offBaseAssembleProgress < 0)
+            return;   // 网络属性没找到, 部署加速不可用
+
+        if (!(GetEntData(entity, g_offBaseIsInUse, 1) & 1))      // 没有角色在使用
+            continue;
+        if (GetEntData(entity, g_offBaseAssembled, 1) & 1)       // 已经装配完成
+            continue;
+
+        float fProgress = GetEntDataFloat(entity, g_offBaseAssembleProgress);
+        fProgress += fAdd;
+        if (fProgress > 1.0)
+            fProgress = 1.0;
+        SetEntDataFloat(entity, g_offBaseAssembleProgress, fProgress, true);
+    }
+}
+
+// ============================================================================
+//  拆卸时间压缩 (每帧)
+//  引擎把拆卸写死为按住 2 秒 (asw_player_shared.h 的 ASW_USE_KEY_HOLD_SENTRY_TIME):
+//  asw_player_shared.cpp 的 PlayerUse 里, 当
+//      gpGlobals->curtime - m_flUseKeyDownTime >= 2.0
+//  时发出 ASW_USE_HOLD_RELEASE_FULL, 触发 asw_sentry_base.cpp 的 ActivateUseIcon
+//  走原生拆卸流程 (生成拾取箱、还弹药、移除塔身)。
+//  本函数在玩家按住使用键、目标是已装配哨戒塔、且按住时长达到配置值时,
+//  把 m_flUseKeyDownTime 改写为"2 秒前", 让引擎下一帧立刻判定已按住满 2 秒。
+//  这样拆卸完全走引擎原生流程, 只是触发时间提前。0=按下即拆。
+// ============================================================================
+void Frame_ApplyDismantleTime()
+{
+    float fDismantleTime = g_cvDismantleTime.FloatValue;
+    if (fDismantleTime >= SENTRY_ENGINE_HOLD_DISMANTLE_TIME)  // 设到 2 秒=引擎默认, 不干预
+        return;
+
+    // 玩家偏移还没缓存时, 从在场玩家的网络类名建立
+    CachePlayerUsePropOffsets();
+    if (g_offBaseAssembled < 0 || g_offPlayerUseKeyDownTime < 0 || g_offPlayerUseKeyDownEnt < 0)
+        return;
+
+    float fGameTime = GetGameTime();
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsClientInGame(i) || IsFakeClient(i))
+            continue;
+        if (!(GetClientButtons(i) & IN_USE))
+            continue;
+
+        float fDownTime = GetEntDataFloat(i, g_offPlayerUseKeyDownTime);
+        if (fDownTime <= 0.0)                       // 还没按下过使用键
+            continue;
+        if (fGameTime - fDownTime < fDismantleTime) // 按住时长还没到配置值
+            continue;
+
+        int iTarget = GetEntDataEnt2(i, g_offPlayerUseKeyDownEnt);
+        if (iTarget <= 0 || !IsValidEntity(iTarget))
+            continue;
+
+        char sClass[64];
+        GetEntityClassname(iTarget, sClass, sizeof(sClass));
+        if (!StrEqual(sClass, "asw_sentry_base", false))
+            continue;
+        if (!(GetEntData(iTarget, g_offBaseAssembled, 1) & 1))   // 只拆已装配的塔
+            continue;
+
+        // 把按住时刻改写为 2 秒前 → 引擎下一帧走 HOLD_RELEASE_FULL 原生拆卸
+        SetEntDataFloat(i, g_offPlayerUseKeyDownTime, fGameTime - SENTRY_ENGINE_HOLD_DISMANTLE_TIME, true);
+    }
+}
+
+// ============================================================================
 //  每游戏帧执行: 补采炮口、射速加速、无敌维持、头顶塔跟随
 //  只遍历有记录的塔 (通常不到 20 个), 不扫描全部实体
 // ============================================================================
@@ -1127,6 +1311,10 @@ public void OnGameFrame()
 
     // "拆除不补满弹药" 同样每帧保证 (挑战可能周期性重设)
     ForceNoDismantleRefill();
+
+    // 部署/拆卸时间压缩 (独立于哨戒塔记录列表, 见 Frame_ApplyDeployTime)
+    Frame_ApplyDeployTime();
+    Frame_ApplyDismantleTime();
 
     if (!g_cvEnabled.BoolValue)
         return;
@@ -2212,6 +2400,9 @@ public Action Command_SentryDump(int client, int args)
     PrintToConsole(client, "top  (cached=%d): ShootRange=%d NextFire=%d FriendlyFire=%d SentryBase=%d",
         g_bTopPropsCached, g_offTopShootRange, g_offTopNextFireTime, g_offTopFriendlyFire, g_offTopSentryBase);
     PrintToConsole(client, "m_flLastFireTime 原始偏移: %d (-2=定位失败, -1=未尝试)", g_offTopLastFireTime);
+    PrintToConsole(client, "部署/拆卸: base(Assembled=%d IsInUse=%d Progress=%d) player(Time=%d Ent=%d, cached=%d)",
+        g_offBaseAssembled, g_offBaseIsInUse, g_offBaseAssembleProgress,
+        g_offPlayerUseKeyDownTime, g_offPlayerUseKeyDownEnt, g_bPlayerUsePropsCached);
     PrintToConsole(client, "列表长度: %d", g_hSentries.Length);
     PrintToConsole(client, "------------------------------");
 
