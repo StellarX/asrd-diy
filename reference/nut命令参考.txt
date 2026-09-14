@@ -1,0 +1,10 @@
+ent_fire player RunScriptCode "self.ResurrectMarine(Vector(0,0,0), false)" //复活，中间VECTOR是坐标，调位置
+ent_Fire #asw_name_faith addoutput "health 5000"设置血量，更改faith为其他即可修改其他
+ent_fire asw_marine RunScriptCode "self.BecomeInfested()"所有人叠加一个感染状态
+ent_fire asw_marine RunScriptCode "self.Ignite(100.0)"所有人叠加一个点燃状态
+ent_fire #asw_name_vegas kill将物品、人物移除游戏，更改vegas部分即可修改其他
+ent_fire asw_marine color更改人物颜色，后跟3组颜色码，红色为 255 0 0
+script Convars.SetValue( "asw_skill", 5 );强制调整难度，5为残酷，1为简单，
+script Director.RestartMission();强制重启
+Script{i<-null}while(i=Entities.FindByClassname(i,"player")){if(l.GetPlayerName()=="Clannad"){NetProps.SetPropInt(i,"movetype",8)}};设置行动模式，8为穿墙与加速
+ent_fire asw_drone RunScriptCode "self.TakeDamage(2000, 8, self)"所有异形收到2000点伤害
