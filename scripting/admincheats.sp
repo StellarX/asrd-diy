@@ -17,10 +17,12 @@ public Plugin:myinfo =
 new String:hooked[MAX_COMMANDS][128];
 new nextHooked=0;
 new Handle:cCheatOverride;
+new Handle:cCheatAnnounce;
 
 public OnPluginStart()
 {
 	cCheatOverride = CreateConVar("sm_admin_cheats_level","z","Level required to execute cheat commands",FCVAR_PLUGIN);
+	cCheatAnnounce = CreateConVar("sm_admin_cheats_announce","0","Announce successful cheat command usage to player consoles (0=off, 1=on)",FCVAR_PLUGIN);
 	CreateConVar("sm_admin_cheats_version",PLUGIN_VERSION,"Version Information",FCVAR_REPLICATED|FCVAR_NOTIFY);
 	
 	new String:cmdname[128];
@@ -68,11 +70,14 @@ public Action:cheatcommand(client, args)
 	if (GetUserFlagBits(client)&ReadFlagString(access) > 0 || GetUserFlagBits(client)&ADMFLAG_ROOT > 0)
 	{
 		LogClient(client,"ran cheat command '%s'",argstring);
-		for (new i=1;i<MaxClients;i++)
+		if (GetConVarBool(cCheatAnnounce))
 		{
-			if (IsClientConnected(i) && IsClientInGame(i) && !IsFakeClient(i))
+			for (new i=1;i<MaxClients;i++)
 			{
-				PrintToConsole(i,"%s <%s> ran cheat command '%s'",argstring);
+				if (IsClientConnected(i) && IsClientInGame(i) && !IsFakeClient(i))
+				{
+					PrintToConsole(i,"%s <%s> ran cheat command '%s'",argstring);
+				}
 			}
 		}
 		return Plugin_Continue;
