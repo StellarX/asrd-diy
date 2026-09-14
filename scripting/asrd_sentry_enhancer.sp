@@ -1912,7 +1912,7 @@ public Action Command_SentryHat(int client, int args)
     // 头顶塔数量上限: 每个玩家最多 SENTRY_HAT_LIMIT 座 (写死, 不给 ConVar)
     if (CountPlayerHatSentries(GetClientUserId(client)) >= SENTRY_HAT_LIMIT)
     {
-        ReplyToCommand(client, "头顶哨戒塔已达上限(%d 座), 请先用 sm_hat_off 取消", SENTRY_HAT_LIMIT);
+        ReplyToCommand(client, "头顶哨戒塔已达上限(%d 座)", SENTRY_HAT_LIMIT);
         return Plugin_Handled;
     }
 
