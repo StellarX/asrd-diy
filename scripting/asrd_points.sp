@@ -148,7 +148,7 @@ native int ASRDAmmoHead_PlaceDefaultOnClient(int client);
 #define BUY_BETRAY_VARIANTS  6
 
 // ─── 快捷指令编号上限: /1 ~ /8 与 /buy 1 ~ /buy 8 一一对应 ─
-#define BUY_ITEM_MAX         8
+#define BUY_ITEM_MAX         9
 
 // ─── /buy 8 掉落弹药箱: 在玩家身前地面生成一个原版 asw_ammo_drop ─
 //   AMMO_DROP_UNITS = 游戏原版弹药量, 见 RD 源码 asw_ammo_drop_shared.h
@@ -157,6 +157,7 @@ native int ASRDAmmoHead_PlaceDefaultOnClient(int client);
 #define AMMO_DROP_CLASSNAME  "asw_ammo_drop"
 #define AMMO_DROP_UNITS      100     // = DEFAULT_AMMO_DROP_UNITS (游戏原版弹药量, 有限非无限)
 #define AMMO_DROP_FORWARD    60.0    // 生成点相对玩家前移距离 (与 /buy 6 掉落武器一致)
+#define ARMOR_CLASSNAME      "asw_weapon_normal_armor"   // 第 9 类 动力护甲 (L3a 重甲实体)
 char g_sBetrayAlias[BUY_BETRAY_VARIANTS + 1][16] = { "", "drone", "buzzer", "ranger", "shield", "mortar", "shaman" };
 int  g_iBetrayCount[BUY_BETRAY_VARIANTS + 1] = { 0, 10, 20, 10, 5, 10, 5 };
 
@@ -235,6 +236,7 @@ ConVar g_cvChainsawCost;  // 第 6 类 武器箱 6 1: 增强电锯的积分价�
 ConVar g_cvRifleCost;     // 第 6 类 武器箱 6 2: 守望者脉冲步枪的积分价格
 ConVar g_cvAmmoHeadCost;  // 第 7 类 头顶弹药箱: 标准弹药箱放到自己头顶的积分价格
 ConVar g_cvAmmoDropCost;  // 第 8 类 弹药箱: 在玩家身前地面掉落一个原版弹药箱的积分价格
+ConVar g_cvArmorCost;     // 第 9 类 动力护甲: 在玩家身前掉落一件 L3a 重甲的积分价格
 ConVar g_cvHud;
 ConVar g_cvHudChannel;
 ConVar g_cvHudX;
@@ -337,6 +339,11 @@ public void OnPluginStart()
     g_cvAmmoDropCost = CreateConVar(
         "sm_asrd_points_ammodrop_cost", "300",
         "弹药箱(/buy 8)积分价格: 在玩家身前地面掉落一个原版弹药箱 (0=不设积分门槛)",
+        FCVAR_NOTIFY, true, 0.0
+    );
+    g_cvArmorCost = CreateConVar(
+        "sm_asrd_points_armor_cost", "200",
+        "动力护甲(/buy 9)积分价格: 给玩家掉落一件 L3a 重甲供拾取穿戴, 穿戴后减伤、对部分枪械及道具免伤、免疫寄生、提升移速, 护甲处于完全免伤状态时自动恢复血量 (0=不设积分门槛)",
         FCVAR_NOTIFY, true, 0.0
     );
     g_cvHud = CreateConVar(
@@ -1018,7 +1025,7 @@ void HandleBuyItem(int client, int iItem, const char[] sOpt)
             }
             if (iVar < 1 || iVar > BUY_BETRAY_VARIANTS)
             {
-                PrintToChat(client, "\x04[积分]\x01 /buy 3 选项: 1=工蜂 2=蜂群 3=游侠 4=盾甲虫 5=迫击炮虫 6=治疗虫");
+                PrintToChat(client, "\x04[积分]\x01 /buy 3 选项: 1=爪虫 2=蜂群 3=吐酸虫 4=盾甲虫 5=迫击炮虫 6=治疗虫");
                 return;
             }
 
@@ -1125,6 +1132,13 @@ void HandleBuyItem(int client, int iItem, const char[] sOpt)
         {
             // /buy 8 与 /8: 弹药箱 (在玩家身前地面掉落一个原版弹药箱)
             BuyAmmoDrop(client);
+            return;
+        }
+
+        case 9:
+        {
+            // /buy 9 与 /9: 动力护甲 (在玩家身前掉落一件 L3a 重甲)
+            BuyArmorDrop(client);
             return;
         }
 
@@ -1410,6 +1424,84 @@ void BuyAmmoDrop(int client)
 }
 
 // ============================================================================
+//  第 9 类 动力护甲: 在玩家(其陆战队员)身前地面掉落一件 L3a 重甲
+//    (asw_weapon_normal_armor, 与 /buy 6 掉落武器同一观感)。
+//    只负责"掉落护甲", 不做自动装备——拾取/穿戴由任务与游戏规则决定。
+// ============================================================================
+void BuyArmorDrop(int client)
+{
+    // 不在游戏中 (未控制任何陆战队员) 的玩家不能消费积分 / 也没有落点
+    if (!IsActivePlayer(client))
+    {
+        PrintToChat(client, "\x04[积分]\x01 不在游戏中的玩家不能购买, 请先加入游戏");
+        return;
+    }
+
+    // 积分机制关闭: 禁止购买 (聊天入口已拦截, 这里做兜底)
+    if (!g_cvEnabled.BoolValue)
+    {
+        PrintToChat(client, "\x04[积分]\x01 积分机制已关闭, 暂时无法购买动力护甲");
+        return;
+    }
+
+    int iCost = GetScaledCost(g_cvArmorCost);
+
+    // 先校验积分, 不足则不生成、不扣分
+    if (iCost > 0 && g_iPoints < iCost)
+    {
+        PrintToChat(client, "\x04[积分]\x01 积分不足: 动力护甲需要 \x05%d\x01 积分, 当前 \x05%d\x01 积分",
+            iCost, g_iPoints);
+        return;
+    }
+
+    // 先生成: 生成失败(如无有效落点)就别扣分
+    int iArmor = SpawnArmorNear(client);
+    if (iArmor <= 0)
+    {
+        PrintToChat(client, "\x04[积分]\x01 动力护甲生成失败 (请确认自己已控制陆战队员)");
+        return;
+    }
+
+    if (iCost > 0)
+    {
+        g_iPoints -= iCost;
+        RefreshHud();
+        PrintToChatAll("\x04[积分]\x01 %N 花费 \x05%d\x01 积分购买【动力护甲】, 剩余 \x05%d\x01 积分",
+            client, iCost, g_iPoints);
+    }
+    else
+    {
+        PrintToChatAll("\x04[积分]\x01 %N 获得【动力护甲】(无积分门槛)", client);
+    }
+}
+
+// 在玩家(其陆战队员)身前地面生成一件 L3a 重甲
+//    落点算法与 SpawnAmmoDropNear 完全一致; 返回实体索引 (>0=成功, -1=失败)
+int SpawnArmorNear(int client)
+{
+    int iMarine = GetClientMarine(client);
+    if (iMarine <= 0)
+        return -1;
+
+    // 落点 = 陆战队员脚下原点 沿其视角水平前方偏移 (与弹药箱/掉落武器同一算法)
+    float fPos[3], fAng[3];
+    GetEntPropVector(iMarine, Prop_Data, "m_vecAbsOrigin", fPos);
+    GetClientEyeAngles(client, fAng);
+    float fYaw = DegToRad(fAng[1]);
+    fPos[0] += Cosine(fYaw) * AMMO_DROP_FORWARD;
+    fPos[1] += Sine(fYaw) * AMMO_DROP_FORWARD;
+
+    int iArmor = CreateEntityByName(ARMOR_CLASSNAME);
+    if (iArmor == -1)
+        return -1;
+
+    // 先 Teleport 就位 (会落向地面) 再 DispatchSpawn, 与原版掉落观感一致
+    TeleportEntity(iArmor, fPos, NULL_VECTOR, NULL_VECTOR);
+    DispatchSpawn(iArmor);
+    return iArmor;
+}
+
+// ============================================================================
 //  在玩家(其陆战队员)身前地面生成一个原版 asw_ammo_drop
 //    - 落点: 身前 AMMO_DROP_FORWARD(60) 单位, 再向下探测地面贴地放置(与原版掉落一致)
 //    - 返回实体索引 (>0=成功, -1=失败)
@@ -1602,17 +1694,18 @@ void ShowBuyHelp(int client)
     PrintToChat(client, "欢迎 \x05%N\x01! 当前总积分: \x05%d\x01   用法: \x05/buy <编号> [选项]", client, g_iPoints);
     if (g_cvCostMult.FloatValue != 1.0)
         PrintToChat(client, "  (当前购买倍率 \x05x%.2f\x01: 以下价格已按此倍率缩放)", g_cvCostMult.FloatValue);
-    PrintToChat(client, "  \x05/buy 1\x01  全队属性强化 +1 (%d 分; 全体满级后转为全体加血)", GetScaledCost(g_cvPowerCost));
+    PrintToChat(client, "  \x05/buy 1\x01  全队属性强化等级 +1 (%d 分; 最高5级, 满级后转为全体加血200)", GetScaledCost(g_cvPowerCost));
     PrintToChat(client, "  \x05/buy 2\x01  战术核弹 (%d 分, 购买后 %d 秒内不能再买)", GetScaledCost(g_cvNukeCost), g_cvNukeCooldown.IntValue);
-    PrintToChat(client, "  \x05/buy 3 [1-6]\x01  友军虫群 (%d 分): 1=工蜂 2=蜂群 3=游侠 4=盾甲虫 5=迫击炮虫 6=治疗虫", GetScaledCost(g_cvBetrayCost));
+    PrintToChat(client, "  \x05/buy 3 [1-6]\x01  友军虫群 (%d 分): 1=爪虫 2=蜂群 3=吐酸虫 4=盾甲虫 5=迫击炮虫 6=治疗虫", GetScaledCost(g_cvBetrayCost));
     PrintToChat(client, "  \x05/buy 4 <0/1>\x01  强化哨戒塔箱 (%d 分): 0=机枪 1=炮塔", GetScaledCost(g_cvSentryCost));
     PrintToChat(client, "  \x05/buy 5\x01  补充全部哨戒塔弹药 (%d 分)", GetScaledCost(g_cvRefillCost));
     PrintToChat(client, "  \x05/buy 6 1\x01  增强电锯 (%d 分, 掉落在身边)", GetScaledCost(g_cvChainsawCost));
     PrintToChat(client, "  \x05/buy 6 2\x01  守望者脉冲步枪 (%d 分, 掉落在身边, 击杀计积分)", GetScaledCost(g_cvRifleCost));
     PrintToChat(client, "  \x05/buy 7\x01  头顶弹药箱 (%d 分, 标准弹药放到自己头顶, 游戏默认/有限/同时仅1个)", GetScaledCost(g_cvAmmoHeadCost));
     PrintToChat(client, "  \x05/buy 8\x01  弹药箱 (%d 分, 在身前地面掉落一个原版弹药箱, 走过去补弹)", GetScaledCost(g_cvAmmoDropCost));
+    PrintToChat(client, "  \x05/buy 9\x01  动力护甲 (%d 分; 穿戴后大幅减伤, 对部分枪械及道具免伤, 免疫寄生, 提升移速, 护甲处于完全免伤状态时自动恢复血量)", GetScaledCost(g_cvArmorCost));
     PrintToChat(client, "  \x05/hat\x01  将哨戒塔置于头顶");
-    PrintToChat(client, "  快捷指令: \x05/1\x01 强化   \x05/2\x01 核弹   \x05/3 [1-6]\x01 虫群   \x05/4 [0/1]\x01 哨戒塔箱   \x05/5\x01 补弹药   \x05/6 [1|2]\x01 武器箱(1=电锯 2=脉冲步枪)   \x05/7\x01 头顶弹药箱   \x05/8\x01 弹药箱");
+    PrintToChat(client, "  快捷指令: \x05/1\x01 强化   \x05/2\x01 核弹   \x05/3 [1-6]\x01 虫群   \x05/4 [0/1]\x01 哨戒塔箱   \x05/5\x01 补弹药   \x05/6 [1|2]\x01 武器箱(1=电锯 2=脉冲步枪)   \x05/7\x01 头顶弹药箱   \x05/8\x01 弹药箱   \x05/9\x01 动力护甲");
     PrintToChat(client, "  例: \x05/3 2\x01 = /buy 3 2 (游侠)   \x05/4 1\x01 = /buy 4 1 (炮塔)   \x05/6 2\x01 = /buy 6 2 (脉冲步枪)");
     PrintToChat(client, "  积分: \x05通过击杀虫族获取\x01");
 }

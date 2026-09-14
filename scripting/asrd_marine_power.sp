@@ -252,6 +252,9 @@ public void OnPluginStart()
     // 若要恢复代码默认值, 删掉该 cfg 让插件重新生成即可。
     AutoExecConfig(true, "asrd_marine_power");
 
+    // 注册为插件库: 供 asrd_armor 护甲插件跨插件读取强化移速倍率, 协调"取最大移速加成"
+    RegPluginLibrary("asrd_marine_power");
+
     // 玩家命令
     RegConsoleCmd("sm_power_up",    Cmd_PowerUp,    "调大 1 级强化");
     RegConsoleCmd("sm_power_down",  Cmd_PowerDown,  "调小 1 级强化");
@@ -701,6 +704,12 @@ float GetSpeedForLevel(int client)
     if (level > 0 && g_cvSpeedEnabled.BoolValue)
         return 1.0 + g_cvSpeedStep.FloatValue * level;
     return 1.0;
+}
+
+// 跨插件公开: 返回该玩家当前强化移速倍率(无强化=1.0), 供 asrd_armor 协调"取最大加成"
+public float ASRD_GetPowerSpeedMul(int client)
+{
+    return GetSpeedForLevel(client);
 }
 
 // ============================================================================
