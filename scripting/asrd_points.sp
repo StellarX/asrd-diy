@@ -482,25 +482,60 @@ public Action OnAlienDamaged(int victim, int &attacker, int &inflictor,
 {
     if (!g_cvEnabled.BoolValue)
         return Plugin_Continue;
-    if (attacker <= 0 || attacker == victim)
-        return Plugin_Continue;
     if (!HasEntProp(victim, Prop_Data, "m_iHealth"))
         return Plugin_Continue;
 
     int iHealth = GetEntProp(victim, Prop_Data, "m_iHealth");
     if (iHealth <= 0 || damage < float(iHealth))
         return Plugin_Continue;   // 已死亡或本次伤害非致命
+    if (attacker > 0 && attacker == victim)
+        return Plugin_Continue;   // 环境/自伤不计分
 
     // 友军虫/玩家附身虫 (targetname=asrd_betray_swarm) 不打分, 防刷分
     if (IsBetrayAlien(victim))
         return Plugin_Continue;
 
-    int killer = ResolveKillerClient(attacker);
+    // 归属解析: attacker 主源, weapon/inflictor 兜底 (AR2 主武器子弹的 attacker
+    // 可能是不可识别实体, 但 damageinfo 的 weapon=asw_weapon_ar2 始终可靠)
+    int killer = ResolveKillerMulti(attacker, weapon, inflictor);
     if (killer <= 0)
         return Plugin_Continue;
 
     AwardPoints(victim, killer);
     return Plugin_Continue;
+}
+
+// ============================================================================
+//  多源击杀归属解析: 依次尝试 attacker → weapon → inflictor, 任意一个解析出
+//  玩家即返回。AR2 主武器子弹直击时, weapon=asw_weapon_ar2 是可靠标识。
+// ============================================================================
+int ResolveKillerMulti(int attacker, int weapon, int inflictor)
+{
+    int killer = ResolveKillerClient(attacker);
+    if (killer > 0)
+        return killer;
+
+    killer = TryDamageSourceClient(weapon);
+    if (killer > 0)
+        return killer;
+
+    return TryDamageSourceClient(inflictor);
+}
+
+// 把一个伤害来源实体 (weapon/inflictor) 解析为击杀玩家; AR2 武器/能量球走
+// owner 链, 其余 (marine/虫族) 走通用归属
+int TryDamageSourceClient(int ent)
+{
+    if (ent <= 0 || !IsValidEntity(ent))
+        return 0;
+
+    char cls[64];
+    GetEntityClassname(ent, cls, sizeof(cls));
+
+    if (StrEqual(cls, "asw_weapon_ar2", false) || StrEqual(cls, "prop_combine_ball", false))
+        return GetRifleOwnerClient(ent);
+
+    return ResolveKillerClient(ent);
 }
 
 // ============================================================================
