@@ -72,7 +72,7 @@
 #define CFG_HUD_X        0.01
 #define CFG_HUD_Y        0.06
 #define CFG_HUD_CH       7
-#define CFG_IMMUNE       "asw_weapon_flamer asw_weapon_rifle asw_weapon_gas_grenades asw_flamer_projectile asw_gas_grenade_projectile asw_parasite asw_parasite_defanged"
+#define CFG_IMMUNE       "asw_weapon_flamer asw_weapon_rifle asw_weapon_gas_grenades asw_flamer_projectile asw_gas_grenade_projectile asw_parasite asw_parasite_defanged asw_mine asw_firewall_piece env_fire"
 
 #include <sourcemod>
 #include <sdktools>
@@ -412,6 +412,25 @@ public void OnGameFrame()
         if (bWorn)
         {
             int missing = GetEntProp(GetArmorForClient(i), Prop_Send, "m_iLayersMissing");
+
+            // 携带榴弹发射器: 护甲有效总层数降至 3 (榴弹伤害大, 高护甲层会近乎无敌)。
+            // 丢弃后由已有恢复机制按"本次待恢复量为基数"慢慢加速补回。
+            bool bHasGL = HasGrenadeLauncher(marine);
+            if (bHasGL)
+            {
+                int forcedMissing = iLayersMax - 3;
+                if (missing < forcedMissing)
+                {
+                    SetEntProp(GetArmorForClient(i), Prop_Send, "m_iLayersMissing", forcedMissing);
+                    missing = forcedMissing;
+                }
+                // 固定层数期间不做恢复: 重设恢复基准并把停手计时置为过去, 丢弃后立即开始缓慢恢复
+                g_iArmorLastMissing[i] = missing;
+                g_iArmorRestoreBase[i] = missing;
+                g_fArmorAccum[i] = 0.0;
+                g_fArmorHitTimer[i] = 0.0;
+            }
+
             int left = iLayersMax - missing;
             if (left < 0) left = 0;
             DrawArmorHud(i, left);
@@ -435,7 +454,8 @@ public void OnGameFrame()
             g_iArmorLastMissing[i] = missing;
 
             // 护甲层恢复 (停手 delay 秒后开始, 以本次待恢复量为基数分三档提速: 1→2→3 层/秒)
-            if (g_EnabledCv.IntValue >= 1 && missing > 0)
+            // 携带榴弹发射器时层数固定为 3, 不自动恢复
+            if (g_EnabledCv.IntValue >= 1 && missing > 0 && !bHasGL)
                 TryArmorRestore(i, missing, fElapsed, fNow);
 
             // 下一击完全免伤且未满血 → 缓慢回血
@@ -451,6 +471,31 @@ public void OnGameFrame()
         }
 
         g_bPrevWorn[i] = bWorn;
+    }
+
+    // 观战者视角: 让正在观战某护甲佩戴者的玩家, 看到与佩戴者一致的护甲 HUD (含破损闪烁)
+    if (g_HudEnabledCv.IntValue >= 1)
+    {
+        for (int j = 1; j <= MaxClients; j++)
+        {
+            if (!IsUsableClient(j))
+                continue;
+
+            int target = GetEntPropEnt(j, Prop_Send, "m_hObserverTarget");
+            if (target <= 0)
+                continue;   // 未在观战
+
+            int owner = GetCommanderClient(target);   // 被观战陆战队员的佩戴者 client
+            if (owner <= 0 || owner == j)
+                continue;   // 跳观看自己
+            if (GetArmorForClient(owner) <= 0)
+                continue;   // 佩戴者没穿护甲
+
+            int missing = GetEntProp(GetArmorForClient(owner), Prop_Send, "m_iLayersMissing");
+            int left = iLayersMax - missing;
+            if (left < 0) left = 0;
+            DrawArmorHud(j, left);
+        }
     }
 }
 
@@ -483,7 +528,7 @@ void DrawArmorHud(int client, int left)
         if (g_bBlinkPhase)
         {
             SetHudTextParams(fX, fY, 0.6, 255, 30, 30, 255, 0, 0.0, 0.1, 0.1);
-            ShowHudText(client, g_HudChCv.IntValue, "护甲层破损：%d", left);
+            ShowHudText(client, g_HudChCv.IntValue, "防御层破损：%d", left);
         }
         else
         {
@@ -494,7 +539,7 @@ void DrawArmorHud(int client, int left)
     {
         // 完全免伤: 保持原配置颜色
         SetHudTextParams(fX, fY, 0.6, g_HudRCv.IntValue, g_HudGCv.IntValue, g_HudBCv.IntValue, 210, 0, 0.0, 0.1, 0.1);
-        ShowHudText(client, g_HudChCv.IntValue, "动力护甲层：%d", left);
+        ShowHudText(client, g_HudChCv.IntValue, "防御层厚度：%d", left);
     }
     else
     {
@@ -927,6 +972,31 @@ int GetWeaponOwner(int weapon)
         if (o > 0) return o;
     }
     return 0;
+}
+
+// 判断某陆战队员的武器库存中是否携带榴弹发射器 (asw_weapon_grenade_launcher),
+// 不要求当前正拿在手上
+bool HasGrenadeLauncher(int marine)
+{
+    if (marine <= 0)
+        return false;
+    int w = -1;
+    while ((w = FindEntityByClassname(w, "asw_weapon_grenade_launcher")) != -1)
+        if (GetWeaponOwnerEntity(w) == marine)
+            return true;
+    return false;
+}
+
+// 读取武器所属实体 (网络属性名优先 m_hOwner, 兜底 m_hOwnerEntity)
+int GetWeaponOwnerEntity(int weapon)
+{
+    if (weapon <= 0 || !IsValidEntity(weapon))
+        return -1;
+    if (HasEntProp(weapon, Prop_Send, "m_hOwner"))
+        return GetEntPropEnt(weapon, Prop_Send, "m_hOwner");
+    if (HasEntProp(weapon, Prop_Send, "m_hOwnerEntity"))
+        return GetEntPropEnt(weapon, Prop_Send, "m_hOwnerEntity");
+    return -1;
 }
 
 int GetClientMarine(int client)

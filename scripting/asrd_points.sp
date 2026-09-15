@@ -252,6 +252,9 @@ int    g_iPlayerLevel[MAXPLAYERS + 1];   // 强化等级镜像, 与 asrd_marine_
 float  g_fJoinHelpAt[MAXPLAYERS + 1];    // 进服购买说明的待发时刻 (GetEngineTime; 0=无待发)
 float  g_fNukeBuyTime[MAXPLAYERS + 1];   // 每位玩家上次购买核弹的时刻 (GetEngineTime; 用于核弹购买冷却)
 
+// 每只虫本局是否已被能量球溶解计分 (实体索引, 换图清零, 防同一虫被多球重复计分)
+bool   g_bBallScored[4096];
+
 // ============================================================================
 //  插件信息
 // ============================================================================
@@ -452,15 +455,22 @@ public void OnMapStart()
     // 换图后强化等级同步归 0 (强化插件同样在换图时重置), 镜像保持一致
     for (int i = 1; i <= MaxClients; i++)
         g_iPlayerLevel[i] = 0;
+
+    // 换图后清空能量球计分标记 (旧实体索引不复用)
+    for (int i = 0; i < sizeof(g_bBallScored); i++)
+        g_bBallScored[i] = false;
 }
 
 // ============================================================================
-//  实体创建钩子: 给虫族挂伤害钩子 (计分必须挂在 victim 侧, 同扫描机模式)
+//  实体创建钩子: 给虫族挂伤害钩子 (计分必须挂在 victim 侧, 同扫描机模式);
+//  给守望者步枪副武器能量球挂触碰钩子 (溶解即命中即死, 不走 OnTakeDamage)
 // ============================================================================
 public void OnEntityCreated(int entity, const char[] classname)
 {
     if (IsAlienClass(classname))
         SDKHookEx(entity, SDKHook_OnTakeDamage, OnAlienDamaged);
+    else if (StrEqual(classname, "prop_combine_ball", false))
+        SDKHookEx(entity, SDKHook_StartTouch, OnBallTouch);
 }
 
 // ============================================================================
@@ -518,6 +528,41 @@ void AwardPoints(int victim, int killer)
         PrintToServer("[积分][debug] %N 击杀 %s (maxhp=%d) 获得 %d 积分, 总 %d",
             killer, cls, iMax, iPoints, g_iPoints);
     }
+}
+
+// ============================================================================
+//  守望者步枪副武器能量球 (prop_combine_ball) 触碰回调 (victim=虫族):
+//  玩家发射的 AR2 能量球命中虫族走 Dissolve() 溶解路径, 不触发 OnTakeDamage,
+//  无法走 OnAlienDamaged 计分, 故在命中(即溶解即死)瞬间直接按球归属计分。
+// ============================================================================
+public Action OnBallTouch(int ball, int other)
+{
+    if (!g_cvEnabled.BoolValue)
+        return Plugin_Continue;
+    if (other <= 0 || !IsAlienEnt(other))
+        return Plugin_Continue;
+    if (IsBetrayAlien(other))
+        return Plugin_Continue;
+    if (g_bBallScored[other])
+        return Plugin_Continue;   // 同一虫本局已被能量球计过, 防多球重复
+
+    int killer = GetRifleOwnerClient(ball);
+    if (killer <= 0)
+        return Plugin_Continue;
+
+    g_bBallScored[other] = true;
+    AwardPoints(other, killer);
+    return Plugin_Continue;
+}
+
+// 判断实体是否为可计分虫族 (类名是否在虫族清单)
+bool IsAlienEnt(int ent)
+{
+    if (ent <= 0 || !IsValidEntity(ent))
+        return false;
+    char cls[64];
+    GetEntityClassname(ent, cls, sizeof(cls));
+    return IsAlienClass(cls);
 }
 
 // ============================================================================
