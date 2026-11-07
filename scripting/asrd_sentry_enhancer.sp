@@ -394,6 +394,31 @@ public void OnPluginStart()
 }
 
 // ============================================================================
+//  聊天框 # 触发: #hat / #hat_off (等价于 sm_hat / sm_hat_off)
+//    # 不是 SourceMod 默认聊天触发符, 控制台命令不会被自动执行,
+//    所以在这里解析后转发。旧的 /hat 与 !hat 仍走 SM 默认聊天命令, 不受影响。
+// ============================================================================
+public Action OnClientSayCommand(int client, const char[] command, const char[] sArgs)
+{
+    if (client <= 0 || !IsClientInGame(client) || IsFakeClient(client))
+        return Plugin_Continue;
+    if (sArgs[0] != '#')
+        return Plugin_Continue;
+
+    if (StrEqual(sArgs, "#hat", false))
+    {
+        FakeClientCommand(client, "sm_hat");
+        return Plugin_Handled;
+    }
+    if (StrEqual(sArgs, "#hat_off", false))
+    {
+        FakeClientCommand(client, "sm_hat_off");
+        return Plugin_Handled;
+    }
+    return Plugin_Continue;
+}
+
+// ============================================================================
 //  配置文件加载完成后: 应用伤害覆盖 (此时 cfg 里的自定义值已生效)
 // ============================================================================
 public void OnConfigsExecuted()

@@ -81,7 +81,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Marine Power"
-#define PLUGIN_VERSION "1.4.2"
+#define PLUGIN_VERSION "1.5.0"
 
 // 重新断言周期(秒): 换陆战队员/复活后仍生效, 不回血
 #define REAPPLY_INTERVAL 1.0
@@ -112,6 +112,7 @@ ConVar g_cvShrinkStep;
 ConVar g_cvSpeedEnabled;
 ConVar g_cvSpeedStep;
 ConVar g_cvDebug;
+ConVar g_cvKeepLevel;
 
 // 视角高度(与俯视高度插件合并): 放大等级每级把相机距离调高 cam_step
 ConVar g_cvCamBase;
@@ -223,6 +224,11 @@ public void OnPluginStart()
         "调试输出到服务器控制台 (0=关 1=开)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
+    g_cvKeepLevel = CreateConVar(
+        "sm_asrd_power_keep_level", "0",
+        "任务重启/换图后是否保留强化等级 (0=每局重置 1=保留; 玩家断线重连仍会重置)",
+        FCVAR_NOTIFY, true, 0.0, true, 1.0
+    );
 
     // 视角高度(与俯视高度插件合并): 放大等级每级把相机距离调高 cam_step
     g_cvCamBase = CreateConVar(
@@ -277,6 +283,10 @@ public void OnPluginStart()
 // AS:RD 任务即时重启(重新开始游戏, 不换图): 清除所有玩家的强化
 public void Event_MissionRestart(Event event, const char[] name, bool dontBroadcast)
 {
+    // 保留等级: 不清除; 重新生成的陆战队员由周期重断言 (Timer_Reapply) 重新应用
+    if (g_cvKeepLevel.BoolValue)
+        return;
+
     // 该事件在游戏帧处理中段触发, 且 RestartMission 即刻重建陆战队员实体,
     // 延迟到实体重建后再恢复, 避免中途改写实体属性导致崩溃
     CreateTimer(REAPPLY_INTERVAL, Timer_ResetAllPower);
@@ -314,8 +324,18 @@ public void OnPluginEnd()
 
 public void OnMapStart()
 {
+    bool bKeep = g_cvKeepLevel.BoolValue;
+
     for (int i = 1; i <= MaxClients; i++)
     {
+        if (bKeep)
+        {
+            // 保留等级: 不清 g_iLevel, 但清"原生血量基准"——新地图(可能换了难度)
+            // 的陆战队员由 ApplyPower 重新记录实际原生上限
+            g_iBaseMaxHealth[i] = 0;
+            continue;
+        }
+
         // 换图/新局: 上一局被强化的玩家先恢复实体属性, 再清内存等级
         if (g_iLevel[i] != 0)
             RestoreMarine(i);

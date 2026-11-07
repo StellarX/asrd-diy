@@ -31,7 +31,7 @@
  *   sm_asrd_watcher_drop_public      允许玩家用 sm_watcherdrop 自己掉步枪 (0=仅管理员, 默认 1)
  *   sm_asrd_watcher_alt_ammo         副武器(能量球)弹药数量 (默认 10; 0=不覆盖, 沿用游戏默认 3; 上限 2000)
  *   sm_asrd_watcher_clip_ammo        主武器弹匣弹药量 (默认 200; 每弹夹的发数; 上限 2000)
- *   sm_asrd_watcher_reserve_clips    主武器备弹格数 (默认 4; HUD 下方弹夹格数, 4=全满; 上限 20)
+ *   sm_asrd_watcher_reserve_clips    主武器备弹格数 (默认 2; HUD 下方弹夹格数, 2=全满 400 发; 上限 20)
  *   sm_asrd_watcher_color_r/g/b      掉落步枪染色 RGB (各 0~255, 默认 0 200 255 = 青色, 一眼可辨)
  *   sm_asrd_watcher_color_a          染色透明度 (0~255, 默认 255=不透明)
  *   sm_asrd_watcher_debug            调试输出 (默认 0)
@@ -51,7 +51,7 @@
  *     本插件标记的 asw_weapon_ar2 (主武器) 或标记过的 prop_combine_ball (副武器) 时,
  *     把 damage 乘以对应倍率。该方案与 asrd_chainsaw_turbo.sp 同源。
  *   - 弹药: 主武器弹匣由 sm_asrd_watcher_clip_ammo 控制 (默认 200), 主武器备弹格数由
- *     sm_asrd_watcher_reserve_clips 控制 (默认 4, 即 HUD 下方 4 格全满; 备弹=clip×clips),
+ *     sm_asrd_watcher_reserve_clips 控制 (默认 2, 即 HUD 下方 2 格全满; 备弹=clip×clips),
  *     副武器(能量球)数量由 sm_asrd_watcher_alt_ammo 控制。三者都在"武器被 marine 拾取"时写入该 marine 的
  *     m_iAmmo[对应弹药类型] 储备池 + 武器 m_iClip1/m_iClip2, 确保主/副弹夹与备弹都填满
  *     (AR2 副弹药类型由武器 m_iSecondaryAmmoType 读取, 不硬编码)。
@@ -61,7 +61,7 @@
  *   - 备弹上限同步: AR2 主/副弹药的 MaxCarry 由游戏 ConVar sk_max_ar2 (默认 180) /
  *     sk_max_ar2_altfire (默认 3) 控制。弹匣 200 时 180/200=0 弹夹, HUD 显示"备弹 0",
  *     且游戏内拾取弹药会被截断到 180。插件启动时强制 sk_max_ar2 = clip_ammo*(reserve_clips+1)
- *     (=默认 1000)、sk_max_ar2_altfire = 副武器目标值, 保证 HUD 显示 4 个弹夹且上限足够。
+ *     (=默认 600)、sk_max_ar2_altfire = 副武器目标值, 保证 HUD 显示 2 个弹夹且上限足够。
  *   - 弹药箱补给: 游戏自带弹药箱 (asw_ammo_drop) 的成本表不含 AR2 弹药,
  *     GetAmmoUnitCost 返回 9999 导致弹药箱对 AR2 直接判定"无法补给"。本插件每 0.25 秒
  *     检查持枪 marine 是否站在弹药箱补给半径内 (ASW_MARINE_USE_RADIUS=100), 是则从弹药箱
@@ -85,7 +85,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] 守望者标准型脉冲步枪 (Watcher Pulse Rifle)"
-#define PLUGIN_VERSION "1.5.0"
+#define PLUGIN_VERSION "1.5.1"
 
 // 武器实体类名: 游戏源码 scripts/asw_weapon_ar2.txt 对应实体 asw_weapon_ar2
 // (Overwatch Standard Issue Pulse Rifle / AR2 / 联合军脉冲步枪)
@@ -103,7 +103,7 @@
 
 // 主武器弹匣弹药与备弹: 由 ConVar 控制, 见 OnPluginStart
 //   sm_asrd_watcher_clip_ammo      弹匣弹药量 (默认 200)
-//   sm_asrd_watcher_reserve_clips  备弹槽位数 (默认 4, 即 HUD 4 个备弹槽全满)
+//   sm_asrd_watcher_reserve_clips  备弹槽位数 (默认 2, 即 HUD 2 个备弹槽全满, 备弹 400 发)
 //   备弹 = clip_ammo * reserve_clips; MaxCarry = clip_ammo * (reserve_clips + 1)
 
 // 弹药箱补给判定半径: 对齐游戏 ASW_MARINE_USE_RADIUS (marine 按 E 使用实体的距离)
@@ -202,8 +202,8 @@ public void OnPluginStart()
     );
     HookConVarChange(g_cvClipAmmo, OnClipAmmoChanged);
     g_cvReserveClips = CreateConVar(
-        "sm_asrd_watcher_reserve_clips", "4",
-        "主武器备弹槽位数 (HUD 显示的备弹格数; 默认 4 = 全部填满; 设 3 = 3 格满 1 格空)",
+        "sm_asrd_watcher_reserve_clips", "2",
+        "主武器备弹槽位数 (HUD 显示的备弹格数; 默认 2 = 2 格全满, 备弹 400 发; 设 3 = 3 格满 1 格空)",
         FCVAR_NOTIFY, true, 0.0, true, 20.0
     );
     HookConVarChange(g_cvReserveClips, OnClipAmmoChanged);
@@ -675,7 +675,7 @@ int SpawnWatcherRifleNear(int client)
 
     // 主武器备弹: 写武器实体的 m_iPrimaryAmmoCount (datamap 字段, 拾取时通过 GiveAmmo
     // 转移到 marine 的 m_iAmmo 储备池, 见 rd_asw_marine.cpp 3073 行)。
-    // HUD 下方弹夹格数 = 备弹 / MaxClip1; 默认 4 格全满 = clip_ammo * 4
+    // HUD 下方弹夹格数 = 备弹 / MaxClip1; 默认 2 格全满 = clip_ammo * 2
     int iReserve = iClip * g_cvReserveClips.IntValue;
     int iPriAmmo = FindDataMapInfo(iWeapon, "m_iPrimaryAmmoCount");
     if (iPriAmmo != -1)
@@ -816,7 +816,7 @@ int GetMarineCommander(int iMarine)
 
 // 武器被 marine 拾取时调用: 填满主武器弹匣 + 主/副备弹储备池
 //   - 主武器弹匣 m_iClip1 = sm_asrd_watcher_clip_ammo (默认 200)
-//   - 主武器备弹: marine.m_iAmmo[主弹药类型] = clip_ammo * reserve_clips (默认 4 格全满)
+//   - 主武器备弹: marine.m_iAmmo[主弹药类型] = clip_ammo * reserve_clips (默认 2 格全满)
 //   - 副武器(能量球): 武器 m_iClip2 = sm_asrd_watcher_alt_ammo, 同时写 marine.m_iAmmo[副弹药类型]
 void ApplyWatcherAmmo(int iWeapon, int iMarine)
 {

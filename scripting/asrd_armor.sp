@@ -1,7 +1,8 @@
 /**
  * ============================================================================
  *  [AS:RD] L3a 重型战术护甲增强 (Armor)
- *  版本 2.0.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 2.0.2  |  (2.0.2: 穿戴提示改为"减伤，移速，防蚊虫叮咬、烧烤、寄生，部分武器免伤。")
+ *                 (2.0.1: 新增火焰伤害完全免伤 sm_asrd_armor_immune_burn — 燃烧地雷/地图火焰/燃烧弹等按 DMG_BURN 拦截, 不掉血不消耗护甲层)  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  对陆战队员的 L3a 重型战术护甲 (实体 asw_weapon_normal_armor) 增强:
@@ -12,7 +13,9 @@
  *    3. 层数 HUD: 屏幕上常驻显示该玩家当前的护甲剩余层数, 仅本人可见,
  *       显示位置/颜色可配置。
  *    4. 移速加成: 穿戴护甲时按加成倍率提升移速 (写 AS:RD 的 m_fSpeedScale)。
- *    5. 免伤: 穿戴护甲时免疫一组指定武器的伤害 (默认: 火枪/步枪/毒气手雷)。
+ *    5. 免伤: 穿戴护甲时免疫一组指定武器的伤害 (默认: 火枪/步枪/毒气手雷等),
+ *       并对火焰伤害 (燃烧地雷/地图火焰/燃烧弹, 引擎标志 DMG_BURN) 完全免伤,
+ *       不掉血也不消耗护甲层 (开关 sm_asrd_armor_immune_burn, 默认开)。
  *    6. 管理员指令: 掉落护甲 / 改属性 / 查状态。
  *
  *  ── 插件 ConVar (cfg/sourcemod/asrd_armor.cfg) ─────────
@@ -34,6 +37,8 @@
  *   sm_asrd_armor_hud_r/g/b    HUD 颜色 (默认 0/255/200)
  *   sm_asrd_armor_notify      穿戴聊天通知开关 (默认 1)
  *   sm_asrd_armor_immune      免伤武器列表 (空格分隔的实体类名)
+ *   sm_asrd_armor_immune_burn 火焰伤害完全免伤 (默认 1; 燃烧地雷/地图火焰/燃烧弹等
+ *                            按 DMG_BURN 拦截, 不消耗护甲层; 0=火焰照常烧甲)
  *
  *  ── 管理员命令 (ADMFLAG_GENERIC) ────────────────────────
  *   sm_asrd_armor                         查看属性面板
@@ -49,7 +54,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Armor"
-#define PLUGIN_VERSION "2.0.0"
+#define PLUGIN_VERSION "2.0.2"
 
 #define ARMOR_CLASS  "asw_weapon_normal_armor"
 #define MARINE_CLASS "asw_marine"
@@ -103,6 +108,7 @@ ConVar g_HudGCv;
 ConVar g_HudBCv;
 ConVar g_NotifyCv;
 ConVar g_ImmuneCv;
+ConVar g_ImmuneBurnCv; // 火焰伤害完全免伤开关 (DMG_BURN, 默认 1)
 ConVar g_RegenCv;   // 护甲满护免伤时缓慢回血速率 (生命/秒, 0=关闭)
 ConVar g_MaxSpeedCv; // 护甲层恢复的最高速度 (层/秒)
 ConVar g_BlinkCv;   // 红色警告 HUD 闪烁翻转间隔 (秒)
@@ -165,6 +171,7 @@ public void OnPluginStart()
     g_HudBCv         = CreateConVar("sm_asrd_armor_hud_b",       "200",  "HUD 文字蓝色");
     g_NotifyCv       = CreateConVar("sm_asrd_armor_notify",      "1",    "穿戴护甲聊天通知开关");
     g_ImmuneCv       = CreateConVar("sm_asrd_armor_immune",      CFG_IMMUNE, "免伤武器实体类名列表 (空格分隔)");
+    g_ImmuneBurnCv   = CreateConVar("sm_asrd_armor_immune_burn", "1", "火焰伤害完全免伤: 燃烧地雷/地图火焰/燃烧弹等 (DMG_BURN) 不掉血不消耗护甲层 (0=火焰照常烧甲)");
     g_RegenCv         = CreateConVar("sm_asrd_armor_regen",       "2",     "护甲满护免伤时缓慢回血速率 (生命/秒, 0=关闭)");
     g_MaxSpeedCv      = CreateConVar("sm_asrd_armor_recover_maxspeed","3", "护甲层最高恢复速度 (层/秒): 以本次待恢复层数为基数, 按已恢复比例分三档提速(默认 1→2→3 层/秒) (0=恒定基础速度)");
     g_BlinkCv         = CreateConVar("sm_asrd_armor_hud_blink",         "0.2",     "红色警告 HUD 闪烁翻转间隔(秒): 越小闪得越快 (0=关闭闪烁)");
@@ -288,6 +295,15 @@ public Action OnMarineDamaged(int victim, int &attacker, int &inflictor,
         return Plugin_Handled;
     }
 
+    // 火焰伤害: AS:RD 引擎统一打 DMG_BURN 标志 — 燃烧地雷 (弹药类型 ASW_MINES,
+    // asw_gamerules.cpp AddAmmoType) / 地图火焰与附着燃烧 (EntityFlame.cpp:
+    // DMG_BURN 或 DMG_BURN|DMG_DIRECT) / 自然火 (fire.cpp FIRE_NATURAL) / 燃烧弹等。
+    // 穿甲完全免伤: 不掉血也不消耗护甲层。类名列表对火焰不可靠 (火焰伤害的
+    // attacker/inflictor 常是火焰实体或 NULL), 故按伤害类型兜底。
+    // 注: AS:RD 中 DMG_SLOWBURN 是冷冻 (asw_shareddefs.h: #define DMG_COLD DMG_SLOWBURN), 不拦。
+    if (g_ImmuneBurnCv.BoolValue && (damagetype & DMG_BURN))
+        return Plugin_Handled;
+
     // 几乎所有枪械: 陆战队员实弹枪械(步枪/手枪/冲锋枪/霰弹等)均以 DMG_BULLET 造成伤害,
     // 穿戴护甲时对这些子弹伤害免伤。(能量武器如 railgun 走 DMG_SONIC, 不在此列)
     if (damagetype & DMG_BULLET)
@@ -387,7 +403,7 @@ public void OnGameFrame()
         if (bWorn && !g_bPrevWorn[i])
         {
             if (g_NotifyCv.IntValue >= 1)
-                PrintToChat(i, "\x04[护甲]\x01 你已穿戴 \x05IAF 动力护甲\x01, 护甲层 \x05%d\x01 层, 减伤+移速加成已生效", iLayersMax);
+                PrintToChat(i, "\x04[护甲]\x01 你已穿戴 \x05IAF 动力护甲\x01, 护甲层 \x05%d\x01 层: 减伤，移速，防蚊虫叮咬、烧烤、寄生，部分武器免伤。", iLayersMax);
         }
 
         // 移速: 穿戴时取 max(护甲加成, 强化移速)为最终值; 刚掉落/脱下时还原为强化倍率(无强化=1.0)

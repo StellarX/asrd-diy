@@ -1,7 +1,13 @@
 /**
  * ============================================================================
  *  [AS:RD] 范围击退 (Repulse)
- *  版本 1.14.1  |  (1.14.1: 挡子弹补齐 AS:RD 全部枪械弹药类型 — 修复导轨步枪(DMG_SONIC)等打穿护盾)  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.17.0  |  (1.17.0: 限时护盾带纯视觉特效 — 给护盾玩家创建 X-33 同款特效信标
+ *                   (涟漪+光晕), 落地后移走其增益触发盒, 只留特效、无伤害增益无电弧,
+ *                   特效燃烧时间与护盾严格一致, 到期随信标自动燃尽)
+ *                  (1.16.0: 限时护盾独立于配置开关 — 不受 sm_asrd_repulse_enabled /
+ *                   sm_asrd_repulse_aura 影响, 两个开关关闭时跨插件自动护盾照样生效;
+ *                   护盾期间屏幕中央显示绿色"护盾 n 秒"倒计时, 到期自动清除)
+ *                  (1.15.0: 新增跨插件 native ASRDRepulse_AuraTimed — 供 asrd_points 自动护盾等外部调用, 给玩家加限时 aura 护盾, 到期自动解除; 不影响管理员手动 sm_repulseaura 的开关)  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  1. 手动击退: 按绑定键以自己为中心, 把周围虫族沿径向往外推开。
@@ -137,7 +143,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Area Repulse"
-#define PLUGIN_VERSION "1.14.1"
+#define PLUGIN_VERSION "1.17.0"
 
 // ─── 平滑推进动画池 (手动击退用) ──
 #define MAX_PUSH 512
@@ -286,6 +292,12 @@ ConVar g_cvX33HudY;
 // ─── 按玩家激活的护盾 (由管理员命令 sm_repulseaura 指定, 默认全场无护盾) ──
 bool g_bAuraOn[MAXPLAYERS + 1];
 
+// ─── 限时 aura 护盾 (跨插件 native ASRDRepulse_AuraTimed 开启, 到期自动解除) ──
+// g_bAuraTimedOwned: 当前 aura 是否由限时护盾打开 — 只有它自己开的才在到期时关闭,
+//                    管理员手动 sm_repulseaura 开的永不过期、也不被限时到期误关。
+bool  g_bAuraTimedOwned[MAXPLAYERS + 1];
+float g_fAuraTimedEnd[MAXPLAYERS + 1];   // 到期时刻 (GetGameTime; 0=无限时护盾)
+
 // ─── X-33 威力增强器触发的限时护盾 ─────────────────────
 // 仅 Wildcat/Wolfe (重武兵职业, 档案索引 1/5) 使用 X-33 (asw_weapon_buff_grenade)
 // 时触发: 每次使用把该玩家的护盾结束时间刷新为 now+时长 (以最后一次使用为基准,
@@ -326,6 +338,146 @@ public Plugin myinfo = {
 // ============================================================================
 //  插件启动
 // ============================================================================
+// 跨插件接口: asrd_points 的"自动力场护盾"通过本 native 给玩家加限时 aura 护盾。
+//   ASRDRepulse_AuraTimed(client, int seconds) -> 1=已开启(到期自动解除)
+//                                                  0=玩家已有护盾/参数无效, 未改动
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+    CreateNative("ASRDRepulse_AuraTimed", Native_AuraTimed);
+    RegPluginLibrary("asrd_repulse");
+    return APLRes_Success;
+}
+
+int Native_AuraTimed(Handle plugin, int numParams)
+{
+    int client = GetNativeCell(1);
+    int seconds = GetNativeCell(2);
+    if (client < 1 || client > MaxClients || !IsClientInGame(client) || IsFakeClient(client))
+        return 0;
+    if (seconds <= 0)
+        return 0;
+
+    // 已有 aura (管理员手动开过 / 限时未到期): 不覆盖, 避免到期误关别人的永久护盾
+    if (g_bAuraOn[client])
+        return 0;
+
+    g_bAuraOn[client] = true;
+    g_bAuraTimedOwned[client] = true;
+    g_fAuraTimedEnd[client] = GetGameTime() + float(seconds);
+    return 1;
+}
+
+// ── 限时护盾状态查询 (跨插件自动护盾独立于配置开关) ──
+// 只要 native 开了限时盾就为真, 不看 sm_asrd_repulse_enabled / sm_asrd_repulse_aura
+bool IsTimedAuraOn(int client)
+{
+    return g_bAuraTimedOwned[client] && g_bAuraOn[client];
+}
+
+bool AnyTimedAuraOn()
+{
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (IsTimedAuraOn(i))
+            return true;
+    }
+    return false;
+}
+
+// ── 限时护盾的纯视觉特效信标 ──────────────────────────────
+// 原理: 涟漪/光晕是客户端渲染 asw_buffgrenade_projectile (X-33 信标) 画的, 与伤害
+// 增益无关; 增益来自信标落地时生成的 asw_aoegrenade_touch_trigger 触发盒 — 把触发盒
+// 移到远处(物理 EndTouch → 撤销已挂增益并清空 touch 列表)后, 只剩涟漪+光晕纯视觉,
+// 无伤害增益也无电弧 (电弧由增益目标数组驱动)。信标燃烧截止时间每帧同步为护盾
+// 结束时间 → 特效与护盾严格同起同止, 到期由引擎 AOEGrenadeThink 自动燃尽移除。
+bool g_bFxDisarmed[MAXPLAYERS + 1];   // 该玩家的特效信标已移走增益触发盒 (每护盾周期一次)
+
+// 找 marine 名下已存在的增益信标 (X-33 扔的 / 限时护盾创建的); 无则返回 0
+int FindMarineBeacon(int marine)
+{
+    int ent = -1;
+    while ((ent = FindEntityByClassname(ent, X33_BEACON_CLASS)) != -1)
+    {
+        if (!IsValidEntity(ent))
+            continue;
+        if (HasEntProp(ent, Prop_Send, "m_hOwnerEntity")
+            && GetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity") == marine)
+            return ent;
+    }
+    return 0;
+}
+
+// 给限时护盾创建特效信标: 放在 marine 脚下、零速度 → 引擎下一 Think 贴地自动
+// settled; 燃烧截止 = 护盾结束 (之后 ThinkAura 每帧继续同步)。
+int CreateTimedShieldBeacon(int client, int marine, float fEnd)
+{
+    int ent = CreateEntityByName(X33_BEACON_CLASS);
+    if (ent == -1)
+        return 0;
+
+    DispatchSpawn(ent);
+
+    if (HasEntProp(ent, Prop_Send, "m_hOwnerEntity"))
+        SetEntPropEnt(ent, Prop_Send, "m_hOwnerEntity", marine);
+    else if (HasEntProp(ent, Prop_Data, "m_hOwnerEntity"))
+        SetEntPropEnt(ent, Prop_Data, "m_hOwnerEntity", marine);
+
+    float pos[3], ang[3], vel[3];
+    GetEntPropVector(marine, Prop_Data, "m_vecAbsOrigin", pos);
+    ang[0] = ang[1] = ang[2] = 0.0;
+    vel[0] = vel[1] = vel[2] = 0.0;
+    TeleportEntity(ent, pos, ang, vel);
+
+    float fDur = fEnd - GetGameTime();
+    if (fDur < 0.1)
+        fDur = 0.1;
+    if (HasEntProp(ent, Prop_Send, "m_flTimeBurnOut"))
+        SetEntPropFloat(ent, Prop_Send, "m_flTimeBurnOut", fEnd);
+    if (HasEntProp(ent, Prop_Send, "m_flDuration"))
+        SetEntPropFloat(ent, Prop_Send, "m_flDuration", fDur);
+
+    g_bFxDisarmed[client] = false;
+
+    if (g_cvDebug.BoolValue)
+        PrintToServer("[击退][shield-fx] 为 %N 创建特效信标 #%d (燃烧至 %.1f)", client, ent, fEnd);
+    return ent;
+}
+
+// 解除特效信标的增益能力: 把它落地生成的触发盒移到远离地图的角落 — 触发器
+// 位置变化引起引擎 EndTouch → 信标立即撤销已挂的伤害增益并清空 touch 列表;
+// 之后触发放远处也 touch 不到任何人, 不再产生增益/电弧。幂等, 每护盾周期一次。
+void DisarmShieldBeacon(int client, int beacon)
+{
+    if (g_bFxDisarmed[client] || beacon <= 0 || !IsValidEntity(beacon))
+        return;
+
+    int trig = -1;
+    while ((trig = FindEntityByClassname(trig, "asw_aoegrenade_touch_trigger")) != -1)
+    {
+        if (!IsValidEntity(trig))
+            continue;
+
+        int owner = -2;
+        if (HasEntProp(trig, Prop_Send, "m_hOwnerEntity"))
+            owner = GetEntPropEnt(trig, Prop_Send, "m_hOwnerEntity");
+        else if (HasEntProp(trig, Prop_Data, "m_hOwnerEntity"))
+            owner = GetEntPropEnt(trig, Prop_Data, "m_hOwnerEntity");
+        if (owner != beacon)
+            continue;
+
+        float farPos[3];
+        farPos[0] = 16384.0;
+        farPos[1] = 16384.0;
+        farPos[2] = -16384.0;
+        TeleportEntity(trig, farPos, NULL_VECTOR, NULL_VECTOR);
+
+        g_bFxDisarmed[client] = true;
+        if (g_cvDebug.BoolValue)
+            PrintToServer("[击退][shield-fx] 已移走 %N 特效信标的增益触发盒 #%d (无增益/电弧)", client, trig);
+        break;
+    }
+}
+
 public void OnPluginStart()
 {
     g_cvEnabled = CreateConVar("sm_asrd_repulse_enabled", "1",
@@ -827,6 +979,11 @@ public Action Command_Aura(int client, int args)
     {
         g_bAuraOn[target] = !g_bAuraOn[target];
     }
+
+    // 手动命令优先于限时护盾: 清除限时归属记录, 之后该玩家的 aura 状态
+    // 完全由手动开关决定 (限时到期不再误关它)
+    g_bAuraTimedOwned[target] = false;
+    g_fAuraTimedEnd[target] = 0.0;
 
     char sName[64];
     GetClientName(target, sName, sizeof(sName));
@@ -1718,7 +1875,7 @@ bool IsShieldedMarine(int marine)
         if (GetPlayerMarine(c) != marine)
             continue;
 
-        bool bAura = g_cvAura.BoolValue && g_bAuraOn[c];
+        bool bAura = (g_cvAura.BoolValue && g_bAuraOn[c]) || IsTimedAuraOn(c);
         bool bX33  = g_cvX33.BoolValue && (g_fX33End[c] > GetGameTime());
         if (bAura || bX33)
             return true;
@@ -1802,9 +1959,11 @@ int ProjectileOwnerClient(int ent)
 public void OnGameFrame()
 {
     // 无动画且未开任何护盾模式时直接跳过, 避免空转
-    // (X-33 护盾激活期间 g_bAnyX33Active 保持 true, 状态机会一直跑到全部到期才停)
-    bool bHasAura = g_cvEnabled.BoolValue
-        && (g_cvAura.BoolValue || g_bAnyX33Active);
+    // (X-33 护盾激活期间 g_bAnyX33Active 保持 true, 状态机会一直跑到全部到期才停;
+    //  限时护盾 = 跨插件 native 开的自动护盾, 独立生效, 不受 enabled/aura 开关影响)
+    bool bTimed = AnyTimedAuraOn();
+    bool bHasAura = bTimed
+        || (g_cvEnabled.BoolValue && (g_cvAura.BoolValue || g_bAnyX33Active));
     if (!bHasAura && !g_bAnyPushActive)
         return;
 
@@ -1901,6 +2060,29 @@ void ThinkAura()
         if (!IsClientInGame(client) || IsFakeClient(client))
             continue;
 
+        // ── 限时 aura 护盾状态机: 到期自动解除 (只关自己开的) ──
+        if (g_fAuraTimedEnd[client] > 0.0 && now >= g_fAuraTimedEnd[client])
+        {
+            g_fAuraTimedEnd[client] = 0.0;
+            if (g_bAuraTimedOwned[client])
+            {
+                g_bAuraTimedOwned[client] = false;
+                g_bAuraOn[client] = false;
+                if (!g_bX33Active[client])
+                {
+                    ClearX33Hud(client);   // 清掉限时护盾的倒计时字样
+
+                    // 特效信标: 每帧已把燃烧截止同步为护盾结束时刻, 引擎下一 Think
+                    // 自动燃尽移除(连带触发盒); 这里只清插件侧的附着/还原/解除标记
+                    g_bX33Attached[client] = false;
+                    g_iX33BeaconEnt[client] = 0;
+                    g_fX33FxOrig[client] = 0.0;
+                    g_fX33ScaleOrig[client] = 0.0;
+                    g_bFxDisarmed[client] = false;
+                }
+            }
+        }
+
         // ── X-33 限时护盾状态机: 到期/阵亡检测 + 右侧倒计时 HUD ──
         bool bX33 = false;
         if (g_fX33End[client] > 0.0)
@@ -1956,14 +2138,34 @@ void ThinkAura()
             }
         }
 
-        // 该玩家是否有有效盾: 管理员手动指定 或 X-33 护盾生效中
-        bool bActive = (g_cvAura.BoolValue && g_bAuraOn[client]) || bX33;
+        // 该玩家是否有有效盾: 管理员手动指定 / 跨插件限时护盾(独立于开关) / X-33
+        bool bActive = (g_cvAura.BoolValue && g_bAuraOn[client]) || IsTimedAuraOn(client) || bX33;
         if (!bActive)
             continue;
 
         float fCenter[3];
         if (!GetMarineOrigin(client, fCenter))
             continue;
+
+        // ── 限时护盾纯视觉特效: X-33 同款信标 (涟漪+光晕), 无增益无电弧 ──
+        //   玩家同时处于 X-33 护盾时用 X-33 自己的信标供特效, 这里不重复建
+        if (IsTimedAuraOn(client) && !bX33)
+        {
+            int mFx = GetPlayerMarine(client);
+            if (mFx > 0)
+            {
+                int beacon = FindMarineBeacon(mFx);
+                if (beacon == 0)
+                    beacon = CreateTimedShieldBeacon(client, mFx, g_fAuraTimedEnd[client]);
+                if (beacon > 0)
+                {
+                    DisarmShieldBeacon(client, beacon);   // 移走增益触发盒 (只做一次)
+                    SyncX33Beacons(mFx, g_fAuraTimedEnd[client]);   // 特效时间=护盾时间
+                    ApplyX33BeaconFx(mFx, client, false);           // 涟漪半径/光晕
+                    ApplyX33BeaconFollow(mFx, client, true);        // 跟随玩家移动
+                }
+            }
+        }
 
         if (bDumpPending && !bDumped)
         {
@@ -2037,30 +2239,39 @@ void ShowX33Hud(int client, const char[] text)
     }
 }
 
-// X-33 倒计时刷新定时器 (0.5s): 只负责显示, 到期检测仍在 ThinkAura 每帧进行。
-// 护盾状态由 ThinkAura 维护 (g_bX33Active=当前帧处于护盾中), 这里仅读取。
+// 护盾倒计时刷新定时器 (0.5s): X-33 护盾与跨插件限时护盾共用; 只负责显示,
+// 到期检测仍在 ThinkAura 每帧进行。
+// 限时护盾不受 enabled/aura 开关影响, 其倒计时也独立于这两个开关显示。
 public Action Timer_X33Hud(Handle timer)
 {
-    if (!g_cvEnabled.BoolValue || !g_cvX33.BoolValue || !g_bAnyX33Active)
+    bool bTimed   = AnyTimedAuraOn();
+    bool bX33Any  = g_cvX33.BoolValue && g_bAnyX33Active;
+    if (!bTimed && !bX33Any)
+        return Plugin_Continue;
+    // X-33 倒计时仍受总开关控制; 限时护盾(自动掉落)独立, 关了开关也照常显示
+    if (!g_cvEnabled.BoolValue && !bTimed)
         return Plugin_Continue;
 
     float now = GetGameTime();
     for (int c = 1; c <= MaxClients; c++)
     {
-        if (!g_bX33Active[c] || g_fX33End[c] <= now)
-            continue;
         if (!IsClientInGame(c) || IsFakeClient(c))
             continue;
 
-        int secs = RoundToCeil(g_fX33End[c] - now);
+        int secs = 0;
+        if (bX33Any && g_bX33Active[c] && g_fX33End[c] > now)
+            secs = RoundToCeil(g_fX33End[c] - now);
+        else if (IsTimedAuraOn(c) && g_fAuraTimedEnd[c] > now)
+            secs = RoundToCeil(g_fAuraTimedEnd[c] - now);
         if (secs < 1)
-            secs = 1;
+            continue;
+
         char sBuf[64];
         Format(sBuf, sizeof(sBuf), "护盾 %d 秒", secs);
         ShowX33Hud(c, sBuf);
 
         if (g_cvDebug.BoolValue)
-            PrintToServer("[击退][x33] HUD刷新: client=%d 剩余=%ds 模式=%d 通道=%d 位置=(%.2f, %.2f)",
+            PrintToServer("[击退][shield] HUD刷新: client=%d 剩余=%ds 模式=%d 通道=%d 位置=(%.2f, %.2f)",
                 c, secs, g_iX33HudMode[c], g_cvX33HudChannel.IntValue, g_cvX33HudX.FloatValue, g_cvX33HudY.FloatValue);
     }
     return Plugin_Continue;
@@ -2308,6 +2519,9 @@ int ClientOfMarine(int iMarine)
 public void OnClientDisconnect(int client)
 {
     g_bAuraOn[client] = false;
+    g_bAuraTimedOwned[client] = false;
+    g_fAuraTimedEnd[client] = 0.0;
+    g_bFxDisarmed[client] = false;
     g_fX33End[client] = 0.0;
     g_bX33Active[client] = false;
     g_fX33FxOrig[client] = 0.0;

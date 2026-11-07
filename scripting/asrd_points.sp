@@ -1,19 +1,19 @@
 /**
  * ============================================================================
  *  [AS:RD] 积分机制 (Points)
- *  版本 1.23.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.27.1  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
  *  引入一套全队共享的积分经济:
  *    1. 击杀计分: 玩家击杀虫族获得积分, 按被杀虫族的实际最大血量计算
  *       (血量越高积分越多, 倍率见 sm_asrd_points_hp_scale, 最少 1 分)
  *    2. 积分购买: 玩家使用 sm_nukepub / sm_betraypub / sm_power_up|down 时,
- *       先扣除积分再放行给原插件执行功能; 聊天框用 /buy 4 <编号> 购买强化
- *       哨戒塔 (0机枪 1炮塔, 喷火/冰冻暂不支持), /buy 5 补充全部哨戒塔弹药
+ *       先扣除积分再放行给原插件执行功能; 聊天框用 #buy 4 <编号> 购买强化
+ *       哨戒塔 (0机枪 1炮塔, 喷火/冰冻暂不支持), #buy 5 补充全部哨戒塔弹药
  *    3. 积分显示: 屏幕左上方常驻显示总积分, 每 0.5 秒刷新, 击杀/消费即时更新
  *       (积分机制关闭时 HUD 隐藏并清掉残留文字)
  *    4. 进服通知: 玩家连上服务器后, 延迟几秒在聊天框私聊发送欢迎,
- *       并提示输入 /buy 查看详细用法 (详细用法在玩家输入 /buy 后才显示;
+ *       并提示输入 #buy 查看详细用法 (详细用法在玩家输入 #buy 后才显示;
  *       不再周期性公告。开关见 sm_asrd_points_join_help;
  *       积分机制关闭时既无 HUD 也不发此通知)
  *
@@ -43,8 +43,13 @@
  *    - sm_betraypub 的虫种参数会在扣分前预校验, 打错虫种名不会白扣积分。
  *
  *  ── 击杀归属判定 ───────────────────────────────────────
- *    - 伤害回调挂在虫族 victim 侧 (SDKHook_OnTakeDamage, 与扫描机插件同模式)
- *    - 致命一击的归属按攻击者解析: 玩家客户端 / 陆战队员实体(查 m_Commander)
+ *    - 计分挂在引擎的 entity_killed 事件上 (死亡发生时由引擎触发, 携带
+ *      被杀实体/攻击者/伤害源); 不用 SDKHook_OnTakeDamage 的单发伤害判定。
+ *      原因: AS:RD 的子弹伤害走 MultiDamage 累积扣血, 单发 damage 往往
+ *      小于虫族当前血量; 且其它插件(如守望者步枪)在伤害钩子中放大倍率,
+ *      钩子顺序会让本插件看到未放大的原始伤害 → 低伤害武器(AR2脉冲)击杀
+ *      长期不触发计分。改用死亡事件后不再受单发伤害大小与钩子顺序影响。
+ *    - 归属按攻击者解析: 玩家客户端 / 陆战队员实体(查 m_Commander)
  *      / 被玩家附身的虫族(查 m_Commander) / 哨戒塔塔顶炮台(反查塔底座
  *      m_hSentryBase -> 部署者 m_hDeployer -> 操控者), 其它来源 (核弹/
  *      扫描机/虫族互杀) 不计分
@@ -54,31 +59,36 @@
  *    - 友军虫 (targetname=asrd_betray_swarm, 含玩家附身虫) 不计分, 防刷分
  *
  *  ── 命令 ────────────────────────────────────────────────
- *   /buy [1] [2]      玩家: 聊天框购买 (唯一扣积分入口, 无控制台命令)
- *                        /buy = 显示格式; /buy 1=全队属性强化+1; /buy 2=核弹
- *                        (核弹购买后 nuke_cooldown 秒内不能再买, 默认 3);
- *                        /buy 3 [1-6]=叛变虫群 (/buy 3 无选项=drone×10)
+ *   #buy [1] [2]      玩家: 聊天框购买 (唯一扣积分入口, 无控制台命令)
+ *                        #buy = 显示格式; #buy 1=全队属性强化+1; #buy 2=核弹
+ *                        (任意玩家购买核弹后 nuke_cooldown 秒内全队都不能再买, 默认 30);
+ *                        #buy 3 [1-6]=叛变虫群 (#buy 3 无选项=drone×10)
  *                        (强化等级全队共享: 任一玩家购买一次, 全体在游戏玩家
- *                        各升 1 级 (观战者不升); 全部玩家满级后 /buy 1 转为
+ *                        各升 1 级 (观战者不升); 全部玩家满级后 #buy 1 转为
  *                        全体加血: 各玩家无论当前血量一律 +200, 封顶各自最大血量)
- *                        /buy 4 [编号]=强化哨戒塔箱 (0机枪 1炮塔,
+ *                        #buy 4 [编号]=强化哨戒塔箱 (0机枪 1炮塔,
  *                        无选项默认 0=机枪; 喷火/冰冻暂不支持);
- *                        /buy 5=补充全部哨戒塔弹药
+ *                        #buy 5=补充全部哨戒塔弹药
  *                        (地图上没有哨戒塔时不允许购买, 不扣分)
- *                        /buy 6 [1|2]=武器箱 (第 6 类):
+ *                        #buy 6 [1-3]=武器 (第 6 类):
  *                          6 1=增强电锯 (伤害由 asrd_chainsaw_turbo 的 sm_asrd_chainsaw_dmg_mult 决定)
  *                          6 2=守望者脉冲步枪 (由 asrd_watcher_pulse_rifle 掉落, 击杀计积分)
- *                        /buy 7=头顶弹药箱 (由 asrd_ammohead 在玩家自己头顶放置标准弹药箱,
- *                        游戏默认弹药量/有限/同一陆战队员头顶同时仅1个; 管理员 sm_ammohead 可自定义含量)
- *                        /buy 8=弹药箱 (本插件直接实现在玩家身前地面掉落一个原版 asw_ammo_drop,
- *                        弹药量=游戏原版默认(DEFAULT_AMMO_DROP_UNITS=100)/有限, 走过去补弹)
- *   /1 ../8           玩家: 聊天框快捷购买, 与 /buy <编号> **完全等价**且同样能带选项:
- *                        /1 强化等级  /2 核弹  /3 [1-6] 叛变虫群(默认 drone×10)
- *                        /4 [0/1] 哨戒塔箱  /5 补充全部哨戒塔弹药  /6 [1|2] 武器箱(1=电锯 2=脉冲步枪)
- *                        /7 头顶弹药箱(标准弹药, 放到自己头顶)  /8 弹药箱(身前地面掉落)
- *                        例: /3 2 = /buy 3 2 (游侠); /4 1 = /buy 4 1 (炮塔)
- *   /nukepub /betraypub /power_up /power_down
+ *                          6 3=增强型黏弹发射器 (非标准隐藏武器, 由本插件直接生成实体)
+ *                          (采矿激光/灭火器 暂时不支持购买; RD_7A 武器在正式版中未编译, 无法生成)
+ *                        #buy 7=动力护甲 (在玩家身前掉落一件 L3a 重甲)
+ *                        #buy 8 [1-3]=隐藏道具 (第 8 类):
+ *                          8 1=瞬移  8 2=喷气背包  8 3=诱饵
+ *                          (非标准隐藏道具, 由本插件直接生成实体, 价格统一;
+ *                           RD_7A 道具如燃烧手雷/加速冲刺等在正式版中未编译, 无法生成)
+ *                        #buy 9=掉落弹药 (掉在身前地面, 走过去补满武器弹药)
+ *   #1 ..#9           玩家: 聊天框快捷购买, 与 #buy <编号> **完全等价**且同样能带选项:
+ *                        #1 强化等级  #2 核弹  #3 [1-6] 叛变虫群(默认 drone×10)
+ *                        #4 [0/1] 哨戒塔箱  #5 补充全部哨戒塔弹药  #6 [1-3] 武器(1=电锯 2=脉冲步枪 3=黏弹发射器)
+ *                        #7 动力护甲  #8 [1-3] 隐藏道具  #9 掉落弹药
+ *                        例: #3 2 = #buy 3 2 (吐酸虫); #4 1 = #buy 4 1 (炮塔)
+ *   #nukepub #betraypub #power_up #power_down
  *                     玩家: 聊天框直接调用原功能命令同样扣积分
+ *   注: 触发前缀为 #; 旧的 / 与 ! 前缀仍可触发, 但公告/帮助只写 #。
  *   注: 玩家侧无任何 sm_points* 聊天/控制台命令 (控制台调用原功能命令不扣积分);
  *       以下为管理员控制台命令:
  *   sm_asrd_points_toggle       管理员: 一键切换积分机制开关 (不带参数=反转当前状态; 0=关 1=开)。
@@ -92,23 +102,49 @@
  *   sm_asrd_points_start      每局初始积分 (默认 1000; 开局/换图时重置)
  *   sm_asrd_points_hp_scale   击杀积分 = 虫族最大血量 x 倍率 (默认 0.05, 最少 1 分)
  *   sm_asrd_points_nuke_cost  核弹价格 (默认 200, 0=不设门槛)
- *   sm_asrd_points_nuke_cooldown 核弹购买冷却秒数 (默认 3; 同一玩家购买后
- *                                此时间内不能再购买核弹; 0=不限制)
+ *   sm_asrd_points_nuke_cooldown 核弹购买冷却秒数 (默认 30; 任意玩家购买后
+ *                                全队此时间内都不能再购买核弹; 0=不限制)
  *   sm_asrd_points_betray_cost 叛变虫群价格 (默认 100, 0=不设门槛)
  *   sm_asrd_points_power_cost 强化等级价格 (默认 800, 0=不设门槛; 购买一次全队共享升级)
  *   sm_asrd_points_sentry_cost 强化哨戒塔价格 (默认 300, 0=不设门槛)
  *   sm_asrd_points_refill_cost 补充全部哨戒塔弹药价格 (默认 500, 0=不设门槛)
  *   sm_asrd_points_chainsaw_cost 增强电锯价格 (默认 300, 0=不设门槛)
  *   sm_asrd_points_rifle_cost  守望者脉冲步枪价格 (默认 300, 0=不设门槛)
- *   sm_asrd_points_ammohead_cost 头顶弹药箱价格 (默认 300, 0=不设门槛; 由 asrd_ammohead 放置标准弹药箱)
- *   sm_asrd_points_ammodrop_cost 弹药箱价格 (默认 300, 0=不设门槛; 本插件在玩家身前地面掉落原版弹药箱)
+ *   sm_asrd_points_armor_cost   动力护甲价格 (默认 300, 0=不设门槛; 与步枪/电锯同价)
+ *   sm_asrd_points_ammodrop_cost 掉落弹药价格 (默认 300, 0=不设门槛; 掉在身前地面, 走过去补弹)
+ *   sm_asrd_points_extra_weapon_cost 隐藏武器/道具价格 (默认 300; #buy 6 3 与 #buy 8 1、8 2、8 3 共用)
+ *   sm_asrd_points_flechette_dmg 增强型黏弹发射器单发火箭伤害 (默认 50; 覆盖引擎 asw_skill_grenades_flechette_dmg_base, 0=不覆盖)
+ *   sm_asrd_points_flechette_ammo 增强型黏弹发射器携带弹药数 (默认 60; 覆盖引擎 asw_ammo_count_flechette, 0=不覆盖)
+ *
+ *  ── 自动掉落 (帧回调驱动, 等价"随机玩家购买", 同样扣共享积分) ──
+ *    每 auto_interval 秒: 步枪/护甲/电锯/增强型黏弹发射器/瞬移/喷气背包 按各自配置价格判定积分够否,
+ *    够的里面随机选一件 (单次最多掉落一件), 随机挑一名存活玩家按该玩家购买
+ *    同样的价格/落点掉落 (掉落价与购买价同一配置项, 完全一致; 价格=0 不自动掉);
+ *    广播措辞为"系统随机掉落【物品】到 %N 身边" (不说是玩家购买)。
+ *    (其它隐藏武器/道具只保留购买, 不参与自动掉落; 见 g_bExtraWeaponAutoDrop)
+ *    开局/换图/重开 立即判断一次 (场上暂无玩家时 1 秒后重试,
+ *    玩家一进入游戏就检查)。
+ *    护盾触发条件每帧实时检查 (不判断玩家人数):
+ *    只要场上有存活玩家血量 < auto_shield_hp, 就给全场血量最低的那名玩家
+ *    auto_shield_duration 秒力场护盾; 30 秒冷却只在"护盾真的加上"之后才开始计时,
+ *    场上没人符合条件时不消耗冷却; 冷却结束瞬间若条件仍满足立即触发
+ *    (单次只作用一人;
+ *    asrd_repulse 的 aura 护盾, 不消耗积分; 需 repulse 插件已加载,
+ *    且不受 repulse 的 enabled/aura 开关影响)。
+ *   sm_asrd_points_auto         自动掉落总开关 (默认 1; 0=关)
+ *   sm_asrd_points_auto_interval 步枪/护甲/电锯自动掉落检查间隔秒数 (默认 120)
+ *   sm_asrd_points_auto_shield_interval 护盾冷却秒数 (默认 30; 只在护盾真正加上后开始计时)
+ *   sm_asrd_points_auto_shield_duration 护盾作用时长秒数 (默认 10)
+ *   sm_asrd_points_auto_shield_hp       触发血量阈值: 任一存活玩家血量低于此值 (默认 30)
  *   sm_asrd_points_hud        积分显示开关 (0=关 1=开, 默认 1)
  *   sm_asrd_points_hud_channel HUD 通道 (默认 6, 避开 4=哨戒塔/X-33, 5=核弹)
  *   sm_asrd_points_hud_x      横向位置 (默认 0.01 左上角; -1=居中)
  *   sm_asrd_points_hud_y      纵向位置 (默认 0.02)
  *   sm_asrd_points_hud_alpha  文字透明度 (默认 170 半透明; 0=全透明 255=不透明)
+ *   sm_asrd_points_objhelp    任务详情购买说明 (默认 1; 开局生成 asw_objective_dummy
+ *                               纯文字目标, 显示在任务详情的目标列表里, 不影响通关)
  *   sm_asrd_points_debug      调试输出 (默认 0)
- *   sm_asrd_points_join_help  玩家进服后私聊发送欢迎与 /buy 用法提示 (默认 1; 0=不通知)
+ *   sm_asrd_points_join_help  玩家进服后私聊发送欢迎与 #buy 用法提示 (默认 1; 0=不通知)
  *
  *  依赖: SourceMod 1.11+ (核心 + sdktools + sdkhooks)
  * ============================================================================
@@ -116,7 +152,6 @@
 
 #include <sourcemod>
 #include <sdktools>
-#include <sdktools_trace>
 #include <sdkhooks>
 #include <events>
 
@@ -124,14 +159,13 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Points"
-#define PLUGIN_VERSION "1.23.0"
+#define PLUGIN_VERSION "1.33.3"
 
-// 与 asrd_ammohead 联动: 玩家 /buy 7 经此 native 在"自己"头顶放置标准(游戏默认)弹药箱。
-// native 由 asrd_ammohead 注册; 本插件用 MarkNativeAsOptional 标记为可选,
-// 即使 ammohead 未加载也不影响其它购买功能 (购买前用 GetFeatureStatus 判断可用与否)。
-native int ASRDAmmoHead_PlaceDefaultOnClient(int client);
+// 与 asrd_repulse 联动: 自动力场护盾经此 native 给玩家加限时 aura 护盾
+// (到期由 repulse 插件自动解除)。同样标记为可选, 未加载时静默跳过。
+native int ASRDRepulse_AuraTimed(int client, int seconds);
 
-// ─── /buy 4 强化哨戒塔可选编号 (哨戒塔插件 sm_sentrydrop 的塔类型; 2喷火/3冰冻暂不支持) ─
+// ─── #buy 4 强化哨戒塔可选编号 (哨戒塔插件 sm_sentrydrop 的塔类型; 2喷火/3冰冻暂不支持) ─
 #define BUY_SENTRY_VARIANTS_MAX 1   // 当前支持的最高塔编号 (0=机枪 1=炮塔)
 
 // ─── HUD 显示 (左上角, 与 4=哨戒塔/X-33、5=核弹 错开) ─────
@@ -141,27 +175,124 @@ native int ASRDAmmoHead_PlaceDefaultOnClient(int client);
 #define HUD_HOLD        1.2
 #define HUD_REFRESH     0.5
 
+// ─── 购买说明显示方式: 任务详情目标列表 (asw_objective_dummy 实体, 见 SpawnBuyHelpObjectives) ─
+
 // ─── 进服通知: 玩家连上后延迟这么久再发购买说明 (等加载/入队完成) ─
 #define JOIN_HELP_DELAY 3.0
 
-// ─── /buy 3 叛变虫群可选虫种 (别名 + 数量, 对应 asrd_alien_civilwar 的 sm_betraypub) ─
+// ─── #buy 3 叛变虫群可选虫种 (别名 + 数量, 对应 asrd_alien_civilwar 的 sm_betraypub) ─
 #define BUY_BETRAY_VARIANTS  6
 
-// ─── 快捷指令编号上限: /1 ~ /8 与 /buy 1 ~ /buy 8 一一对应 ─
+// ─── 快捷指令编号上限: #1 ~ #9 与 #buy 1 ~ #buy 9 一一对应 ─
 #define BUY_ITEM_MAX         9
 
-// ─── /buy 8 掉落弹药箱: 在玩家身前地面生成一个原版 asw_ammo_drop ─
-//   AMMO_DROP_UNITS = 游戏原版弹药量, 见 RD 源码 asw_ammo_drop_shared.h
-//   "DEFAULT_AMMO_DROP_UNITS 100" (CASW_Ammo_Drop 构造默认值)。
-//   弹药箱本身完全沿用原版: 模型/碰撞/使用逻辑/用光(<=0)自动移除均不变。
-#define AMMO_DROP_CLASSNAME  "asw_ammo_drop"
-#define AMMO_DROP_UNITS      100     // = DEFAULT_AMMO_DROP_UNITS (游戏原版弹药量, 有限非无限)
-#define AMMO_DROP_FORWARD    60.0    // 生成点相对玩家前移距离 (与 /buy 6 掉落武器一致)
-#define ARMOR_CLASSNAME      "asw_weapon_normal_armor"   // 第 9 类 动力护甲 (L3a 重甲实体)
+#define AMMO_DROP_FORWARD    60.0    // 掉落生成点相对玩家前移距离 (#buy 6/7/8/9 掉落物品共用)
+#define ARMOR_CLASSNAME      "asw_weapon_normal_armor"   // 第 7 类 动力护甲 (L3a 重甲实体)
+#define AMMO_DROP_CLASSNAME  "asw_ammo_drop"             // 第 9 类 掉落弹药 (掉在地面, 走过去补弹)
+
+// ─── 第 6 类 隐藏武器 (非标准武器, 不在常规装备界面可选) ─
+//   这些武器在游戏源码 asw_equipment_list.cpp 中 bSelectableInBriefing=false,
+//   普通地图/挑战不会掉落; 本插件直接 CreateEntityByName 生成供玩家拾取。
+//   注意: RD_7A 武器(冰冻炮/等离子喷射器/能量护盾步枪等)在正式版中未编译注册, 无法生成。
+//   子选项编号: 6 3=增强型黏弹发射器 (其余隐藏武器均已停用: 采矿激光/灭火器暂时不支持购买)
+enum
+{
+    EXTRA_WEAPON_MINING_LASER = 0,
+    EXTRA_WEAPON_FIRE_EXTINGUISHER,
+    EXTRA_WEAPON_FLECHETTE,
+    EXTRA_WEAPON_FLECHETTE2,
+    EXTRA_WEAPON_RICOCHET,
+    EXTRA_WEAPON_AMMO_BAG,
+    EXTRA_WEAPON_MEDICAL_SATCHEL,
+    EXTRA_WEAPON_COUNT
+};
+char g_sExtraWeaponClass[EXTRA_WEAPON_COUNT][64] =
+{
+    "asw_weapon_mining_laser",
+    "asw_weapon_fire_extinguisher",
+    "asw_weapon_flechette",
+    "asw_weapon_flechette2",
+    "asw_weapon_ricochet",
+    "asw_weapon_ammo_bag",
+    "asw_weapon_medical_satchel"
+};
+char g_sExtraWeaponName[EXTRA_WEAPON_COUNT][32] =
+{
+    "采矿激光",
+    "灭火器",
+    "增强型黏弹发射器",
+    "飞镖枪2",
+    "弹跳步枪",
+    "弹药包",
+    "医疗包"
+};
+// 是否参与自动随机掉落 (购买 #buy 6 不受影响)
+//   仅 增强型黏弹发射器 自动掉落
+bool g_bExtraWeaponAutoDrop[EXTRA_WEAPON_COUNT] =
+{
+    false,  // 采矿激光
+    false,  // 灭火器
+    true,   // 增强型黏弹发射器
+    false,  // 飞镖枪2
+    false,  // 弹跳步枪
+    false,  // 弹药包
+    false   // 医疗包
+};
+// 是否允许购买 (#buy 6)
+//   已停用: 采矿激光 / 灭火器 (暂时不支持购买) / 飞镖枪2 / 弹跳步枪 / 弹药包 / 医疗包
+//   (不可购买、不掉落、帮助里不再列出)
+bool g_bExtraWeaponPurchasable[EXTRA_WEAPON_COUNT] =
+{
+    false,  // 采矿激光
+    false,  // 灭火器
+    true,   // 增强型黏弹发射器
+    false,  // 飞镖枪2
+    false,  // 弹跳步枪
+    false,  // 弹药包
+    false   // 医疗包
+};
+
+// ─── 第 8 类 隐藏道具 (非标准道具, 不在常规装备界面可选) ─
+//   注意: RD_7A 道具(燃烧手雷/加速冲刺/护盾生成器等)在正式版中未编译注册, 无法生成。
+//   子选项编号: 8 1=瞬移  8 2=喷气背包  8 3=诱饵
+enum
+{
+    EXTRA_ITEM_BLINK = 0,
+    EXTRA_ITEM_JUMP_JET,
+    EXTRA_ITEM_BAIT,
+    EXTRA_ITEM_COUNT
+};
+char g_sExtraItemClass[EXTRA_ITEM_COUNT][64] =
+{
+    "asw_weapon_blink",
+    "asw_weapon_jump_jet",
+    "asw_weapon_bait"
+};
+char g_sExtraItemName[EXTRA_ITEM_COUNT][32] =
+{
+    "瞬移",
+    "喷气背包",
+    "诱饵"
+};
+// 是否参与自动随机掉落 (购买 #buy 8 不受影响, 始终可买)
+//   仅 瞬移 / 喷气背包 自动掉落; 诱饵 只保留购买
+bool g_bExtraItemAutoDrop[EXTRA_ITEM_COUNT] =
+{
+    true,   // 瞬移
+    true,   // 喷气背包
+    false   // 诱饵
+};
+// 是否允许购买 (#buy 8)
+bool g_bExtraItemPurchasable[EXTRA_ITEM_COUNT] =
+{
+    true,   // 瞬移
+    true,   // 喷气背包
+    true    // 诱饵
+};
 char g_sBetrayAlias[BUY_BETRAY_VARIANTS + 1][16] = { "", "drone", "buzzer", "ranger", "shield", "mortar", "shaman" };
 int  g_iBetrayCount[BUY_BETRAY_VARIANTS + 1] = { 0, 10, 20, 10, 5, 10, 5 };
 
-// ─── 满级加血 (全部玩家满级后再购买 /buy 1): 全体在游戏玩家统一加血 ─
+// ─── 满级加血 (全部玩家满级后再购买 #buy 1): 全体在游戏玩家统一加血 ─
 #define MAX_LEVEL_HEAL_AMOUNT   200    // 每次全体加血量 (每个玩家当前血量+200, 封顶其最大血量)
 #define MAX_POWER_LEVEL_MAXHP   1000   // 强化插件满级(L5)最大血量 (代码固定) — 满级判断以此为准
 
@@ -234,26 +365,42 @@ ConVar g_cvSentryCost;
 ConVar g_cvRefillCost;
 ConVar g_cvChainsawCost;  // 第 6 类 武器箱 6 1: 增强电锯的积分价格
 ConVar g_cvRifleCost;     // 第 6 类 武器箱 6 2: 守望者脉冲步枪的积分价格
-ConVar g_cvAmmoHeadCost;  // 第 7 类 头顶弹药箱: 标准弹药箱放到自己头顶的积分价格
-ConVar g_cvAmmoDropCost;  // 第 8 类 弹药箱: 在玩家身前地面掉落一个原版弹药箱的积分价格
-ConVar g_cvArmorCost;     // 第 9 类 动力护甲: 在玩家身前掉落一件 L3a 重甲的积分价格
+ConVar g_cvArmorCost;     // 第 7 类 动力护甲: 在玩家身前掉落一件 L3a 重甲的积分价格
+ConVar g_cvAmmoDropCost;  // 第 9 类 掉落弹药: 掉在身前地面的弹药箱的积分价格
+ConVar g_cvExtraWeaponCost; // 第 6 类 隐藏武器 (6 3) 与第 8 类隐藏道具: 统一积分价格
+ConVar g_cvFlechetteDmg;    // 增强型黏弹发射器追踪火箭单发伤害 (覆盖引擎 asw_skill_grenades_flechette_dmg_base; 0=不覆盖)
+ConVar g_hGameFlechetteDmg; // 引擎 ConVar asw_skill_grenades_flechette_dmg_base 的句柄 (缓存在 OnMapStart)
+ConVar g_cvFlechetteAmmo;   // 增强型黏弹发射器携带弹药数 (覆盖引擎 asw_ammo_count_flechette; 0=不覆盖)
+ConVar g_hGameFlechetteAmmo; // 引擎 ConVar asw_ammo_count_flechette 的句柄
+float  g_fNextFlechetteApply; // 下次重新应用增强型黏弹发射器伤害/弹药的时刻 (防挑战脚本覆盖)
 ConVar g_cvHud;
 ConVar g_cvHudChannel;
 ConVar g_cvHudX;
 ConVar g_cvHudY;
 ConVar g_cvHudAlpha;
+ConVar g_cvObjHelp;     // 任务详情购买说明显示开关 (asw_objective_dummy)
+bool  g_bObjHelpSpawned;   // 本局购买说明目标是否已生成
+float g_fObjHelpCheckAt;   // 下一次检查游戏状态的时间 (0=不检查)
 ConVar g_cvDebug;
 ConVar g_cvJoinHelp;
+ConVar g_cvAuto;              // 自动掉落总开关 (步枪/护甲/力场护盾)
+ConVar g_cvAutoInterval;      // 步枪/护甲自动掉落检查间隔 (秒)
+ConVar g_cvAutoShieldInterval; // 力场护盾检查间隔 (秒)
+ConVar g_cvAutoShieldDuration; // 力场护盾作用时长 (秒)
+ConVar g_cvAutoShieldHp;      // 力场护盾触发血量阈值 (任一玩家血量低于此值)
 
 // ─── 积分池与 HUD 状态 ──────────────────────────────────
 int    g_iPoints;
 float  g_fLastHudCheck;         // HUD 帧回调节流时间 (秒)
 int    g_iPlayerLevel[MAXPLAYERS + 1];   // 强化等级镜像, 与 asrd_marine_power 同步, 用于满/低级别拦截扣分
 float  g_fJoinHelpAt[MAXPLAYERS + 1];    // 进服购买说明的待发时刻 (GetEngineTime; 0=无待发)
-float  g_fNukeBuyTime[MAXPLAYERS + 1];   // 每位玩家上次购买核弹的时刻 (GetEngineTime; 用于核弹购买冷却)
+float  g_fNukeBuyTime;                   // 上次购买核弹的时刻 (GetEngineTime; 全员共享冷却)
+float  g_fNextAutoDrop;                  // 下次自动掉落(步枪/护甲)检查时刻 (GetEngineTime)
+float  g_fNextAutoShield;                // 下次自动力场护盾检查时刻 (GetEngineTime)
 
-// 每只虫本局是否已被能量球溶解计分 (实体索引, 换图清零, 防同一虫被多球重复计分)
-bool   g_bBallScored[4096];
+// 每只虫本局是否已经计过分 (实体索引; 换图/实体销毁时清零)
+// 统一标记 entity_killed 事件与能量球触碰两路计分, 防止同一只虫重复得分
+bool   g_bDeathScored[4096];
 
 // ============================================================================
 //  插件信息
@@ -261,7 +408,7 @@ bool   g_bBallScored[4096];
 public Plugin myinfo = {
     name        = PLUGIN_NAME,
     author      = "jack",
-    description = "AS:RD 全队共享积分: 击杀虫族得分, 积分购买核弹/叛变虫群/强化等级/武器箱",
+    description = "AS:RD 全队共享积分: 击杀虫族得分, 积分购买核弹/叛变虫群/强化等级/武器箱(含隐藏武器)/隐藏道具箱/护甲/弹药",
     version     = PLUGIN_VERSION,
     url         = ""
 };
@@ -300,8 +447,8 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 0.0
     );
     g_cvNukeCooldown = CreateConVar(
-        "sm_asrd_points_nuke_cooldown", "3",
-        "核弹购买冷却秒数: 同一玩家购买核弹后此时间内不能再购买 (0=不限制)",
+        "sm_asrd_points_nuke_cooldown", "30",
+        "核弹购买冷却秒数: 任意玩家购买后全队此时间内都不能再购买 (0=不限制)",
         FCVAR_NOTIFY, true, 0.0
     );
     g_cvBetrayCost = CreateConVar(
@@ -316,12 +463,12 @@ public void OnPluginStart()
     );
     g_cvSentryCost = CreateConVar(
         "sm_asrd_points_sentry_cost", "300",
-        "强化哨戒塔(/buy 4)积分价格 (0=不设积分门槛)",
+        "强化哨戒塔(#buy 4)积分价格 (0=不设积分门槛)",
         FCVAR_NOTIFY, true, 0.0
     );
     g_cvRefillCost = CreateConVar(
         "sm_asrd_points_refill_cost", "500",
-        "补充全部哨戒塔弹药(/buy 5)积分价格 (0=不设积分门槛)",
+        "补充全部哨戒塔弹药(#buy 5)积分价格 (0=不设积分门槛)",
         FCVAR_NOTIFY, true, 0.0
     );
     g_cvChainsawCost = CreateConVar(
@@ -334,19 +481,29 @@ public void OnPluginStart()
         "守望者脉冲步枪(sm_watcherdrop)积分价格 (0=不设积分门槛)",
         FCVAR_NOTIFY, true, 0.0
     );
-    g_cvAmmoHeadCost = CreateConVar(
-        "sm_asrd_points_ammohead_cost", "300",
-        "头顶弹药箱(/buy 7)积分价格: 在玩家自己头顶放置标准(游戏默认/有限)弹药箱 (0=不设积分门槛)",
+    g_cvArmorCost = CreateConVar(
+        "sm_asrd_points_armor_cost", "300",
+        "动力护甲(#buy 7)积分价格: 给玩家掉落一件 L3a 重甲供拾取穿戴, 穿戴后减伤、对部分枪械及道具免伤、免疫寄生、提升移速, 护甲处于完全免伤状态时自动恢复血量 (0=不设积分门槛)",
         FCVAR_NOTIFY, true, 0.0
     );
     g_cvAmmoDropCost = CreateConVar(
         "sm_asrd_points_ammodrop_cost", "300",
-        "弹药箱(/buy 8)积分价格: 在玩家身前地面掉落一个原版弹药箱 (0=不设积分门槛)",
+        "掉落弹药(#buy 9)积分价格: 在玩家身前地面掉落一个弹药箱, 走过去补满武器弹药 (0=不设积分门槛)",
         FCVAR_NOTIFY, true, 0.0
     );
-    g_cvArmorCost = CreateConVar(
-        "sm_asrd_points_armor_cost", "200",
-        "动力护甲(/buy 9)积分价格: 给玩家掉落一件 L3a 重甲供拾取穿戴, 穿戴后减伤、对部分枪械及道具免伤、免疫寄生、提升移速, 护甲处于完全免伤状态时自动恢复血量 (0=不设积分门槛)",
+    g_cvExtraWeaponCost = CreateConVar(
+        "sm_asrd_points_extra_weapon_cost", "300",
+        "隐藏武器/道具统一积分价格 (#buy 6 3 与 #buy 8 1、8 2、8 3): 0=不设积分门槛",
+        FCVAR_NOTIFY, true, 0.0
+    );
+    g_cvFlechetteDmg = CreateConVar(
+        "sm_asrd_points_flechette_dmg", "50",
+        "增强型黏弹发射器(asw_weapon_flechette)单发追踪火箭基础伤害: 插件会覆盖引擎 ConVar asw_skill_grenades_flechette_dmg_base (0=不覆盖, 使用引擎原值)",
+        FCVAR_NOTIFY, true, 0.0
+    );
+    g_cvFlechetteAmmo = CreateConVar(
+        "sm_asrd_points_flechette_ammo", "60",
+        "增强型黏弹发射器(asw_weapon_flechette)拿起时携带的弹药数: 插件会覆盖引擎 ConVar asw_ammo_count_flechette (默认 60; 0=不覆盖, 使用引擎原值)",
         FCVAR_NOTIFY, true, 0.0
     );
     g_cvHud = CreateConVar(
@@ -374,6 +531,11 @@ public void OnPluginStart()
         "积分 HUD 文字透明度 (0=完全透明 255=不透明, 170≈半透明)",
         FCVAR_NOTIFY, true, 0.0, true, 255.0
     );
+    g_cvObjHelp = CreateConVar(
+        "sm_asrd_points_objhelp", "1",
+        "任务详情购买说明: 在任务详情(Mission Details)的目标列表里显示 #buy 命令说明 (0=关 1=开)",
+        FCVAR_NOTIFY, true, 0.0, true, 1.0
+    );
     g_cvDebug = CreateConVar(
         "sm_asrd_points_debug", "0",
         "调试输出到服务器控制台 (0=关 1=开)",
@@ -383,6 +545,31 @@ public void OnPluginStart()
         "sm_asrd_points_join_help", "1",
         "玩家连接后私聊通知购买用法 (0=关 1=开)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
+    );
+    g_cvAuto = CreateConVar(
+        "sm_asrd_points_auto", "1",
+        "自动掉落总开关: 积分够时自动给随机存活玩家掉 守望者步枪/动力护甲/增强电锯(单次一件), 危急时自动给力场护盾 (0=关 1=开)",
+        FCVAR_NOTIFY, true, 0.0, true, 1.0
+    );
+    g_cvAutoInterval = CreateConVar(
+        "sm_asrd_points_auto_interval", "120",
+        "步枪/护甲/电锯/隐藏武器自动掉落检查间隔秒数 (积分够价格才掉, 单次最多掉一件)",
+        FCVAR_NOTIFY, true, 5.0, true, 600.0
+    );
+    g_cvAutoShieldInterval = CreateConVar(
+        "sm_asrd_points_auto_shield_interval", "30",
+        "两次自动力场护盾之间的最小间隔秒数: 冷却只在护盾实际加上之后才开始计时 (场上无低血玩家时不消耗冷却; 条件每帧实时检查)",
+        FCVAR_NOTIFY, true, 1.0, true, 600.0
+    );
+    g_cvAutoShieldDuration = CreateConVar(
+        "sm_asrd_points_auto_shield_duration", "10",
+        "力场护盾自动触发后的作用时长秒数 (asrd_repulse 的 aura 护盾)",
+        FCVAR_NOTIFY, true, 1.0, true, 300.0
+    );
+    g_cvAutoShieldHp = CreateConVar(
+        "sm_asrd_points_auto_shield_hp", "30",
+        "力场护盾触发血量阈值: 任一存活玩家血量低于此值即触发 (给全场血量最低的那名玩家)",
+        FCVAR_NOTIFY, true, 1.0, true, 1000.0
     );
 
     // 自动保存/读取配置到 cfg/sourcemod/asrd_points.cfg
@@ -394,7 +581,7 @@ public void OnPluginStart()
     RegAdminCmd("sm_asrd_points_mult", Cmd_SetMult, ADMFLAG_GENERIC,
         "设置积分购买倍率: sm_asrd_points_mult <倍率> (例如 10 = 所有物品价格x10; 0.5 = 半价)");
 
-    // 无注册命令: /buy、/1~/5 等聊天框购买统一走 OnClientSayCommand (同一份逻辑);
+    // 无注册命令: #buy、#1~#8 等聊天框购买统一走 OnClientSayCommand (同一份逻辑);
     // 控制台没有积分相关命令 (原功能命令控制台调用不扣积分)。
 
     // sm_power_reset 免费, 但需同步强化等级镜像 (镜像置 0), 不扣分
@@ -411,17 +598,16 @@ public void OnPluginStart()
     // 重置积分并把强化等级镜像清 0, 避免满级判断漂移
     HookEventEx("asw_mission_restart", Event_MissionRestart, EventHookMode_Post);
 
-	// 热加载 (插件中途载入 / map 已在进行) 时补挂虫族伤害钩子
-	char sMap[PLATFORM_MAX_PATH];
-	if (GetCurrentMap(sMap, sizeof(sMap)) > 0)
-		HookExistingAliens();
+    // 击杀计分: 引擎死亡事件 (entity_killed) 携带被杀实体/攻击者/伤害源,
+    // 不受单发伤害大小与其它插件伤害倍率钩子顺序影响
+    HookEventEx("entity_killed", Event_EntityKilled, EventHookMode_Post);
 }
 
-// 标记与 asrd_ammohead 联动的 native 为可选: 即使 ammohead 插件未加载,
-// 本插件也能正常编译与运行 (/buy 7 会在购买前用 GetFeatureStatus 判断并优雅拒绝)。
+// 标记与 asrd_repulse 联动的 native 为可选: 即使 repulse 插件未加载,
+// 本插件也能正常编译与运行 (自动力场护盾静默跳过)。
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
-	MarkNativeAsOptional("ASRDAmmoHead_PlaceDefaultOnClient");
+	MarkNativeAsOptional("ASRDRepulse_AuraTimed");
 	return APLRes_Success;
 }
 
@@ -445,6 +631,67 @@ public void OnClientDisconnect(int client)
         g_fJoinHelpAt[client] = 0.0;
 }
 
+// ============================================================================
+//  任务详情购买说明 (asw_objective_dummy)
+//    asw_objective_dummy 是游戏自带的"纯文字目标"实体 (源码注释原话:
+//    "A dummy objective used to show some text on the objectives screen"),
+//    标题经 SendProp 下发, 显示在任务详情 (Mission Details) 的目标列表里,
+//    不带勾选框/编号; 不会出现在 Tab 计分板摘要/HUD 目标栏/小地图标记。
+//    m_bOptional=1 + m_bComplete=1: 不参与通关判定, 也不拉低任务统计。
+// ============================================================================
+void SpawnBuyHelpObjectives()
+{
+    if (!g_cvEnabled.BoolValue || !g_cvObjHelp.BoolValue)
+        return;
+
+    int iExtra = GetScaledCost(g_cvExtraWeaponCost);
+
+    // 只生成 1 个假目标: 列表里显示一行标题, 点击后右侧详细面板显示 4 段说明
+    // (详细面板共 4 个自动换行文本标签, 对应 objectivedescription1~4, 段内可用 \n 换行)
+    char sDesc1[480], sDesc2[480], sDesc3[480], sDesc4[480];
+    int iPower  = GetScaledCost(g_cvPowerCost);
+    int iNuke   = GetScaledCost(g_cvNukeCost);
+    int iBetray = GetScaledCost(g_cvBetrayCost);
+    int iSentry = GetScaledCost(g_cvSentryCost);
+    int iRefill = GetScaledCost(g_cvRefillCost);
+    int iChain  = GetScaledCost(g_cvChainsawCost);
+    int iRifle  = GetScaledCost(g_cvRifleCost);
+    int iArmor  = GetScaledCost(g_cvArmorCost);
+
+    Format(sDesc1, sizeof(sDesc1),
+        "#buy 1 全队强化+1级 (%d分)\n#buy 2 战术核弹 (%d分 cd%d秒)\n#buy 3 1 召唤普通爪虫x10 (%d分)\n#buy 3 2 召唤蚊子x20 (%d分)\n#buy 3 3 召唤吐酸虫x10 (%d分)",
+        iPower, iNuke, g_cvNukeCooldown.IntValue, iBetray, iBetray, iBetray);
+    Format(sDesc2, sizeof(sDesc2),
+        "#buy 3 4 召唤盾甲虫x5 (%d分)\n#buy 3 5 召唤炮虫x10 (%d分)\n#buy 3 6 召唤治疗虫x5 (%d分)\n#buy 4 0 机枪哨戒塔 (%d分)\n#buy 4 1 炮塔哨戒塔 (%d分)\n#buy 5 哨戒塔补满弹药 (%d分)",
+        iBetray, iBetray, iBetray, iSentry, iSentry, iRefill);
+    Format(sDesc3, sizeof(sDesc3),
+        "#buy 6 1 增强电锯 (%d分)\n#buy 6 2 守望者脉冲步枪 (%d分)\n#buy 6 3 增强型黏弹发射器 (%d分)\n#buy 7 动力护甲 (%d分)",
+        iChain, iRifle, iExtra, iArmor);
+    Format(sDesc4, sizeof(sDesc4),
+        "#buy 8 1 瞬移 (%d分)\n#buy 8 2 喷气背包 (%d分)\n#buy 8 3 诱饵 (%d分)\n#buy 9 掉落弹药 (%d分)\n#hat 把哨戒塔放到头顶\n积分来源: 击杀虫族 (血量越多积分越多)",
+        iExtra, iExtra, iExtra, GetScaledCost(g_cvAmmoDropCost));
+
+    int ent = CreateEntityByName("asw_objective_dummy");
+    if (ent == -1)
+        return;
+    DispatchKeyValue(ent, "objectivetitle", "积分购买说明 (点击看详情)");
+    DispatchKeyValue(ent, "objectivedescription1", sDesc1);
+    DispatchKeyValue(ent, "objectivedescription2", sDesc2);
+    DispatchKeyValue(ent, "objectivedescription3", sDesc3);
+    DispatchKeyValue(ent, "objectivedescription4", sDesc4);
+    if (DispatchSpawn(ent))
+    {
+        SetEntProp(ent, Prop_Send, "m_bOptional", 1);
+        SetEntProp(ent, Prop_Send, "m_bComplete", 1);
+    }
+}
+
+public Action Timer_SpawnBuyHelpObjectives(Handle timer)
+{
+    SpawnBuyHelpObjectives();
+    return Plugin_Continue;
+}
+
 // 地图加载/开局: 每局重置为初始积分 (一局一结算)
 public void OnMapStart()
 {
@@ -452,57 +699,120 @@ public void OnMapStart()
     if (g_iPoints < 0)
         g_iPoints = 0;
 
-    // 换图后强化等级同步归 0 (强化插件同样在换图时重置), 镜像保持一致
-    for (int i = 1; i <= MaxClients; i++)
-        g_iPlayerLevel[i] = 0;
+    // 购买说明目标改由 OnGameFrame 等任务开始 (m_iGameState==3) 后生成;
+    // 这里只重置轮询状态 (1 秒后开始检查, 每秒一次)
+    g_bObjHelpSpawned = false;
+    g_fObjHelpCheckAt = GetEngineTime() + 1.0;
 
-    // 换图后清空能量球计分标记 (旧实体索引不复用)
-    for (int i = 0; i < sizeof(g_bBallScored); i++)
-        g_bBallScored[i] = false;
+    // 换图后强化等级同步归 0 (强化插件同样在换图时重置), 镜像保持一致;
+    // 强化插件开启 sm_asrd_power_keep_level 时两边都保留
+    ResetPlayerLevels();
+
+    // 换图后清空核弹全员冷却
+    g_fNukeBuyTime = 0.0;
+
+    // 换图后清空计分标记 (旧实体索引不复用)
+    for (int i = 0; i < sizeof(g_bDeathScored); i++)
+        g_bDeathScored[i] = false;
+
+    // 自动掉落节流: 开局立即允许判断一次 (场上暂无玩家时帧回调会 1 秒重试,
+    // 玩家一进入游戏就检查是否满足掉落条件)
+    g_fNextAutoDrop = 0.0;
+    g_fNextAutoShield = 0.0;
+
+    // 增强型黏弹发射器伤害/弹药: 覆盖引擎 ConVar (0=不覆盖, 保留引擎/挑战原值)
+    g_hGameFlechetteDmg = FindConVar("asw_skill_grenades_flechette_dmg_base");
+    g_hGameFlechetteAmmo = FindConVar("asw_ammo_count_flechette");
+    g_fNextFlechetteApply = 0.0;
+    ApplyFlechetteSettings();
 }
 
 // ============================================================================
-//  实体创建钩子: 给虫族挂伤害钩子 (计分必须挂在 victim 侧, 同扫描机模式);
-//  给守望者步枪副武器能量球挂触碰钩子 (溶解即命中即死, 不走 OnTakeDamage)
+//  增强型黏弹发射器设置: 把玩家配置的数值写进引擎 ConVar
+//  1) 伤害: 每发创建一枚追踪火箭, 伤害取
+//     asw_skill_grenades_flechette_dmg_base (原值 10), 再叠加"爆破"技能等级;
+//  2) 弹药: 装备条目把 asw_ammo_count_flechette (原值 60) 同时用作
+//     DefaultAmmo1 / MaxAmmo1, 即拿起武器自带且上限的弹药数;
+//  挑战脚本可能在地图开始后改写它们, 故由 OnGameFrame 定期纠偏。
+// ============================================================================
+void ApplyFlechetteSettings()
+{
+    // 伤害
+    if (g_cvFlechetteDmg.IntValue > 0)
+    {
+        if (g_hGameFlechetteDmg == null)
+            g_hGameFlechetteDmg = FindConVar("asw_skill_grenades_flechette_dmg_base");
+
+        if (g_hGameFlechetteDmg != null &&
+            g_hGameFlechetteDmg.IntValue != g_cvFlechetteDmg.IntValue)
+            g_hGameFlechetteDmg.SetInt(g_cvFlechetteDmg.IntValue);
+    }
+
+    // 弹药
+    if (g_cvFlechetteAmmo.IntValue > 0)
+    {
+        if (g_hGameFlechetteAmmo == null)
+            g_hGameFlechetteAmmo = FindConVar("asw_ammo_count_flechette");
+
+        if (g_hGameFlechetteAmmo != null &&
+            g_hGameFlechetteAmmo.IntValue != g_cvFlechetteAmmo.IntValue)
+            g_hGameFlechetteAmmo.SetInt(g_cvFlechetteAmmo.IntValue);
+    }
+}
+
+// ============================================================================
+//  实体创建: 给守望者步枪副武器能量球挂触碰钩子
+//  (能量球命中虫族走 Dissolve 溶解路径, 不触发 OnTakeDamage/死亡伤害链)
 // ============================================================================
 public void OnEntityCreated(int entity, const char[] classname)
 {
-    if (IsAlienClass(classname))
-        SDKHookEx(entity, SDKHook_OnTakeDamage, OnAlienDamaged);
-    else if (StrEqual(classname, "prop_combine_ball", false))
+    if (StrEqual(classname, "prop_combine_ball", false))
         SDKHookEx(entity, SDKHook_StartTouch, OnBallTouch);
 }
 
+// 实体销毁: 清除计分标记, 避免实体索引复用把别的虫误判为已计分
+public void OnEntityDestroyed(int entity)
+{
+    if (entity > 0 && entity < sizeof(g_bDeathScored))
+        g_bDeathScored[entity] = false;
+}
+
 // ============================================================================
-//  伤害回调 (victim=虫族): 判定致命一击的归属并计分
+//  引擎死亡事件 (entity_killed): 虫族死亡时计分
+//  引擎在 CBaseCombatCharacter::Event_Killed 中触发该事件, 携带被杀实体/
+//  攻击者/伤害源, 此时实体仍有效 (尚未 Remove), 可读 m_iMaxHealth。
+//  不用 OnTakeDamage 的单发伤害判定: AS:RD 子弹伤害走 MultiDamage 累积扣血,
+//  单发 damage 往往小于当前血量; 且其它插件的伤害倍率钩子若后执行, 本插件
+//  只会看到未放大的原始伤害 → 低伤害武器(如守望者脉冲步枪)击杀无法计分。
 // ============================================================================
-public Action OnAlienDamaged(int victim, int &attacker, int &inflictor,
-    float &damage, int &damagetype, int &weapon,
-    float damageForce[3], float damagePosition[3], int damagecustom)
+public void Event_EntityKilled(Event event, const char[] name, bool dontBroadcast)
 {
     if (!g_cvEnabled.BoolValue)
-        return Plugin_Continue;
-    if (!HasEntProp(victim, Prop_Data, "m_iHealth"))
-        return Plugin_Continue;
+        return;
 
-    int iHealth = GetEntProp(victim, Prop_Data, "m_iHealth");
-    if (iHealth <= 0 || damage < float(iHealth))
-        return Plugin_Continue;   // 已死亡或本次伤害非致命
-    if (attacker > 0 && attacker == victim)
-        return Plugin_Continue;   // 环境/自伤不计分
+    int victim = event.GetInt("entindex_killed");
+    if (victim <= 0 || !IsValidEntity(victim))
+        return;
+    if (!IsAlienEnt(victim))
+        return;
 
     // 友军虫/玩家附身虫 (targetname=asrd_betray_swarm) 不打分, 防刷分
     if (IsBetrayAlien(victim))
-        return Plugin_Continue;
+        return;
+    if (g_bDeathScored[victim])
+        return;
 
-    // 归属解析: attacker 主源, weapon/inflictor 兜底 (AR2 主武器子弹的 attacker
-    // 可能是不可识别实体, 但 damageinfo 的 weapon=asw_weapon_ar2 始终可靠)
-    int killer = ResolveKillerMulti(attacker, weapon, inflictor);
+    int attacker  = event.GetInt("entindex_attacker");
+    int inflictor = event.GetInt("entindex_inflictor");
+
+    // 归属解析: attacker 主源, inflictor 兜底。
+    // 核弹用 SDKHooks_TakeDamage(entity, 0, 0, ...) 攻击者为 0 → 不计分
+    int killer = ResolveKillerMulti(attacker, -1, inflictor);
     if (killer <= 0)
-        return Plugin_Continue;
+        return;
 
+    g_bDeathScored[victim] = true;
     AwardPoints(victim, killer);
-    return Plugin_Continue;
 }
 
 // ============================================================================
@@ -568,7 +878,8 @@ void AwardPoints(int victim, int killer)
 // ============================================================================
 //  守望者步枪副武器能量球 (prop_combine_ball) 触碰回调 (victim=虫族):
 //  玩家发射的 AR2 能量球命中虫族走 Dissolve() 溶解路径, 不触发 OnTakeDamage,
-//  无法走 OnAlienDamaged 计分, 故在命中(即溶解即死)瞬间直接按球归属计分。
+//  也可能不产生死亡伤害链, 故在命中(即溶解即死)瞬间直接按球归属计分;
+//  与 entity_killed 事件用 g_bDeathScored 统一去重。
 // ============================================================================
 public Action OnBallTouch(int ball, int other)
 {
@@ -578,14 +889,14 @@ public Action OnBallTouch(int ball, int other)
         return Plugin_Continue;
     if (IsBetrayAlien(other))
         return Plugin_Continue;
-    if (g_bBallScored[other])
-        return Plugin_Continue;   // 同一虫本局已被能量球计过, 防多球重复
+    if (g_bDeathScored[other])
+        return Plugin_Continue;   // 已被任意途径计过分, 防重复
 
     int killer = GetRifleOwnerClient(ball);
     if (killer <= 0)
         return Plugin_Continue;
 
-    g_bBallScored[other] = true;
+    g_bDeathScored[other] = true;
     AwardPoints(other, killer);
     return Plugin_Continue;
 }
@@ -829,6 +1140,10 @@ public Action Listener_Restart(int client, const char[] command, int argc)
         g_iPoints = 0;
     ResetPlayerLevels();
 
+    // 重开即视为新一局: 立即允许自动掉落判断一次
+    g_fNextAutoDrop = 0.0;
+    g_fNextAutoShield = 0.0;
+
     if (g_cvDebug.BoolValue)
         PrintToServer("[积分][debug] 检测到 %s, 积分重置为 %d", command, g_iPoints);
     return Plugin_Continue;
@@ -844,34 +1159,46 @@ public void Event_MissionRestart(Event event, const char[] name, bool dontBroadc
         g_iPoints = 0;
     ResetPlayerLevels();
 
+    // 任务重启同样立即允许自动掉落判断一次
+    g_fNextAutoDrop = 0.0;
+    g_fNextAutoShield = 0.0;
+
     if (g_cvDebug.BoolValue)
         PrintToServer("[积分][debug] 任务重启(asw_mission_restart), 积分重置为 %d", g_iPoints);
 }
 
 void ResetPlayerLevels()
 {
+    // 强化插件开启"保留等级"(sm_asrd_power_keep_level 1)时, 等级跨局保留,
+    // 镜像同步保留 (否则 #buy 1 的满级判断/缩小拦截会与实际等级漂移)
+    ConVar cvKeep = FindConVar("sm_asrd_power_keep_level");
+    if (cvKeep != null && cvKeep.BoolValue)
+        return;
+
     for (int i = 1; i <= MaxClients; i++)
         g_iPlayerLevel[i] = 0;
 }
 
 // ============================================================================
 //  聊天框统一购买入口 (唯一扣积分路径)
-//  玩家在聊天框输入 /buy、/1~/5、/nukepub、/betraypub、/power_up 等,
+//  玩家在聊天框输入 #buy、#1~#8、#nukepub、#betraypub、#power_up 等,
 //  全部在此解析: 校验 → 扣分 → 转发给原插件命令执行。
-//  /1~/5 与 /buy <编号> 完全等价 (可带选项), 见 HandleBuyItem()。
+//  #1~#8 与 #buy <编号> 完全等价 (可带选项), 见 HandleBuyItem()。
 //  客户端控制台/服务器控制台调用原命令不经过这里 → 不扣积分。
 // ============================================================================
 public Action OnClientSayCommand(int client, const char[] command, const char[] sArgs)
 {
     if (client <= 0 || !IsClientInGame(client) || IsFakeClient(client))
         return Plugin_Continue;
-    if (sArgs[0] != '/' && sArgs[0] != '!')
+    // 触发前缀: # (新触发符, 公告/帮助只用这个); 同时保留 / 和 ! 兼容旧习惯
+    // (必须继续拦截 /nukepub 等, 否则它们会经 SourceMod 默认聊天命令免费执行, 绕过积分)
+    if (sArgs[0] != '#' && sArgs[0] != '/' && sArgs[0] != '!')
         return Plugin_Continue;
 
     char sText[192];
     strcopy(sText, sizeof(sText), sArgs);
     TrimString(sText);
-    if (sText[0] != '/' && sText[0] != '!')
+    if (sText[0] != '#' && sText[0] != '/' && sText[0] != '!')
         return Plugin_Continue;
 
     char sCmd[64];
@@ -884,8 +1211,8 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
         return Plugin_Handled;
     }
 
-    // ── /buy <编号> [选项] 与快捷指令 /1 ~ /8 走**同一套逻辑** ──
-    //    /buy 3 2  等价于  /3 2       (编号后的选项位置不同, 统一收进 sOpt)
+    // ── #buy <编号> [选项] 与快捷指令 #1 ~ #8 走**同一套逻辑** ──
+    //    #buy 3 2  等价于  #3 2       (编号后的选项位置不同, 统一收进 sOpt)
     if (StrEqual(sCmd, "buy", false) || IsBuyShortcut(sCmd))
     {
         char sOpt[16];
@@ -944,7 +1271,7 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 }
 
 // ============================================================================
-//  快捷指令 /1 ~ /8: 判定 + 与 /buy 共用的分发入口
+//  快捷指令 #1 ~ #8: 判定 + 与 #buy 共用的分发入口
 // ============================================================================
 bool IsBuyShortcut(const char[] sCmd)
 {
@@ -985,7 +1312,7 @@ bool IsPointsCommand(const char[] sCmd)
         || StrEqual(sCmd, "betraypub", false) || StrEqual(sCmd, "power_up", false)
         || StrEqual(sCmd, "power_down", false))
         return true;
-    if (IsBuyShortcut(sCmd))   // /1 ~/8 与 /buy 1~/8 等价, 一并拦截
+    if (IsBuyShortcut(sCmd))   // #1 ~#8 与 #buy 1~#buy 8 等价, 一并拦截
         return true;
     return false;
 }
@@ -1076,7 +1403,7 @@ public Action Cmd_SetMult(int client, int args)
 }
 
 // ============================================================================
-//  /buy <编号> [选项] 的统一实现 (唯一扣分入口), 快捷 /编号 亦调用此处
+//  #buy <编号> [选项] 的统一实现 (唯一扣分入口), 快捷 /编号 亦调用此处
 //    iItem  1=强化 2=核弹 3=虫群 4=哨戒塔箱 5=补弹药; 其它 → 编号无效提示
 //    sOpt   编号之后的选项 (可缺省; 空串 = 未指定)
 // ============================================================================
@@ -1092,20 +1419,20 @@ void HandleBuyItem(int client, int iItem, const char[] sOpt)
 
         case 3:
         {
-            // /buy 3 [1-6] 与 /3 [1-6]: 缺省 = 1 (工蜂×10)
+            // #buy 3 [1-6] 与 /3 [1-6]: 缺省 = 1 (工蜂×10)
             int iVar = 1;
             if (sOpt[0] != '\0')
             {
                 if (!IsNumericArg(sOpt))
                 {
-                    PrintToChat(client, "\x04[积分]\x01 选项必须是数字: /buy 3 [1-6] 或 /3 [1-6]");
+                    PrintToChat(client, "\x04[积分]\x01 选项必须是数字: #buy 3 [1-6] 或 #3 [1-6]");
                     return;
                 }
                 iVar = StringToInt(sOpt);
             }
             if (iVar < 1 || iVar > BUY_BETRAY_VARIANTS)
             {
-                PrintToChat(client, "\x04[积分]\x01 /buy 3 选项: 1=爪虫 2=蜂群 3=吐酸虫 4=盾甲虫 5=迫击炮虫 6=治疗虫");
+                PrintToChat(client, "\x04[积分]\x01 #buy 3 编号: 1=普通爪虫×10  2=蚊子×20  3=吐酸虫×10  4=盾甲虫×5  5=炮虫×10  6=治疗虫×5");
                 return;
             }
 
@@ -1117,25 +1444,25 @@ void HandleBuyItem(int client, int iItem, const char[] sOpt)
 
         case 4:
         {
-            // /buy 4 [0/1] 与 /4 [0/1]: 强化哨戒塔箱 (0=机枪 1=炮塔; 喷火/冰冻暂不支持)
+            // #buy 4 [0/1] 与 /4 [0/1]: 强化哨戒塔箱 (0=机枪 1=炮塔; 喷火/冰冻暂不支持)
             bool bHasOpt = (sOpt[0] != '\0');
             int  iType   = 0;                       // 未指定编号 → 默认 0=机枪
             if (bHasOpt)
             {
                 if (!IsNumericArg(sOpt))
                 {
-                    PrintToChat(client, "\x04[积分]\x01 选项必须是数字: /buy 4 <0/1> (0=机枪 1=炮塔)");
+                    PrintToChat(client, "\x04[积分]\x01 选项必须是数字: #buy 4 <0/1> (0=机枪 1=炮塔)");
                     return;
                 }
                 iType = StringToInt(sOpt);
             }
             if (iType < 0 || iType > BUY_SENTRY_VARIANTS_MAX)
             {
-                PrintToChat(client, "\x04[积分]\x01 /buy 4 编号无效: 0=机枪 1=炮塔 (喷火/冰冻暂不支持)");
+                PrintToChat(client, "\x04[积分]\x01 #buy 4 编号无效: 0=机枪 1=炮塔 (喷火/冰冻暂不支持)");
                 return;
             }
             if (!bHasOpt)
-                PrintToChat(client, "\x04[积分]\x01 未指定编号, 默认购买 0=机枪 (炮塔: \x05/buy 4 1\x01 或 \x05/4 1\x01)");
+                PrintToChat(client, "\x04[积分]\x01 未指定编号, 默认购买 0=机枪 (炮塔: \x05#buy 4 1\x01 或 \x05#4 1\x01)");
 
             char sTypeArg[8];
             IntToString(iType, sTypeArg, sizeof(sTypeArg));
@@ -1150,7 +1477,7 @@ void HandleBuyItem(int client, int iItem, const char[] sOpt)
 
         case 5:
         {
-            // /buy 5 与 /5: 补充全部哨戒塔弹药 (底层命令实际补满生命与弹药)
+            // #buy 5 与 /5: 补充全部哨戒塔弹药 (底层命令实际补满生命与弹药)
             // 先查地图上有没有塔: 一座都没有就别让玩家白扣 refill_cost 分
             if (CountMapSentries() <= 0)
             {
@@ -1165,15 +1492,16 @@ void HandleBuyItem(int client, int iItem, const char[] sOpt)
 
         case 6:
         {
-            // /buy 6 [1|2] 与 /6 [1|2]: 第 6 类 = 武器箱
+            // #buy 6 [1-3] 与 /6 [1-3]: 第 6 类 = 武器
             //   6 1 = 增强电锯 (sm_chainsawdrop)
             //   6 2 = 守望者脉冲步枪 (sm_watcherdrop)
+            //   6 3 = 增强型黏弹发射器 (本插件直接生成)
             int iSub = -1;
             if (sOpt[0] != '\0')
             {
                 if (!IsNumericArg(sOpt))
                 {
-                    PrintToChat(client, "\x04[积分]\x01 选项必须是数字: /buy 6 <1|2> (1=增强电锯 2=守望者脉冲步枪)");
+                    PrintToChat(client, "\x04[积分]\x01 选项必须是数字: #buy 6 <1-3>");
                     return;
                 }
                 iSub = StringToInt(sOpt);
@@ -1191,11 +1519,14 @@ void HandleBuyItem(int client, int iItem, const char[] sOpt)
                     PurchaseFromChat(client, "sm_watcherdrop", "", g_cvRifleCost,
                         "守望者脉冲步枪", "sm_asrd_watcher_enabled", "sm_asrd_watcher_drop_public");
                 }
+                case 3:  BuyExtraWeapon(client, EXTRA_WEAPON_FLECHETTE);
                 default:
                 {
-                    PrintToChat(client, "\x04[积分]\x01 第 6 类 武器箱: \x05/buy 6 1\x01 增强电锯 (%d 分)   \x05/buy 6 2\x01 守望者脉冲步枪 (%d 分)",
-                        GetScaledCost(g_cvChainsawCost), GetScaledCost(g_cvRifleCost));
-                    PrintToChat(client, "\x04[积分]\x01 快捷指令: \x05/6 1\x01 电锯   \x05/6 2\x01 脉冲步枪");
+                    int iExtra = GetScaledCost(g_cvExtraWeaponCost);
+                    PrintToChat(client, "\x04[积分]\x01 第 6 类 武器编号 (每个编号买一把, 掉在自己身边):");
+                    PrintToChat(client, "        #buy 6 1 增强电锯 (%d 分)", GetScaledCost(g_cvChainsawCost));
+                    PrintToChat(client, "        #buy 6 2 守望者脉冲步枪 (%d 分)", GetScaledCost(g_cvRifleCost));
+                    PrintToChat(client, "        #buy 6 3 增强型黏弹发射器 (%d 分)", iExtra);
                 }
             }
             return;
@@ -1203,52 +1534,77 @@ void HandleBuyItem(int client, int iItem, const char[] sOpt)
 
         case 7:
         {
-            // /buy 7 与 /7: 头顶弹药箱 (标准弹药, 放到自己头顶)
-            BuyAmmoHead(client);
+            // #buy 7 与 /7: 动力护甲 (在玩家身前掉落一件 L3a 重甲)
+            BuyArmorDrop(client);
             return;
         }
 
         case 8:
         {
-            // /buy 8 与 /8: 弹药箱 (在玩家身前地面掉落一个原版弹药箱)
-            BuyAmmoDrop(client);
+            // #buy 8 [1-3] 与 /8 [1-3]: 第 8 类 = 隐藏道具
+            //   8 1=瞬移  8 2=喷气背包  8 3=诱饵
+            int iSub = -1;
+            if (sOpt[0] != '\0')
+            {
+                if (!IsNumericArg(sOpt))
+                {
+                    PrintToChat(client, "\x04[积分]\x01 选项必须是数字: #buy 8 <1-3>");
+                    return;
+                }
+                iSub = StringToInt(sOpt);
+            }
+
+            switch (iSub)
+            {
+                case 1:  BuyExtraItem(client, EXTRA_ITEM_BLINK);
+                case 2:  BuyExtraItem(client, EXTRA_ITEM_JUMP_JET);
+                case 3:  BuyExtraItem(client, EXTRA_ITEM_BAIT);
+                default:
+                {
+                    int iExtra = GetScaledCost(g_cvExtraWeaponCost);
+                    PrintToChat(client, "\x04[积分]\x01 第 8 类 隐藏道具 (每个编号掉一个, 各 %d 分):", iExtra);
+                    PrintToChat(client, "        #buy 8 1 瞬移");
+                    PrintToChat(client, "        #buy 8 2 喷气背包");
+                    PrintToChat(client, "        #buy 8 3 诱饵");
+                }
+            }
             return;
         }
 
         case 9:
         {
-            // /buy 9 与 /9: 动力护甲 (在玩家身前掉落一件 L3a 重甲)
-            BuyArmorDrop(client);
+            // #buy 9 与 #9: 掉落弹药 (掉在身前地面, 走过去补弹)
+            BuyAmmoDrop(client);
             return;
         }
 
         default:
-            PrintToChat(client, "\x04[积分]\x01 /buy 编号无效, 输入 \x05/buy\x01 查看格式");
+            PrintToChat(client, "\x04[积分]\x01 #buy 编号无效, 输入 \x05#buy\x01 查看格式");
     }
 }
 
 // ============================================================================
-//  核弹购买 (统一入口: /buy 2、/2、/nukepub)
-//    冷却: 同一玩家购买核弹后 nuke_cooldown 秒内不能再购买 (默认 3, 0=不限制)
+//  核弹购买 (统一入口: #buy 2、#2、#nukepub)
+//    冷却: 任意玩家购买核弹后 nuke_cooldown 秒内全队都不能再购买 (默认 30, 0=不限制)
 //    冷却仅作用于"扣分路径" (积分开启且价格>0); 积分关闭/免费时不拦截,
 //    由原插件自行处理, 保持原有行为
 // ============================================================================
 void BuyNukeFromChat(int client, const char[] sArgs)
 {
     if (g_cvEnabled.BoolValue && g_cvNukeCost.IntValue > 0 &&
-        g_cvNukeCooldown.FloatValue > 0.0 && g_fNukeBuyTime[client] > 0.0)
+        g_cvNukeCooldown.FloatValue > 0.0 && g_fNukeBuyTime > 0.0)
     {
-        float fElapsed = GetEngineTime() - g_fNukeBuyTime[client];
+        float fElapsed = GetEngineTime() - g_fNukeBuyTime;
         if (fElapsed < g_cvNukeCooldown.FloatValue)
         {
             int iLeft = RoundToCeil(g_cvNukeCooldown.FloatValue - fElapsed);
-            PrintToChat(client, "\x04[积分]\x01 核弹倒计时中, 请 \x05%d\x01 秒后再购买", iLeft);
+            PrintToChat(client, "\x04[积分]\x01 核弹全队冷却中, 请 \x05%d\x01 秒后再购买", iLeft);
             return;
         }
     }
     if (PurchaseFromChat(client, "sm_nukepub", sArgs, g_cvNukeCost,
         "核弹", "sm_asrd_nuke_enabled", "sm_asrd_nuke_public"))
-        g_fNukeBuyTime[client] = GetEngineTime();
+        g_fNukeBuyTime = GetEngineTime();
 }
 
 void BuyPowerFromChat(int client, bool bUp)
@@ -1287,7 +1643,7 @@ void BuyPowerFromChat(int client, bool bUp)
 }
 
 // ============================================================================
-//  有没有在游戏中且未满级的玩家 (决定 /buy 1 走升级还是满级加血)
+//  有没有在游戏中且未满级的玩家 (决定 #buy 1 走升级还是满级加血)
 // ============================================================================
 bool HasActiveNonMaxPlayer()
 {
@@ -1380,135 +1736,11 @@ void LevelUpAllActive()
 }
 
 // ============================================================================
-//  头顶弹药箱购买 (/buy 7): 经 asrd_ammohead 的 native 在玩家自己头顶放置
-//  "标准(游戏默认)"弹药箱。
-//    - 弹药量 = 游戏默认 (asrd_ammohead 内部固定 percent_remaining=100, 有限非无限)
-//    - 同一陆战队员头顶同时只能有 1 个 (插件内部放置前会替换旧的)
-//    - 不叠加、不无限: 满足"积分购买的弹药箱不能是无限弹药"与"保持原版属性"
-//  前置: asrd_ammohead 已加载 (native 可用) 且 sm_asrd_ammohead_enabled/public 开启
-// ============================================================================
-void BuyAmmoHead(int client)
-{
-    // 原插件(ammohead)是否已加载? native 可用才放行
-    if (GetFeatureStatus(FeatureType_Native, "ASRDAmmoHead_PlaceDefaultOnClient") != FeatureStatus_Available)
-    {
-        PrintToChat(client, "\x04[积分]\x01 头顶弹药箱插件未加载, 无法购买");
-        return;
-    }
-
-    // 原插件总开关
-    ConVar cvEnabled = FindConVar("sm_asrd_ammohead_enabled");
-    if (cvEnabled != null && !cvEnabled.BoolValue)
-    {
-        PrintToChat(client, "\x04[积分]\x01 头顶弹药箱功能已禁用");
-        return;
-    }
-
-    // 对玩家开放开关
-    ConVar cvPublic = FindConVar("sm_asrd_ammohead_public");
-    if (cvPublic == null || !cvPublic.BoolValue)
-    {
-        PrintToChat(client, "\x04[积分]\x01 头顶弹药箱未对玩家开放 (管理员需设置 sm_asrd_ammohead_public 1)");
-        return;
-    }
-
-    if (!IsActivePlayer(client))
-    {
-        PrintToChat(client, "\x04[积分]\x01 不在游戏中的玩家不能购买, 请先加入游戏");
-        return;
-    }
-
-    // 积分机制关闭: 禁止购买 (聊天入口已拦截, 这里做兜底)
-    if (!g_cvEnabled.BoolValue)
-    {
-        PrintToChat(client, "\x04[积分]\x01 积分机制已关闭, 暂时无法购买头顶弹药箱");
-        return;
-    }
-
-    int iCost = GetScaledCost(g_cvAmmoHeadCost);
-    // 价格=0: 不设门槛, 直接放置(仍受 ammohead 内部"唯一+标准"约束)
-    if (iCost <= 0)
-    {
-        ASRDAmmoHead_PlaceDefaultOnClient(client);
-        PrintToChatAll("\x04[积分]\x01 %N 获得【头顶弹药箱】(无积分门槛)", client);
-        return;
-    }
-    if (g_iPoints < iCost)
-    {
-        PrintToChat(client, "\x04[积分]\x01 积分不足: 头顶弹药箱需要 \x05%d\x01 积分, 当前 \x05%d\x01 积分",
-            iCost, g_iPoints);
-        return;
-    }
-
-    g_iPoints -= iCost;
-    RefreshHud();
-    PrintToChatAll("\x04[积分]\x01 %N 花费 \x05%d\x01 积分购买【头顶弹药箱】, 剩余 \x05%d\x01 积分",
-        client, iCost, g_iPoints);
-
-    ASRDAmmoHead_PlaceDefaultOnClient(client);
-}
-
-// ============================================================================
-//  弹药箱购买 (/buy 8): 在玩家(其陆战队员)身前地面掉落一个"原版"弹药箱。
-//  本功能直接实现在积分插件内, 不依赖任何其它插件 (不像 /buy 6/7 需转发)。
-//    - 实体 = asw_ammo_drop, 弹药量 = AMMO_DROP_UNITS(100) = 游戏原版默认
-//      (RD 源码 asw_ammo_drop_shared.h: DEFAULT_AMMO_DROP_UNITS = 100)
-//    - 除位置外完全沿用原版属性: 模型/碰撞/使用逻辑/用光(<=0)自动移除均不变
-//    - 有限、非无限 (与头顶弹药箱一致)
-// ============================================================================
-void BuyAmmoDrop(int client)
-{
-    // 不在游戏中 (未控制任何陆战队员) 的玩家不能消费积分 / 也没有落点
-    if (!IsActivePlayer(client))
-    {
-        PrintToChat(client, "\x04[积分]\x01 不在游戏中的玩家不能购买, 请先加入游戏");
-        return;
-    }
-
-    // 积分机制关闭: 禁止购买 (聊天入口已拦截, 这里做兜底)
-    if (!g_cvEnabled.BoolValue)
-    {
-        PrintToChat(client, "\x04[积分]\x01 积分机制已关闭, 暂时无法购买弹药箱");
-        return;
-    }
-
-    int iCost = GetScaledCost(g_cvAmmoDropCost);
-
-    // 先校验积分, 不足则不生成、不扣分
-    if (iCost > 0 && g_iPoints < iCost)
-    {
-        PrintToChat(client, "\x04[积分]\x01 积分不足: 弹药箱需要 \x05%d\x01 积分, 当前 \x05%d\x01 积分",
-            iCost, g_iPoints);
-        return;
-    }
-
-    // 先生成: 生成失败(如无有效落点)就别扣分
-    int iBox = SpawnAmmoDropNear(client);
-    if (iBox <= 0)
-    {
-        PrintToChat(client, "\x04[积分]\x01 弹药箱生成失败 (请确认自己已控制陆战队员)");
-        return;
-    }
-
-    if (iCost > 0)
-    {
-        g_iPoints -= iCost;
-        RefreshHud();
-        PrintToChatAll("\x04[积分]\x01 %N 花费 \x05%d\x01 积分购买【弹药箱】, 剩余 \x05%d\x01 积分",
-            client, iCost, g_iPoints);
-    }
-    else
-    {
-        PrintToChatAll("\x04[积分]\x01 %N 获得【弹药箱】(无积分门槛)", client);
-    }
-}
-
-// ============================================================================
-//  第 9 类 动力护甲: 在玩家(其陆战队员)身前地面掉落一件 L3a 重甲
-//    (asw_weapon_normal_armor, 与 /buy 6 掉落武器同一观感)。
+//  第 7 类 动力护甲: 在玩家(其陆战队员)身前地面掉落一件 L3a 重甲
+//    (asw_weapon_normal_armor, 与 #buy 6 掉落武器同一观感)。
 //    只负责"掉落护甲", 不做自动装备——拾取/穿戴由任务与游戏规则决定。
 // ============================================================================
-void BuyArmorDrop(int client)
+void BuyArmorDrop(int client, bool bAuto = false)
 {
     // 不在游戏中 (未控制任何陆战队员) 的玩家不能消费积分 / 也没有落点
     if (!IsActivePlayer(client))
@@ -1546,8 +1778,12 @@ void BuyArmorDrop(int client)
     {
         g_iPoints -= iCost;
         RefreshHud();
-        PrintToChatAll("\x04[积分]\x01 %N 花费 \x05%d\x01 积分购买【动力护甲】, 剩余 \x05%d\x01 积分",
-            client, iCost, g_iPoints);
+        if (bAuto)
+            PrintToChatAll("\x04[积分]\x01 系统随机掉落【动力护甲】到 \x05%N\x01 身前 (消耗 \x05%d\x01 积分, 剩余 \x05%d\x01 积分)",
+                client, iCost, g_iPoints);
+        else
+            PrintToChatAll("\x04[积分]\x01 %N 花费 \x05%d\x01 积分购买【动力护甲】, 剩余 \x05%d\x01 积分",
+                client, iCost, g_iPoints);
     }
     else
     {
@@ -1582,11 +1818,9 @@ int SpawnArmorNear(int client)
 }
 
 // ============================================================================
-//  在玩家(其陆战队员)身前地面生成一个原版 asw_ammo_drop
-//    - 落点: 身前 AMMO_DROP_FORWARD(60) 单位, 再向下探测地面贴地放置(与原版掉落一致)
-//    - 返回实体索引 (>0=成功, -1=失败)
-//  关键顺序: 先 Teleport 到落点, 再 DispatchSpawn —— 因为 CASW_Ammo_Drop::Spawn()
-//  会用 GetAbsOrigin() 做一次贴地/电梯挂接的射线检测, 位置必须先就位。
+//  第 9 类 掉落弹药: 在玩家(其陆战队员)身前地面掉落一个弹药箱
+//    (asw_ammo_drop, 走过去自动补满武器弹药, 用尽后消失)。
+//    落点算法与 SpawnArmorNear 完全一致; 返回实体索引 (>0=成功, -1=失败)
 // ============================================================================
 int SpawnAmmoDropNear(int client)
 {
@@ -1594,7 +1828,6 @@ int SpawnAmmoDropNear(int client)
     if (iMarine <= 0)
         return -1;
 
-    // 落点 = 陆战队员脚下原点 沿其视角水平前方偏移 (与 asrd_watcher 掉落武器同一算法)
     float fPos[3], fAng[3];
     GetEntPropVector(iMarine, Prop_Data, "m_vecAbsOrigin", fPos);
     GetClientEyeAngles(client, fAng);
@@ -1602,47 +1835,209 @@ int SpawnAmmoDropNear(int client)
     fPos[0] += Cosine(fYaw) * AMMO_DROP_FORWARD;
     fPos[1] += Sine(fYaw) * AMMO_DROP_FORWARD;
 
-    // 从落点上方往下打一条只与场景几何(BRUSH)作用的射线: 命中则把箱子贴到地面,
-    // 未命中(悬空/探测失败)则退回"落点上方 20 单位", 与原版掉落观感一致。
-    float fStart[3], fEnd[3];
-    fStart[0] = fPos[0]; fStart[1] = fPos[1]; fStart[2] = fPos[2] + 64.0;
-    fEnd[0]   = fPos[0]; fEnd[1]   = fPos[1]; fEnd[2]   = fPos[2] - 512.0;
-    TR_TraceRayFilter(fStart, fEnd, MASK_SOLID_BRUSHONLY, RayType_EndPoint, TraceFilter_AmmoDrop);
-    if (TR_DidHit())
+    int iDrop = CreateEntityByName(AMMO_DROP_CLASSNAME);
+    if (iDrop == -1)
+        return -1;
+
+    TeleportEntity(iDrop, fPos, NULL_VECTOR, NULL_VECTOR);
+    DispatchSpawn(iDrop);
+    return iDrop;
+}
+
+// 掉落弹药购买入口 (#buy 9 / #9)
+void BuyAmmoDrop(int client)
+{
+    if (!IsActivePlayer(client))
     {
-        float fHit[3];
-        TR_GetEndPosition(fHit);
-        fPos[2] = fHit[2];
+        PrintToChat(client, "\x04[积分]\x01 不在游戏中的玩家不能购买, 请先加入游戏");
+        return;
+    }
+
+    if (!g_cvEnabled.BoolValue)
+    {
+        PrintToChat(client, "\x04[积分]\x01 积分机制已关闭, 暂时无法购买掉落弹药");
+        return;
+    }
+
+    int iCost = GetScaledCost(g_cvAmmoDropCost);
+    if (iCost > 0 && g_iPoints < iCost)
+    {
+        PrintToChat(client, "\x04[积分]\x01 积分不足: 掉落弹药需要 \x05%d\x01 积分, 当前 \x05%d\x01 积分",
+            iCost, g_iPoints);
+        return;
+    }
+
+    int iDrop = SpawnAmmoDropNear(client);
+    if (iDrop <= 0)
+    {
+        PrintToChat(client, "\x04[积分]\x01 弹药箱生成失败 (请确认自己已控制陆战队员)");
+        return;
+    }
+
+    if (iCost > 0)
+    {
+        g_iPoints -= iCost;
+        RefreshHud();
+        PrintToChatAll("\x04[积分]\x01 %N 花费 \x05%d\x01 积分购买【掉落弹药】, 剩余 \x05%d\x01 积分",
+            client, iCost, g_iPoints);
     }
     else
     {
-        fPos[2] += 20.0;
+        PrintToChatAll("\x04[积分]\x01 %N 获得【掉落弹药】(无积分门槛)", client);
     }
-
-    int iBox = CreateEntityByName(AMMO_DROP_CLASSNAME);
-    if (iBox == -1)
-    {
-        if (g_cvDebug.BoolValue)
-            PrintToServer("[积分][debug] CreateEntityByName(%s) 失败 (实体未注册?)", AMMO_DROP_CLASSNAME);
-        return -1;
-    }
-
-    char sUnits[16];
-    IntToString(AMMO_DROP_UNITS, sUnits, sizeof(sUnits));
-    DispatchKeyValue(iBox, "percent_remaining", sUnits);   // 100 = 游戏原版默认弹药量
-
-    // 先就位再 DispatchSpawn (见函数头注释)
-    TeleportEntity(iBox, fPos, NULL_VECTOR, NULL_VECTOR);
-    DispatchSpawn(iBox);
-
-    return iBox;
 }
 
-// 弹药箱贴地射线过滤器: 忽略所有实体, 只让场景几何(brush/world)参与碰撞
-// (MASK_SOLID_BRUSHONLY 下 world/brush 不受 filter 影响, 故恒返回 false 即可)
-public bool TraceFilter_AmmoDrop(int entity, int contentsMask, any data)
+// ============================================================================
+//  第 6 类 隐藏武器: 在玩家(其陆战队员)身前地面生成一把非标准武器
+//    直接 CreateEntityByName 生成 asw_weapon_* 实体, 走过去即可拾取;
+//    弹药/伤害均沿用游戏默认值 (这些武器都有 PRECACHE_WEAPON_REGISTER, 可正常生成)。
+//    落点算法与 SpawnArmorNear 完全一致; 返回实体索引 (>0=成功, -1=失败)
+// ============================================================================
+int SpawnWeaponNear(int client, const char[] classname)
 {
-    return false;
+    int iMarine = GetClientMarine(client);
+    if (iMarine <= 0)
+        return -1;
+
+    float fPos[3], fAng[3];
+    GetEntPropVector(iMarine, Prop_Data, "m_vecAbsOrigin", fPos);
+    GetClientEyeAngles(client, fAng);
+    float fYaw = DegToRad(fAng[1]);
+    fPos[0] += Cosine(fYaw) * AMMO_DROP_FORWARD;
+    fPos[1] += Sine(fYaw) * AMMO_DROP_FORWARD;
+
+    int iWeapon = CreateEntityByName(classname);
+    if (iWeapon == -1)
+        return -1;
+
+    TeleportEntity(iWeapon, fPos, NULL_VECTOR, NULL_VECTOR);
+    DispatchSpawn(iWeapon);
+    ActivateEntity(iWeapon);
+    return iWeapon;
+}
+
+// ============================================================================
+//  第 6 类 隐藏武器购买入口 (#buy 6 3~7, 及自动掉落调用):
+//    iExtra 为 EXTRA_WEAPON_* 常量 (0~4); bAuto=true 时广播"系统随机掉落"措辞。
+//    流程: 校验在游戏中 → 校验积分 → 生成武器 → 扣分 → 广播。
+// ============================================================================
+void BuyExtraWeapon(int client, int iExtra, bool bAuto = false)
+{
+    if (iExtra < 0 || iExtra >= EXTRA_WEAPON_COUNT)
+        return;
+
+    // 已停用的武器 (飞镖枪2/弹跳步枪/弹药包/医疗包): 既不可购买, 也不会被自动掉落选中
+    if (!g_bExtraWeaponPurchasable[iExtra])
+    {
+        if (!bAuto)
+            PrintToChat(client, "\x04[积分]\x01 该编号暂不可用");
+        return;
+    }
+
+    if (!IsActivePlayer(client))
+    {
+        PrintToChat(client, "\x04[积分]\x01 不在游戏中的玩家不能购买, 请先加入游戏 (需控制陆战队员)");
+        return;
+    }
+
+    if (!g_cvEnabled.BoolValue)
+    {
+        PrintToChat(client, "\x04[积分]\x01 积分机制已关闭, 暂时无法购买");
+        return;
+    }
+
+    int iCost = GetScaledCost(g_cvExtraWeaponCost);
+    if (iCost > 0 && g_iPoints < iCost)
+    {
+        PrintToChat(client, "\x04[积分]\x01 积分不足: %s 需要 \x05%d\x01 积分, 当前 \x05%d\x01 积分",
+            g_sExtraWeaponName[iExtra], iCost, g_iPoints);
+        return;
+    }
+
+    int iWeapon = SpawnWeaponNear(client, g_sExtraWeaponClass[iExtra]);
+    if (iWeapon <= 0)
+    {
+        PrintToChat(client, "\x04[积分]\x01 %s 生成失败 (实体未注册?)", g_sExtraWeaponName[iExtra]);
+        return;
+    }
+
+    if (iCost > 0)
+    {
+        g_iPoints -= iCost;
+        RefreshHud();
+        if (bAuto)
+            PrintToChatAll("\x04[积分]\x01 系统随机掉落【%s】到 \x05%N\x01 身前 (消耗 \x05%d\x01 积分, 剩余 \x05%d\x01 积分)",
+                g_sExtraWeaponName[iExtra], client, iCost, g_iPoints);
+        else
+            PrintToChatAll("\x04[积分]\x01 %N 花费 \x05%d\x01 积分购买【%s】, 剩余 \x05%d\x01 积分",
+                client, iCost, g_sExtraWeaponName[iExtra], g_iPoints);
+    }
+    else
+    {
+        PrintToChatAll("\x04[积分]\x01 %N 获得【%s】(无积分门槛)", client, g_sExtraWeaponName[iExtra]);
+    }
+}
+
+// ============================================================================
+//  第 8 类 隐藏道具购买入口 (#buy 8 1~3, 及自动掉落调用):
+//    iExtra 为 EXTRA_ITEM_* 常量 (0~EXTRA_ITEM_COUNT-1); bAuto=true 时广播"系统随机掉落"措辞。
+//    流程: 校验在游戏中 → 校验积分 → 生成道具 → 扣分 → 广播。
+// ============================================================================
+void BuyExtraItem(int client, int iExtra, bool bAuto = false)
+{
+    if (iExtra < 0 || iExtra >= EXTRA_ITEM_COUNT)
+        return;
+
+    // 已停用/已移除的道具 (T75炸药): 既不可购买, 也不会被自动掉落选中
+    if (!g_bExtraItemPurchasable[iExtra])
+    {
+        if (!bAuto)
+            PrintToChat(client, "\x04[积分]\x01 该编号暂不可用");
+        return;
+    }
+
+    if (!IsActivePlayer(client))
+    {
+        PrintToChat(client, "\x04[积分]\x01 不在游戏中的玩家不能购买, 请先加入游戏 (需控制陆战队员)");
+        return;
+    }
+
+    if (!g_cvEnabled.BoolValue)
+    {
+        PrintToChat(client, "\x04[积分]\x01 积分机制已关闭, 暂时无法购买");
+        return;
+    }
+
+    int iCost = GetScaledCost(g_cvExtraWeaponCost);
+    if (iCost > 0 && g_iPoints < iCost)
+    {
+        PrintToChat(client, "\x04[积分]\x01 积分不足: %s 需要 \x05%d\x01 积分, 当前 \x05%d\x01 积分",
+            g_sExtraItemName[iExtra], iCost, g_iPoints);
+        return;
+    }
+
+    int iWeapon = SpawnWeaponNear(client, g_sExtraItemClass[iExtra]);
+    if (iWeapon <= 0)
+    {
+        PrintToChat(client, "\x04[积分]\x01 %s 生成失败 (实体未注册?)", g_sExtraItemName[iExtra]);
+        return;
+    }
+
+    if (iCost > 0)
+    {
+        g_iPoints -= iCost;
+        RefreshHud();
+        if (bAuto)
+            PrintToChatAll("\x04[积分]\x01 系统随机掉落【%s】到 \x05%N\x01 身前 (消耗 \x05%d\x01 积分, 剩余 \x05%d\x01 积分)",
+                g_sExtraItemName[iExtra], client, iCost, g_iPoints);
+        else
+            PrintToChatAll("\x04[积分]\x01 %N 花费 \x05%d\x01 积分购买【%s】, 剩余 \x05%d\x01 积分",
+                client, iCost, g_sExtraItemName[iExtra], g_iPoints);
+    }
+    else
+    {
+        PrintToChatAll("\x04[积分]\x01 %N 获得【%s】(无积分门槛)", client, g_sExtraItemName[iExtra]);
+    }
 }
 
 // 满级判断: 玩家控制的陆战队员最大血量达到强化插件等级表上限(L5=1000)即视为满级
@@ -1656,7 +2051,7 @@ bool IsMarineMaxLevel(int client)
 }
 
 // ============================================================================
-//  满级加血: 全部玩家满级后再购买 /buy 1 的后续逻辑
+//  满级加血: 全部玩家满级后再购买 #buy 1 的后续逻辑
 //    全体在游戏玩家 (含购买者) 无论当前血量多少, 一律各 +200 (封顶其最大血量)
 //    已阵亡 (m_iHealth<=0) 的玩家不治疗
 // ============================================================================
@@ -1768,26 +2163,51 @@ void JoinArgsFrom(const char[] sInput, int n, char[] buf, int maxlen)
     }
 }
 
-// 购买用法说明 (玩家输入 /buy 查询时显示)
+// 购买用法说明 (玩家输入 #buy 查询时显示)
+//   每个子编号都写全命令 (如 #buy 6 1), 系列内换行缩进便于阅读
 void ShowBuyHelp(int client)
 {
-    PrintToChat(client, "欢迎 \x05%N\x01! 当前总积分: \x05%d\x01   用法: \x05/buy <编号> [选项]", client, g_iPoints);
     if (g_cvCostMult.FloatValue != 1.0)
-        PrintToChat(client, "  (当前购买倍率 \x05x%.2f\x01: 以下价格已按此倍率缩放)", g_cvCostMult.FloatValue);
-    PrintToChat(client, "  \x05/buy 1\x01  全队属性强化等级 +1 (%d 分; 最高5级, 满级后转为全体加血200)", GetScaledCost(g_cvPowerCost));
-    PrintToChat(client, "  \x05/buy 2\x01  战术核弹 (%d 分, 购买后 %d 秒内不能再买)", GetScaledCost(g_cvNukeCost), g_cvNukeCooldown.IntValue);
-    PrintToChat(client, "  \x05/buy 3 [1-6]\x01  友军虫群 (%d 分): 1=爪虫 2=蜂群 3=吐酸虫 4=盾甲虫 5=迫击炮虫 6=治疗虫", GetScaledCost(g_cvBetrayCost));
-    PrintToChat(client, "  \x05/buy 4 <0/1>\x01  强化哨戒塔箱 (%d 分): 0=机枪 1=炮塔", GetScaledCost(g_cvSentryCost));
-    PrintToChat(client, "  \x05/buy 5\x01  补充全部哨戒塔弹药 (%d 分)", GetScaledCost(g_cvRefillCost));
-    PrintToChat(client, "  \x05/buy 6 1\x01  增强电锯 (%d 分, 掉落在身边)", GetScaledCost(g_cvChainsawCost));
-    PrintToChat(client, "  \x05/buy 6 2\x01  守望者脉冲步枪 (%d 分, 掉落在身边, 击杀计积分)", GetScaledCost(g_cvRifleCost));
-    PrintToChat(client, "  \x05/buy 7\x01  头顶弹药箱 (%d 分, 标准弹药放到自己头顶, 游戏默认/有限/同时仅1个)", GetScaledCost(g_cvAmmoHeadCost));
-    PrintToChat(client, "  \x05/buy 8\x01  弹药箱 (%d 分, 在身前地面掉落一个原版弹药箱, 走过去补弹)", GetScaledCost(g_cvAmmoDropCost));
-    PrintToChat(client, "  \x05/buy 9\x01  动力护甲 (%d 分; 穿戴后大幅减伤, 对部分枪械及道具免伤, 免疫寄生, 提升移速, 护甲处于完全免伤状态时自动恢复血量)", GetScaledCost(g_cvArmorCost));
-    PrintToChat(client, "  \x05/hat\x01  将哨戒塔置于头顶");
-    PrintToChat(client, "  快捷指令: \x05/1\x01 强化   \x05/2\x01 核弹   \x05/3 [1-6]\x01 虫群   \x05/4 [0/1]\x01 哨戒塔箱   \x05/5\x01 补弹药   \x05/6 [1|2]\x01 武器箱(1=电锯 2=脉冲步枪)   \x05/7\x01 头顶弹药箱   \x05/8\x01 弹药箱   \x05/9\x01 动力护甲");
-    PrintToChat(client, "  例: \x05/3 2\x01 = /buy 3 2 (游侠)   \x05/4 1\x01 = /buy 4 1 (炮塔)   \x05/6 2\x01 = /buy 6 2 (脉冲步枪)");
-    PrintToChat(client, "  积分: \x05通过击杀虫族获取\x01");
+        PrintToChat(client, "\x04[积分]\x01 当前购买倍率 \x05x%.2f\x01: 下面的价格都已按此倍率换算", g_cvCostMult.FloatValue);
+    PrintToChat(client, "\x04[积分]\x01 能买的东西 (聊天框输入 #buy 编号, 也可简写 #编号 如 #6 3):");
+
+    // 属性强化 / 核弹
+    PrintToChat(client, "  \x05#buy 1\x01 全队属性强化 +1 级 (%d 分, 满 5 级后改为全体加血 200)", GetScaledCost(g_cvPowerCost));
+    PrintToChat(client, "  \x05#buy 2\x01 战术核弹 (%d 分, cd %d 秒)", GetScaledCost(g_cvNukeCost), g_cvNukeCooldown.IntValue);
+
+    // 召唤友军: 每个编号写全命令, 换行缩进
+    int iBetray = GetScaledCost(g_cvBetrayCost);
+    PrintToChat(client, "  \x05#buy 3\x01 召唤友军 (%d 分):", iBetray);
+    PrintToChat(client, "        #buy 3 1 普通爪虫×10");
+    PrintToChat(client, "        #buy 3 2 蚊子×20");
+    PrintToChat(client, "        #buy 3 3 吐酸虫×10");
+    PrintToChat(client, "        #buy 3 4 盾甲虫×5");
+    PrintToChat(client, "        #buy 3 5 炮虫×10");
+    PrintToChat(client, "        #buy 3 6 治疗虫×5");
+
+    // 哨戒塔
+    PrintToChat(client, "  \x05#buy 4\x01 强化哨戒塔 (%d 分):", GetScaledCost(g_cvSentryCost));
+    PrintToChat(client, "        #buy 4 0 机枪塔");
+    PrintToChat(client, "        #buy 4 1 炮塔");
+    PrintToChat(client, "  \x05#buy 5\x01 哨戒塔补满弹药 (%d 分)", GetScaledCost(g_cvRefillCost));
+
+    // 武器
+    PrintToChat(client, "  \x05#buy 6\x01 武器编号:");
+    PrintToChat(client, "        #buy 6 1 增强电锯 (%d 分)", GetScaledCost(g_cvChainsawCost));
+    PrintToChat(client, "        #buy 6 2 守望者脉冲步枪 (%d 分)", GetScaledCost(g_cvRifleCost));
+    int iExtra = GetScaledCost(g_cvExtraWeaponCost);
+    PrintToChat(client, "        #buy 6 3 增强型黏弹发射器 (%d 分)", iExtra);
+
+    // 动力护甲 / 隐藏道具
+    PrintToChat(client, "  \x05#buy 7\x01 动力护甲 (%d 分, 大幅减伤、免疫寄生、跑得更快)", GetScaledCost(g_cvArmorCost));
+    PrintToChat(client, "  \x05#buy 8\x01 隐藏道具 (%d 分):", iExtra);
+    PrintToChat(client, "        #buy 8 1 瞬移");
+    PrintToChat(client, "        #buy 8 2 喷气背包");
+    PrintToChat(client, "        #buy 8 3 诱饵");
+    PrintToChat(client, "  \x05#buy 9\x01 掉落弹药 (%d 分, 掉在身前地面, 走过去补弹)", GetScaledCost(g_cvAmmoDropCost));
+
+    PrintToChat(client, "  \x05#hat\x01 把哨戒塔放到头顶 (需先部署)");
+    PrintToChat(client, "  积分来源: 击杀虫族 (虫子血量越多获取积分越多)");
 }
 
 // ============================================================================
@@ -1813,7 +2233,7 @@ int GetPowerShrinkMax()
 // ============================================================================
 // ============================================================================
 //  统计地图上现有的哨戒塔数量 (底座实体 asw_sentry_base)
-//  仅用于 /buy 5 的前置检查: 一座塔都没有时不允许购买, 免得白扣积分
+//  仅用于 #buy 5 的前置检查: 一座塔都没有时不允许购买, 免得白扣积分
 // ============================================================================
 int CountMapSentries()
 {
@@ -1827,7 +2247,7 @@ int CountMapSentries()
 
 bool PurchaseFromChat(int client, const char[] sFullCommand, const char[] sArgs,
     ConVar costCv, const char[] sFeature,
-    const char[] sEnabledCv, const char[] sPublicCv)
+    const char[] sEnabledCv, const char[] sPublicCv, bool bAuto = false)
 {
     // 不在游戏中 (未控制任何陆战队员: 观战/等待/未入队) 的玩家不能消耗积分
     if (!IsActivePlayer(client))
@@ -1903,8 +2323,12 @@ bool PurchaseFromChat(int client, const char[] sFullCommand, const char[] sArgs,
     // 扣分并转发给原插件执行
     g_iPoints -= iCost;
     RefreshHud();
-    PrintToChatAll("\x04[积分]\x01 %N 花费 \x05%d\x01 积分购买【%s】, 剩余 \x05%d\x01 积分",
-        client, iCost, sFeature, g_iPoints);
+    if (bAuto)
+        PrintToChatAll("\x04[积分]\x01 系统随机掉落【%s】到 \x05%N\x01 身边 (消耗 \x05%d\x01 积分, 剩余 \x05%d\x01 积分)",
+            sFeature, client, iCost, g_iPoints);
+    else
+        PrintToChatAll("\x04[积分]\x01 %N 花费 \x05%d\x01 积分购买【%s】, 剩余 \x05%d\x01 积分",
+            client, iCost, sFeature, g_iPoints);
 
     if (g_cvDebug.BoolValue)
         PrintToServer("[积分][debug] %N 购买 %s 花费 %d, 剩余 %d",
@@ -1937,6 +2361,18 @@ public void OnGameFrame()
 {
     float fNow = GetEngineTime();
 
+    // 购买说明目标: 等任务真正开始 (m_iGameState==ASW_GS_INGAME) 后延迟 3 秒生成,
+    // 保证排在地图自带目标之后 (目标列表顺序=实体注册顺序, 地图目标在加载/简报期注册)
+    if (!g_bObjHelpSpawned && g_fObjHelpCheckAt > 0.0 && fNow >= g_fObjHelpCheckAt)
+    {
+        if (GameRules_GetProp("m_iGameState") == 3)  // ASW_GS_INGAME (asw_gamerules.h L625)
+        {
+            CreateTimer(3.0, Timer_SpawnBuyHelpObjectives);
+            g_bObjHelpSpawned = true;
+        }
+        g_fObjHelpCheckAt = fNow + 1.0;  // 每秒轮询一次游戏状态
+    }
+
     // 进服欢迎与用法提示: 到点的玩家逐个私聊发送 (预约见 OnClientPutInServer)
     for (int i = 1; i <= MaxClients; i++)
     {
@@ -1954,21 +2390,183 @@ public void OnGameFrame()
         g_fLastHudCheck = fNow;
         RefreshHud();
     }
+
+    // ── 增强型黏弹发射器伤害/弹药纠偏: 每 3 秒对齐一次引擎 ConVar (防止挑战脚本覆盖) ──
+    if (fNow >= g_fNextFlechetteApply)
+    {
+        g_fNextFlechetteApply = fNow + 3.0;
+        ApplyFlechetteSettings();
+    }
+
+    // ── 自动掉落: 步枪/护甲 (每 auto_interval 秒; 开局/重开立即检查,
+    //    场上暂无玩家时 1 秒后重试 → 开局玩家一进入就判断一次) ──
+    if (g_cvEnabled.BoolValue && g_cvAuto.BoolValue && fNow >= g_fNextAutoDrop)
+        g_fNextAutoDrop = fNow + (AutoDropTick() ? g_cvAutoInterval.FloatValue : 1.0);
+
+    // ── 自动力场护盾: 条件每帧实时检查, 但两次触发之间至少间隔
+    //    auto_shield_interval 秒 (冷却到了且条件仍满足就立即触发) ──
+    if (g_cvAuto.BoolValue && fNow >= g_fNextAutoShield && AutoShieldTick())
+        g_fNextAutoShield = fNow + g_cvAutoShieldInterval.FloatValue;
 }
 
 // ============================================================================
-//  进服欢迎: 仅聊天私发一行 —— 欢迎 + (积分机制开启时)提示输入 /buy 查看用法
-//  (无 [积分] 前缀。详细购买命令与快捷指令由玩家输入 /buy 后经 ShowBuyHelp 显示)
-//  注意: 积分机制即使关闭, 依然发送欢迎消息; 只是不再附 /buy 用法提示。
+//  自动掉落 (帧回调驱动): 等价"随机挑一名存活玩家购买", 价格/落点与手动购买
+//  完全一致 (掉落价 = 购买价, 同一配置项), 同样扣共享积分;
+//  但广播措辞是"系统随机掉落" (不是玩家购买)。
+//    - 可掉物品: 守望者步枪 / 动力护甲 / 增强电锯 / 增强型黏弹发射器 / 瞬移 / 喷气背包
+//    - 单次最多掉落一件: 从"积分够"的物品里随机选一件
+//      (价格=0 不自动掉, 防止免费无限刷)
+//  返回 true = 场上有存活玩家 (检查有意义, 推进完整间隔);
+//  返回 false = 暂无玩家 (开局/清场), 由调用方 1 秒后重试, 保证
+//  "刚开局有玩家了立即判断一次"。
+// ============================================================================
+bool AutoDropTick()
+{
+    int alive[MAXPLAYERS];
+    int n = CollectAlivePlayers(alive);
+    if (n == 0)
+        return false;
+
+    // 各物品按各自配置价格判定
+    int iRifleCost = GetScaledCost(g_cvRifleCost);
+    int iArmorCost = GetScaledCost(g_cvArmorCost);
+    int iSawCost   = GetScaledCost(g_cvChainsawCost);
+    int iExtraCost = GetScaledCost(g_cvExtraWeaponCost);
+
+    // 收集当前积分买得起的物品:
+    //   0=步枪 1=护甲 2=电锯 3+=隐藏武器/隐藏道具, 单次只掉一件
+    //   隐藏武器/道具中只有 g_b*AutoDrop 标记为 true 的才参与自动掉落
+    int candidates[3 + EXTRA_WEAPON_COUNT + EXTRA_ITEM_COUNT];
+    int nCand = 0;
+    if (iRifleCost > 0 && g_iPoints >= iRifleCost)
+        candidates[nCand++] = 0;
+    if (iArmorCost > 0 && g_iPoints >= iArmorCost)
+        candidates[nCand++] = 1;
+    if (iSawCost > 0 && g_iPoints >= iSawCost)
+        candidates[nCand++] = 2;
+    if (iExtraCost > 0 && g_iPoints >= iExtraCost)
+    {
+        for (int i = 0; i < EXTRA_WEAPON_COUNT; i++)
+        {
+            if (g_bExtraWeaponAutoDrop[i])
+                candidates[nCand++] = 3 + i;
+        }
+        for (int i = 0; i < EXTRA_ITEM_COUNT; i++)
+        {
+            if (g_bExtraItemAutoDrop[i])
+                candidates[nCand++] = 3 + EXTRA_WEAPON_COUNT + i;
+        }
+    }
+    if (nCand == 0)
+        return true;
+
+    int pick = alive[GetRandomInt(0, n - 1)];
+    int iChosen = candidates[GetRandomInt(0, nCand - 1)];
+    if (iChosen <= 2)
+    {
+        switch (iChosen)
+        {
+            case 0:
+                PurchaseFromChat(pick, "sm_watcherdrop", "", g_cvRifleCost,
+                    "守望者脉冲步枪", "sm_asrd_watcher_enabled", "sm_asrd_watcher_drop_public", true);
+            case 1:
+                BuyArmorDrop(pick, true);
+            case 2:
+                PurchaseFromChat(pick, "sm_chainsawdrop", "", g_cvChainsawCost,
+                    "增强电锯", "sm_asrd_chainsaw_enabled", "sm_asrd_chainsaw_drop_public", true);
+        }
+    }
+    else if (iChosen < 3 + EXTRA_WEAPON_COUNT)
+    {
+        BuyExtraWeapon(pick, iChosen - 3, true);
+    }
+    else
+    {
+        BuyExtraItem(pick, iChosen - 3 - EXTRA_WEAPON_COUNT, true);
+    }
+    return true;
+}
+
+// ============================================================================
+//  自动力场护盾 (帧回调驱动, 不消耗积分):
+//    触发条件每帧实时检查: 任一存活玩家血量 < auto_shield_hp (不判断玩家人数)
+//    效果:     血量最低的那名存活玩家获得 auto_shield_duration 秒 aura 护盾
+//              (asrd_repulse 的力场护盾, 到期自动解除; repulse 未加载则跳过;
+//               单次只作用一人 — 该玩家已有护盾时本轮静默跳过, 不换人)
+//    冷却:     只有护盾"真的加上"之后才开始计 auto_shield_interval 秒冷却;
+//              场上没有符合条件的人时不消耗冷却 (即: 从不会"空转"计冷却);
+//              冷却期间即使有人掉到触发线以下也不触发, 冷却结束后重新挑血量最低者再判定
+//  返回 true = 护盾已实际作用 (调用方从此刻开始计冷却);
+//       false = 没作用 (条件不满足/无存活玩家/目标已有护盾), 下一帧继续检查。
+// ============================================================================
+bool AutoShieldTick()
+{
+    if (GetFeatureStatus(FeatureType_Native, "ASRDRepulse_AuraTimed") != FeatureStatus_Available)
+        return false;   // repulse 未加载: 不触发
+
+    int alive[MAXPLAYERS];
+    int n = CollectAlivePlayers(alive);
+    if (n == 0)
+        return false;
+
+    // 触发前提: 存在低血玩家; 同时找出全场血量最低的玩家作为唯一目标
+    bool bLowHp = false;
+    int target = -1;
+    int iLowestHp = 0;
+    for (int i = 0; i < n; i++)
+    {
+        int marine = GetClientMarine(alive[i]);
+        if (marine <= 0)
+            continue;
+        int hp = GetEntProp(marine, Prop_Data, "m_iHealth");
+        if (hp < g_cvAutoShieldHp.IntValue)
+            bLowHp = true;
+        if (target == -1 || hp < iLowestHp)
+        {
+            target = alive[i];
+            iLowestHp = hp;
+        }
+    }
+    if (!bLowHp || target == -1)
+        return false;
+
+    // 单次只作用于这一名玩家: 已有护盾(如管理员手动开的)时静默跳过, 不换人
+    if (ASRDRepulse_AuraTimed(target, g_cvAutoShieldDuration.IntValue) != 1)
+        return false;   // 没能加上护盾: 不开始冷却, 下一帧继续判断 (旧护盾一结束就会补上)
+
+    PrintToChatAll("\x04局势危急，\x05%N\x01 开启紧急力场护盾。", target);
+    return true;   // 护盾已实际加上: 从这一刻起才开始计 auto_shield_interval 秒冷却
+}
+
+// 收集存活玩家 (控制陆战队员且 marine 血量>0), 返回人数
+int CollectAlivePlayers(int[] list)
+{
+    int n = 0;
+    for (int i = 1; i <= MaxClients; i++)
+    {
+        if (!IsActivePlayer(i))
+            continue;
+        int marine = GetClientMarine(i);
+        if (marine <= 0 || GetEntProp(marine, Prop_Data, "m_iHealth") <= 0)
+            continue;
+        list[n++] = i;
+    }
+    return n;
+}
+
+// ============================================================================
+//  进服欢迎: 仅聊天私发一行 —— 欢迎 + (积分机制开启时)提示输入 #buy 查看用法
+//  (无 [积分] 前缀。详细购买命令与快捷指令由玩家输入 #buy 后经 ShowBuyHelp 显示)
+//  注意: 积分机制即使关闭, 依然发送欢迎消息; 只是不再附 #buy 用法提示。
 // ============================================================================
 void SendJoinWelcome(int client)
 {
     if (!IsClientInGame(client) || IsFakeClient(client))
         return;
 
-    // 积分机制开启时才追加 /buy 用法提示 (关闭后 /buy 本就被拦截, 提示无意义)
+    // 积分机制开启时才追加 #buy 用法提示 (关闭后 #buy 本就被拦截, 提示无意义)
     if (g_cvEnabled.BoolValue)
-        PrintToChat(client, "欢迎 \x05%N\x01！请输入\x05/buy\x01查看积分使用方法。", client);
+        PrintToChat(client, "欢迎 \x05%N\x01！开始游戏后按 \x05Tab\x01 或输入 \x05#buy\x01 查看积分使用说明。", client);
     else
         PrintToChat(client, "欢迎 \x05%N\x01！", client);
 }
@@ -2004,7 +2602,7 @@ void RefreshHud()
 }
 
 // ============================================================================
-//  工具: 虫族类名判定 / 补挂已有虫族
+//  工具: 虫族类名判定
 // ============================================================================
 bool IsAlienClass(const char[] classname)
 {
@@ -2014,14 +2612,4 @@ bool IsAlienClass(const char[] classname)
             return true;
     }
     return false;
-}
-
-void HookExistingAliens()
-{
-    for (int c = 0; c < sizeof(g_sAlienClasses); c++)
-    {
-        int ent = -1;
-        while ((ent = FindEntityByClassname(ent, g_sAlienClasses[c])) != -1)
-            SDKHookEx(ent, SDKHook_OnTakeDamage, OnAlienDamaged);
-    }
 }
