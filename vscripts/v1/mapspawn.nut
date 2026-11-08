@@ -5,6 +5,7 @@
 //
 //  规则:
 //    - /fh 、/tp  每名玩家每局各一次; 本关重新开始(任务重开)时自动重置
+//    - /tp 只传送到最近的"存活且未倒地"队友旁（倒地可被扶起的状态不算有效目标）
 //    - /smfh <目标> 仅白名单管理员可用, 不限次数
 //    - /asft on|off 管理员开关普通玩家 /fh /tp（持久化到文件, 换图后保持, 管理员不受限）
 //    - /fhb <目标> 管理员恶搞复活: 全服大字+红光闪+音效(占位)
@@ -39,6 +40,8 @@ try { IncludeScript("effects"); } catch(e) {}
 // 各命令使用标记; 换图时本文件重新执行 => 自动重置
 ::g_ASRD_FH_Used <- {};
 ::g_ASRD_TP_Used <- {};
+// 倒地兜底表（仅当 NetProps 取不到 m_bKnockedOut 时才用, 由 marine_incapacitated / marine_revived 事件维护）
+::g_ASRD_DownedFallback <- {};
 // 普通玩家 /fh /tp 总开关；用 save/vscripts/asrd_fh_switch.txt 持久化,
 // 换图后保持管理员上次设置的 on/off。无该文件时默认关闭。
 local _fhSwitchRead = "0";
@@ -78,12 +81,31 @@ function OnGameEvent_marine_selected(tEventData)
         ::g_tPlayerMarineList[hPlayer] <- hMarine;
 }
 
+// 陆战队员被击倒（倒地）时记录: 事件 marine_incapacitated { entindex }
+// 倒地时游戏会把血量设成 最大血量-10（仍 > 0）, 所以不能只靠血量判断
+function OnGameEvent_marine_incapacitated(tEventData)
+{
+    // 保留事件钩子：仅在 NetProps 不可用的极端情况下作兜底记录
+    local hMarine = EntIndexToHScript(tEventData["entindex"]);
+    if (hMarine != null && hMarine.IsValid())
+        ::g_ASRD_DownedFallback[hMarine] <- true;
+}
+
+// 陆战队员被队友扶起时清除标记: 事件 marine_revived { entindex, reviver }
+function OnGameEvent_marine_revived(tEventData)
+{
+    local hMarine = EntIndexToHScript(tEventData["entindex"]);
+    if (hMarine != null && hMarine.IsValid() && ::g_ASRD_DownedFallback.rawin(hMarine))
+        ::g_ASRD_DownedFallback.rawdelete(hMarine);
+}
+
 // 本关重新开始（失败重开该关 / 进入下一关）时, 重置 /fh /tp 使用次数,
 // 这样重开本关后每名玩家又能各用一次, 不必换一张地图。
 function OnGameEvent_asw_mission_restart(params)
 {
     ::g_ASRD_FH_Used.clear();
     ::g_ASRD_TP_Used.clear();
+    ::g_ASRD_DownedFallback.clear();
     if ("ASRD_NukeReset" in ::getroottable())
         ASRD_NukeReset();   // 清理核弹倒计时/冲击波计时器与状态
 }
@@ -95,6 +117,21 @@ function IsAlive(hPlayer)
         && ::g_tPlayerMarineList.rawin(hPlayer)
         && ::g_tPlayerMarineList[hPlayer]
         && ::g_tPlayerMarineList[hPlayer].IsValid());
+}
+
+// 该陆战队员是否处于"倒地"状态（被击倒但没死, 可以被队友扶起, 不能作为传送目标）。
+// 倒地时游戏执行 SetHealth(最大血量-10) 且血量仍 > 0, 所以不能只凭血量判断;
+// 真正的标志是 asw_marine 的网络字段 m_bKnockedOut（SendPropBool）。
+// 用 VScript 内置的 NetProps 单例直接读网络字段, 取不到(-1)时退回事件表。
+function IsDowned(hMarine)
+{
+    if (hMarine == null || !hMarine.IsValid()) return false;
+    if ("NetProps" in ::getroottable())
+    {
+        local v = NetProps.GetPropInt(hMarine, "m_bKnockedOut");
+        if (v >= 0) return (v != 0);
+    }
+    return ::g_ASRD_DownedFallback.rawin(hMarine);
 }
 
 // 是否为白名单管理员（按 SteamID64 比对, 名单来自服务器文件 rd_admins.nut）
@@ -110,7 +147,7 @@ function IsAdmin(hPlayer)
     return false;
 }
 
-// 找离 hPlayer 最近的存活队友陆战队员（含人机），没有则 null
+// 找离 hPlayer 最近的存活且未倒地的队友陆战队员（含人机），没有则 null
 function FindNearestAlly(hPlayer)
 {
     local my = ::g_tPlayerMarineList.rawin(hPlayer) ? ::g_tPlayerMarineList[hPlayer] : null;
@@ -123,6 +160,8 @@ function FindNearestAlly(hPlayer)
         if (!m.IsValid()) continue;
         if (m == my) continue;
         if (m.GetHealth() <= 0) continue;
+        // 倒地(被击倒但未死, 可被扶起)的队友不作为传送目标
+        if (IsDowned(m)) continue;
         local pos = m.GetOrigin();
         local dx = pos.x - myPos.x, dy = pos.y - myPos.y, dz = pos.z - myPos.z;
         local d = dx * dx + dy * dy + dz * dz;
@@ -174,6 +213,14 @@ function RespawnPlayer(hPlayer)
     if (pos == null) return false;
     hPlayer.ResurrectMarine(pos, true);
     ApplyRespawnEffect(pos);
+    // 复活后清掉兜底表里可能残留的倒地标记
+    // （倒地者被致命伤直接杀死时游戏只调 SetKnockedOut(false), 不会触发 marine_revived 事件）
+    if (hPlayer && ::g_tPlayerMarineList.rawin(hPlayer))
+    {
+        local hMarine = ::g_tPlayerMarineList[hPlayer];
+        if (hMarine != null && ::g_ASRD_DownedFallback.rawin(hMarine))
+            ::g_ASRD_DownedFallback.rawdelete(hMarine);
+    }
     return true;
 }
 
@@ -201,7 +248,7 @@ function DoFH(hPlayer)
     }
 }
 
-// /tp：传送到最近的存活队友旁（每局一次）
+// /tp：传送到最近的"存活且未倒地"队友旁（每局一次）
 function DoTP(hPlayer)
 {
     if (!IsAlive(hPlayer))
@@ -217,7 +264,7 @@ function DoTP(hPlayer)
     local target = FindNearestAlly(hPlayer);
     if (target == null)
     {
-        Chat(hPlayer.GetPlayerName() + "：没有找到其他队友（可能场上只有你一个人）");
+        Chat(hPlayer.GetPlayerName() + "：没有可传送的队友（可能只有你一人，或队友都已倒地/阵亡）");
         return;
     }
     local my = ::g_tPlayerMarineList[hPlayer];

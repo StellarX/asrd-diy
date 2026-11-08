@@ -1,7 +1,8 @@
 /**
  * ============================================================================
  *  [AS:RD] L3a 重型战术护甲增强 (Armor)
- *  版本 2.0.2  |  (2.0.2: 穿戴提示改为"减伤，移速，防蚊虫叮咬、烧烤、寄生，部分武器免伤。")
+ *  版本 2.0.3  |  (2.0.3: 取消护甲破损时的"变红+闪烁"提示, 无论破损与否一律显示 "护甲厚度：N")
+ *                 (2.0.2: 穿戴提示改为"减伤，移速，防蚊虫叮咬、烧烤、寄生，部分武器免伤。")
  *                 (2.0.1: 新增火焰伤害完全免伤 sm_asrd_armor_immune_burn — 燃烧地雷/地图火焰/燃烧弹等按 DMG_BURN 拦截, 不掉血不消耗护甲层)  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ──────────────────────────────────────
@@ -10,8 +11,8 @@
  *       新基准 (倍率 0.2 / 总涂层 20 / 停手 3s 后开始恢复 / 每层 1s)。
  *       —— 全部参数在 cfg/sourcemod/asrd_armor.cfg 中可改 (插件重载/换图生效)。
  *    2. 穿戴提示: 玩家穿上护甲后在聊天框私聊通知“已穿戴 IAF 动力护甲”。
- *    3. 层数 HUD: 屏幕上常驻显示该玩家当前的护甲剩余层数, 仅本人可见,
- *       显示位置/颜色可配置。
+ *    3. 层数 HUD: 屏幕上常驻显示该玩家当前的护甲剩余层数 ("护甲厚度：N"),
+ *       仅本人可见, 显示位置/颜色可配置; 护甲破损与否都显示同一字样。
  *    4. 移速加成: 穿戴护甲时按加成倍率提升移速 (写 AS:RD 的 m_fSpeedScale)。
  *    5. 免伤: 穿戴护甲时免疫一组指定武器的伤害 (默认: 火枪/步枪/毒气手雷等),
  *       并对火焰伤害 (燃烧地雷/地图火焰/燃烧弹, 引擎标志 DMG_BURN) 完全免伤,
@@ -33,7 +34,6 @@
  *   sm_asrd_armor_hud_x       HUD 横向位置 (默认 0.01; -1=水平居中)
  *   sm_asrd_armor_hud_y       HUD 纵向位置 (默认 0.06)
  *   sm_asrd_armor_hud_channel HUD 通道 (默认 7, 避开 4/5/6 其它插件)
- *   sm_asrd_armor_hud_blink   红色警告 HUD 闪烁翻转间隔秒 (默认 0.2; 0=关闭闪烁)
  *   sm_asrd_armor_hud_r/g/b    HUD 颜色 (默认 0/255/200)
  *   sm_asrd_armor_notify      穿戴聊天通知开关 (默认 1)
  *   sm_asrd_armor_immune      免伤武器列表 (空格分隔的实体类名)
@@ -54,7 +54,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Armor"
-#define PLUGIN_VERSION "2.0.2"
+#define PLUGIN_VERSION "2.0.3"
 
 #define ARMOR_CLASS  "asw_weapon_normal_armor"
 #define MARINE_CLASS "asw_marine"
@@ -111,7 +111,6 @@ ConVar g_ImmuneCv;
 ConVar g_ImmuneBurnCv; // 火焰伤害完全免伤开关 (DMG_BURN, 默认 1)
 ConVar g_RegenCv;   // 护甲满护免伤时缓慢回血速率 (生命/秒, 0=关闭)
 ConVar g_MaxSpeedCv; // 护甲层恢复的最高速度 (层/秒)
-ConVar g_BlinkCv;   // 红色警告 HUD 闪烁翻转间隔 (秒)
 
 // 免伤列表缓存
 #define MAX_IMMUNE 16
@@ -121,8 +120,6 @@ int  g_iImmuneCount;
 // 上一帧是否穿戴护甲 (用于穿戴转换检测: 通知/移速恢复)
 bool g_bPrevWorn[MAXPLAYERS + 1];
 float g_fLastHudTime;
-bool g_bBlinkPhase;
-float g_fLastBlinkTime;      // 红色警告闪烁最近一次翻转时刻 (按时间翻转, 与重绘节流解耦)
 // 缓慢回血的浮点累积 (避免整数血量逐 tick 取整丢失, 攒够 1 点再一次性加)
 float g_fRegenAccum[MAXPLAYERS + 1];
 
@@ -174,7 +171,6 @@ public void OnPluginStart()
     g_ImmuneBurnCv   = CreateConVar("sm_asrd_armor_immune_burn", "1", "火焰伤害完全免伤: 燃烧地雷/地图火焰/燃烧弹等 (DMG_BURN) 不掉血不消耗护甲层 (0=火焰照常烧甲)");
     g_RegenCv         = CreateConVar("sm_asrd_armor_regen",       "2",     "护甲满护免伤时缓慢回血速率 (生命/秒, 0=关闭)");
     g_MaxSpeedCv      = CreateConVar("sm_asrd_armor_recover_maxspeed","3", "护甲层最高恢复速度 (层/秒): 以本次待恢复层数为基数, 按已恢复比例分三档提速(默认 1→2→3 层/秒) (0=恒定基础速度)");
-    g_BlinkCv         = CreateConVar("sm_asrd_armor_hud_blink",         "0.2",     "红色警告 HUD 闪烁翻转间隔(秒): 越小闪得越快 (0=关闭闪烁)");
 
     // 首次加载生成 / 每次加载执行 cfg/sourcemod/asrd_armor.cfg
     //   需在所有 CreateConVar 之后调用, 才会把上面的参数写进配置文件
@@ -199,8 +195,6 @@ public void OnPluginStart()
 
     // 自杀命令绕过护甲: 拦截 asw_suicide, 改用护甲豁免的伤害类型直接致死
     AddCommandListener(Cmd_Suicide, "asw_suicide");
-
-    // 红色闪烁相位: 随 OnGameFrame 的每次真实重绘翻转, 保证与绘制同频、肉眼可见
 }
 
 void FindEngineCvars()
@@ -224,7 +218,6 @@ public void OnMapStart()
     for (int i = 1; i <= MaxClients; i++)
         g_bPrevWorn[i] = false;
     g_fLastHudTime = 0.0;
-    g_fLastBlinkTime = 0.0;
 }
 
 void ApplyAllToEngine()
@@ -365,22 +358,6 @@ public void OnGameFrame()
         return;
     g_fLastHudTime = fNow;
 
-    // 按 sm_asrd_armor_hud_blink 间隔翻转闪烁相位 (与重绘节流解耦, 频率可配置)
-    float fBlink = g_BlinkCv.FloatValue;
-    if (fBlink > 0.0)
-    {
-        if (fNow - g_fLastBlinkTime >= fBlink)
-        {
-            g_bBlinkPhase = !g_bBlinkPhase;
-            g_fLastBlinkTime = fNow;
-        }
-    }
-    else
-    {
-        g_bBlinkPhase = true;   // 0=关闭闪烁, 恒亮红色警告
-        g_fLastBlinkTime = 0.0;
-    }
-
     int iLayersMax = g_LayersCv.IntValue;
 
     for (int i = 1; i <= MaxClients; i++)
@@ -489,7 +466,7 @@ public void OnGameFrame()
         g_bPrevWorn[i] = bWorn;
     }
 
-    // 观战者视角: 让正在观战某护甲佩戴者的玩家, 看到与佩戴者一致的护甲 HUD (含破损闪烁)
+    // 观战者视角: 让正在观战某护甲佩戴者的玩家, 看到与佩戴者一致的护甲 HUD
     if (g_HudEnabledCv.IntValue >= 1)
     {
         for (int j = 1; j <= MaxClients; j++)
@@ -531,29 +508,9 @@ void DrawArmorHud(int client, int left)
     float fX = g_HudXCv.FloatValue;
     float fY = g_HudYCv.FloatValue;
 
-    // 用当前护甲参数现算"受下一击"的减伤系数 (不缓存, 参数随时可能被改)
-    //   scale = 基础减伤 − (总层 − 掉层后缺失) × 每层吸收, 最小 0 → ≤0 即完全免伤
-    float flScale = ComputeScale(left);
-
-    bool bWarn = (flScale > 0.0001);
-
-    if (g_EnabledCv.IntValue >= 1 && bWarn)
+    if (g_EnabledCv.IntValue >= 1)
     {
-        // 部分减免(下一击会掉血): "高亮显示帧"与"清空通道帧"交替, 实现显示/消失闪烁
-        //   (此游戏 HUD 忽略 alpha, 故隐藏帧直接清空通道, 而不是靠半透明)
-        if (g_bBlinkPhase)
-        {
-            SetHudTextParams(fX, fY, 0.6, 255, 30, 30, 255, 0, 0.0, 0.1, 0.1);
-            ShowHudText(client, g_HudChCv.IntValue, "护甲破损：%d", left);
-        }
-        else
-        {
-            ShowHudText(client, g_HudChCv.IntValue, "");
-        }
-    }
-    else if (g_EnabledCv.IntValue >= 1)
-    {
-        // 完全免伤: 保持原配置颜色
+        // 护甲无论是否破损, 统一显示 "护甲厚度：N", 颜色用配置值 (不做变红/闪烁)
         SetHudTextParams(fX, fY, 0.6, g_HudRCv.IntValue, g_HudGCv.IntValue, g_HudBCv.IntValue, 210, 0, 0.0, 0.1, 0.1);
         ShowHudText(client, g_HudChCv.IntValue, "护甲厚度：%d", left);
     }

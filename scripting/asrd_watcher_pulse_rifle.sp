@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  [AS:RD] 守望者标准型脉冲步枪 (Watcher Standard Pulse Rifle)
- *  版本 1.4.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
+ *  版本 1.6.0  |  游戏: Alien Swarm: Reactive Drop (AppID 563560)
  *
  *  ── 这个插件做什么 ─────────────────────────────────────
  *  游戏里这把武器 (Overwatch Standard Issue Pulse Rifle / OSIPR / AR2 / 联合军脉冲步枪)
@@ -32,6 +32,8 @@
  *   sm_asrd_watcher_alt_ammo         副武器(能量球)弹药数量 (默认 10; 0=不覆盖, 沿用游戏默认 3; 上限 2000)
  *   sm_asrd_watcher_clip_ammo        主武器弹匣弹药量 (默认 200; 每弹夹的发数; 上限 2000)
  *   sm_asrd_watcher_reserve_clips    主武器备弹格数 (默认 2; HUD 下方弹夹格数, 2=全满 400 发; 上限 20)
+ *   sm_asrd_watcher_fire_interval    两次射击间隔秒 (默认 0=不限制, 原版 0.1 秒/发;
+ *                                    设小=射速加快, 设大=放慢; 仅本插件掉落的步枪生效)
  *   sm_asrd_watcher_color_r/g/b      掉落步枪染色 RGB (各 0~255, 默认 0 200 255 = 青色, 一眼可辨)
  *   sm_asrd_watcher_color_a          染色透明度 (0~255, 默认 255=不透明)
  *   sm_asrd_watcher_debug            调试输出 (默认 0)
@@ -72,6 +74,11 @@
  *     副武器目标值, 并在 ConVar 变化时跟随更新。
  *   - 视觉标记: 给掉落的步枪染上设定色 (m_clrRender); AS:RD 武器每帧会复位该属性,
  *     故 OnGameFrame 里对增强步枪持续重涂, 保证地上/手里都稳定是设定色。
+ *   - 射速 (v1.6.0): weapon_fire 事件记录每把增强步枪的开火时刻, 每帧把
+ *     m_flNextPrimaryAttack 直接覆写为"上次开火 + fire_interval" (双向: 引擎推得太远
+ *     则拉小=加快, 太近则推后=放慢); 只在弹匣非空时干预, 换弹/空弹保持引擎原节奏。
+ *     注意: 加快射速时开火动画速率不变 (动画由武器脚本控制), 可能出现动画跟不上
+ *     实际射速的观感, 伤害/弹药消耗按真实射速走。
  *
  *  依赖: SourceMod 1.11+ (不依赖任何扩展, 只用核心 API + sdktools + sdkhooks)
  * ============================================================================
@@ -85,7 +92,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] 守望者标准型脉冲步枪 (Watcher Pulse Rifle)"
-#define PLUGIN_VERSION "1.5.1"
+#define PLUGIN_VERSION "1.6.0"
 
 // 武器实体类名: 游戏源码 scripts/asw_weapon_ar2.txt 对应实体 asw_weapon_ar2
 // (Overwatch Standard Issue Pulse Rifle / AR2 / 联合军脉冲步枪)
@@ -130,6 +137,7 @@ ConVar g_cvDropPublic;  // 普通玩家能否用 sm_watcherdrop 自己掉步枪
 ConVar g_cvAltAmmo;     // 副武器(能量球)弹药数量
 ConVar g_cvClipAmmo;    // 主武器弹匣弹药量
 ConVar g_cvReserveClips;// 主武器备弹槽位数
+ConVar g_cvFireInterval;// 两次射击最小间隔 (秒)
 ConVar g_cvDebug;
 ConVar g_cvColorR;      // 掉落步枪染色 R (0~255)
 ConVar g_cvColorG;      // 掉落步枪染色 G (0~255)
@@ -149,6 +157,9 @@ bool  g_bDamageHooked[2049];
 
 //  已为哪个持枪 marine 补过弹: 避免每帧重复写 (仅在持枪者变化时补一次)
 int   g_iAppliedOwner[2049];
+
+//  每把增强步枪的上次开火时刻 (游戏时间, 射速钳制用)
+float g_fLastFire[2049];
 
 //  弹药箱补给下次检查时刻 (游戏时间)
 float g_fNextBoxRefill;
@@ -207,6 +218,11 @@ public void OnPluginStart()
         FCVAR_NOTIFY, true, 0.0, true, 20.0
     );
     HookConVarChange(g_cvReserveClips, OnClipAmmoChanged);
+    g_cvFireInterval = CreateConVar(
+        "sm_asrd_watcher_fire_interval", "0",
+        "两次射击间隔秒数 (0=不限制 = 原版 0.1 秒/发; 设小=射速加快, 设大=放慢; 仅本插件掉落的步枪生效; 加快时开火动画可能跟不上实际射速)",
+        FCVAR_NOTIFY, true, 0.0, true, 10.0
+    );
     g_cvDebug = CreateConVar(
         "sm_asrd_watcher_debug", "0",
         "调试模式 (向服务器控制台输出检测/掉落/弹药日志)",
@@ -240,6 +256,9 @@ public void OnPluginStart()
 
     // 地图开始时横扫所有已存在的实体并补挂伤害钩子
     HookExistingEntities();
+
+    // 射速钳制: 记录开火时刻
+    HookEvent("weapon_fire", Event_WeaponFire, EventHookMode_Post);
 
     // 同步游戏弹药上限 ConVar:
     //   asw_ammo_count_ar2            = 弹匣上限 (换弹补满目标, 默认 30, 不改成 200 则换弹后被压回 30)
@@ -380,12 +399,41 @@ public void OnGameFrame()
                 ApplyWatcherAmmo(w, iMarine);
                 g_iAppliedOwner[w] = iMarine;
             }
+
+            // ── 射速: 弹匣非空时才钳制, 换弹/空弹保持引擎原节奏 ──
+            //   双向: 引擎把下次开火推得太远则拉小(加快), 太近则推后(放慢)
+            float fInterval = g_cvFireInterval.FloatValue;
+            if (fInterval > 0.0 && g_fLastFire[w] > 0.0 && GetWeaponClip1(w) > 0)
+            {
+                float fTarget = g_fLastFire[w] + fInterval;
+                float fNext = GetWeaponNextAttack(w);
+                if (FloatAbs(fNext - fTarget) > 0.001)
+                    SetWeaponNextAttack(w, fTarget);
+            }
         }
         else if (w < sizeof(g_iAppliedOwner))
         {
             g_iAppliedOwner[w] = -1; // 没人持有时, 下次被拾取再补弹
         }
     }
+}
+
+// weapon_fire: 记录增强步枪的开火时刻 (下一帧据此限制最小间隔)
+public void Event_WeaponFire(Event event, const char[] name, bool dontBroadcast)
+{
+    int client = GetClientOfUserId(event.GetInt("userid"));
+    if (client <= 0 || !IsClientInGame(client))
+        return;
+
+    int iMarine = GetPlayerMarine(client);
+    if (iMarine <= 0)
+        return;
+
+    int iWeapon = GetActiveWeapon(iMarine);
+    if (iWeapon <= 0 || iWeapon >= sizeof(g_bEnhancedWatcher) || !g_bEnhancedWatcher[iWeapon])
+        return;
+
+    g_fLastFire[iWeapon] = GetGameTime();
 }
 
 // ============================================================================
@@ -540,6 +588,7 @@ public void OnEntityDestroyed(int entity)
     {
         g_bEnhancedWatcher[entity] = false;
         g_bDamageHooked[entity] = false;
+        g_fLastFire[entity] = 0.0;
     }
     if (entity >= 0 && entity < sizeof(g_iAppliedOwner))
         g_iAppliedOwner[entity] = -1;
@@ -689,9 +738,11 @@ int SpawnWatcherRifleNear(int client)
     // 标记为"增强步枪": 仅此实体享受 sm_asrd_watcher_dmg_mult 倍率
     if (iWeapon >= 0 && iWeapon < sizeof(g_bEnhancedWatcher))
         g_bEnhancedWatcher[iWeapon] = true;
-    // 重置补弹记录: 让 OnGameFrame 在该武器被 marine 拾取时补满主/副弹夹与备弹
+    // 重置补弹/射速记录: 让 OnGameFrame 在该武器被 marine 拾取时补满主/副弹夹与备弹
     if (iWeapon >= 0 && iWeapon < sizeof(g_iAppliedOwner))
         g_iAppliedOwner[iWeapon] = -1;
+    if (iWeapon >= 0 && iWeapon < sizeof(g_fLastFire))
+        g_fLastFire[iWeapon] = 0.0;
 
     // 视觉标记: 按当前配色给步枪染色, 让掉落的增强步枪一眼可辨
     if (iWeapon >= 0)
@@ -864,6 +915,46 @@ void ApplyWatcherAmmo(int iWeapon, int iMarine)
     if (g_cvDebug.BoolValue)
         PrintToServer("[守望者步枪] 已为 marine %d 补弹: 主弹匣=%d 主备弹=%d(类型=%d) 副弹数=%d(类型=%d)",
             iMarine, iClip, iReserve, iPri, iAlt, iSec);
+}
+
+// 读取武器 m_iClip1 (主武器弹匣; 发送表在嵌套表 DT_ASWLocalWeaponData, 读不到返回 -1)
+int GetWeaponClip1(int iWeapon)
+{
+    if (iWeapon <= 0 || !IsValidEntity(iWeapon))
+        return -1;
+    if (GetEntitySendPropOff(iWeapon, "m_iClip1") != -1)
+        return GetEntProp(iWeapon, Prop_Send, "m_iClip1");
+    int dm = FindDataMapInfo(iWeapon, "m_iClip1");
+    if (dm != -1)
+        return GetEntData(iWeapon, dm, 4);
+    return -1;
+}
+
+// 读取/写入武器 m_flNextPrimaryAttack (下次可开火时刻, 射速钳制用)
+float GetWeaponNextAttack(int iWeapon)
+{
+    if (iWeapon <= 0 || !IsValidEntity(iWeapon))
+        return 0.0;
+    if (GetEntitySendPropOff(iWeapon, "m_flNextPrimaryAttack") != -1)
+        return GetEntPropFloat(iWeapon, Prop_Send, "m_flNextPrimaryAttack");
+    int dm = FindDataMapInfo(iWeapon, "m_flNextPrimaryAttack");
+    if (dm != -1)
+        return GetEntDataFloat(iWeapon, dm);
+    return 0.0;
+}
+
+void SetWeaponNextAttack(int iWeapon, float fValue)
+{
+    if (iWeapon <= 0 || !IsValidEntity(iWeapon))
+        return;
+    if (GetEntitySendPropOff(iWeapon, "m_flNextPrimaryAttack") != -1)
+        SetEntPropFloat(iWeapon, Prop_Send, "m_flNextPrimaryAttack", fValue);
+    else
+    {
+        int dm = FindDataMapInfo(iWeapon, "m_flNextPrimaryAttack");
+        if (dm != -1)
+            SetEntDataFloat(iWeapon, dm, fValue, true);
+    }
 }
 
 // 读取武器 m_iClip2 (AR2 副武器能量球 clip; 发送表在嵌套表 DT_ASWLocalWeaponData)
@@ -1053,6 +1144,10 @@ public Action Command_WatcherStatus(int client, int args)
     if (g_cvAltAmmo.IntValue > 0)
         PrintToConsole(client, "  (副武器弹药数量 = %d)", g_cvAltAmmo.IntValue);
     PrintToConsole(client, "玩家自掉: %s", g_cvDropPublic.BoolValue ? "开" : "关");
+    PrintToConsole(client, "射击间隔: %s",
+        g_cvFireInterval.FloatValue > 0.0 ? "自定义(可快可慢)" : "不限制(原版 0.1 秒/发)");
+    if (g_cvFireInterval.FloatValue > 0.0)
+        PrintToConsole(client, "  (射击间隔 = %.2f 秒)", g_cvFireInterval.FloatValue);
 
     int cR, cG, cB, cA;
     GetEnhancedColor(cR, cG, cB, cA);

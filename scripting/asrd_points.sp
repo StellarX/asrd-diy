@@ -64,16 +64,18 @@
  *                        (任意玩家购买核弹后 nuke_cooldown 秒内全队都不能再买, 默认 30);
  *                        #buy 3 [1-6]=叛变虫群 (#buy 3 无选项=drone×10)
  *                        (强化等级全队共享: 任一玩家购买一次, 全体在游戏玩家
- *                        各升 1 级 (观战者不升); 全部玩家满级后 #buy 1 转为
- *                        全体加血: 各玩家无论当前血量一律 +200, 封顶各自最大血量)
+ *                        各升 1 级 (观战者不升); 全部玩家满级后再购买不做
+ *                        任何操作, 不扣分, 仅提示已满级)
  *                        #buy 4 [编号]=强化哨戒塔箱 (0机枪 1炮塔,
  *                        无选项默认 0=机枪; 喷火/冰冻暂不支持);
  *                        #buy 5=补充全部哨戒塔弹药
  *                        (地图上没有哨戒塔时不允许购买, 不扣分)
- *                        #buy 6 [1-3]=武器 (第 6 类):
+ *                        #buy 6 [1-5]=武器 (第 6 类):
  *                          6 1=增强电锯 (伤害由 asrd_chainsaw_turbo 的 sm_asrd_chainsaw_dmg_mult 决定)
  *                          6 2=守望者脉冲步枪 (由 asrd_watcher_pulse_rifle 掉落, 击杀计积分)
  *                          6 3=增强型黏弹发射器 (非标准隐藏武器, 由本插件直接生成实体)
+ *                          6 4=导轨步枪 (由 asrd_railgun 掉落; 射速/弹药见该插件的 sm_asrd_railgun_* 配置)
+ *                          6 5=AVK-36 神射手步枪 (由 asrd_avk36 掉落; 伤害/弹匣/备弹/射速见 sm_asrd_avk36_* 配置)
  *                          (采矿激光/灭火器 暂时不支持购买; RD_7A 武器在正式版中未编译, 无法生成)
  *                        #buy 7=动力护甲 (在玩家身前掉落一件 L3a 重甲)
  *                        #buy 8 [1-3]=隐藏道具 (第 8 类):
@@ -83,7 +85,7 @@
  *                        #buy 9=掉落弹药 (掉在身前地面, 走过去补满武器弹药)
  *   #1 ..#9           玩家: 聊天框快捷购买, 与 #buy <编号> **完全等价**且同样能带选项:
  *                        #1 强化等级  #2 核弹  #3 [1-6] 叛变虫群(默认 drone×10)
- *                        #4 [0/1] 哨戒塔箱  #5 补充全部哨戒塔弹药  #6 [1-3] 武器(1=电锯 2=脉冲步枪 3=黏弹发射器)
+ *                        #4 [0/1] 哨戒塔箱  #5 补充全部哨戒塔弹药  #6 [1-5] 武器(1=电锯 2=脉冲步枪 3=黏弹发射器 4=导轨步枪 5=AVK-36)
  *                        #7 动力护甲  #8 [1-3] 隐藏道具  #9 掉落弹药
  *                        例: #3 2 = #buy 3 2 (吐酸虫); #4 1 = #buy 4 1 (炮塔)
  *   #nukepub #betraypub #power_up #power_down
@@ -110,6 +112,8 @@
  *   sm_asrd_points_refill_cost 补充全部哨戒塔弹药价格 (默认 500, 0=不设门槛)
  *   sm_asrd_points_chainsaw_cost 增强电锯价格 (默认 300, 0=不设门槛)
  *   sm_asrd_points_rifle_cost  守望者脉冲步枪价格 (默认 300, 0=不设门槛)
+ *   sm_asrd_points_railgun_cost 导轨步枪价格 (默认 300, 0=不设门槛; 射速/弹药见 asrd_railgun 的 sm_asrd_railgun_* 配置)
+ *   sm_asrd_points_avk36_cost  AVK-36 神射手步枪价格 (默认 300, 0=不设门槛; 伤害/弹匣/备弹/射速见 asrd_avk36 的 sm_asrd_avk36_* 配置)
  *   sm_asrd_points_armor_cost   动力护甲价格 (默认 300, 0=不设门槛; 与步枪/电锯同价)
  *   sm_asrd_points_ammodrop_cost 掉落弹药价格 (默认 300, 0=不设门槛; 掉在身前地面, 走过去补弹)
  *   sm_asrd_points_extra_weapon_cost 隐藏武器/道具价格 (默认 300; #buy 6 3 与 #buy 8 1、8 2、8 3 共用)
@@ -117,11 +121,11 @@
  *   sm_asrd_points_flechette_ammo 增强型黏弹发射器携带弹药数 (默认 60; 覆盖引擎 asw_ammo_count_flechette, 0=不覆盖)
  *
  *  ── 自动掉落 (帧回调驱动, 等价"随机玩家购买", 同样扣共享积分) ──
- *    每 auto_interval 秒: 步枪/护甲/电锯/增强型黏弹发射器/瞬移/喷气背包 按各自配置价格判定积分够否,
+ *    每 auto_interval 秒: 步枪/电锯/导轨步枪/AVK-36/增强型黏弹发射器/喷气背包 按各自配置价格判定积分够否,
  *    够的里面随机选一件 (单次最多掉落一件), 随机挑一名存活玩家按该玩家购买
  *    同样的价格/落点掉落 (掉落价与购买价同一配置项, 完全一致; 价格=0 不自动掉);
  *    广播措辞为"系统随机掉落【物品】到 %N 身边" (不说是玩家购买)。
- *    (其它隐藏武器/道具只保留购买, 不参与自动掉落; 见 g_bExtraWeaponAutoDrop)
+ *    (动力护甲/瞬移/其它隐藏武器道具只保留购买, 不参与自动掉落; 见 g_bExtraWeaponAutoDrop / g_bExtraItemAutoDrop)
  *    开局/换图/重开 立即判断一次 (场上暂无玩家时 1 秒后重试,
  *    玩家一进入游戏就检查)。
  *    护盾触发条件每帧实时检查 (不判断玩家人数):
@@ -159,7 +163,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Points"
-#define PLUGIN_VERSION "1.33.4"
+#define PLUGIN_VERSION "1.34.2"
 
 // 与 asrd_repulse 联动: 自动力场护盾经此 native 给玩家加限时 aura 护盾
 // (到期由 repulse 插件自动解除)。同样标记为可选, 未加载时静默跳过。
@@ -275,10 +279,10 @@ char g_sExtraItemName[EXTRA_ITEM_COUNT][32] =
     "诱饵"
 };
 // 是否参与自动随机掉落 (购买 #buy 8 不受影响, 始终可买)
-//   仅 瞬移 / 喷气背包 自动掉落; 诱饵 只保留购买
+//   仅 喷气背包 自动掉落; 瞬移/诱饵 只保留购买
 bool g_bExtraItemAutoDrop[EXTRA_ITEM_COUNT] =
 {
-    true,   // 瞬移
+    false,  // 瞬移 (只保留购买, 不参与自动掉落)
     true,   // 喷气背包
     false   // 诱饵
 };
@@ -291,9 +295,6 @@ bool g_bExtraItemPurchasable[EXTRA_ITEM_COUNT] =
 };
 char g_sBetrayAlias[BUY_BETRAY_VARIANTS + 1][16] = { "", "drone", "buzzer", "ranger", "shield", "mortar", "shaman" };
 int  g_iBetrayCount[BUY_BETRAY_VARIANTS + 1] = { 0, 10, 20, 10, 5, 10, 5 };
-
-// ─── 满级加血 (全部玩家满级后再购买 #buy 1): 全体在游戏玩家统一加血 ─
-#define MAX_LEVEL_HEAL_AMOUNT   200    // 每次全体加血量 (每个玩家当前血量+200, 封顶其最大血量)
 
 // 友军虫统一 targetname (镜像 asrd_alien_civilwar 的 INFECTED_NAME)
 #define BETRAY_NAME     "asrd_betray_swarm"
@@ -364,6 +365,8 @@ ConVar g_cvSentryCost;
 ConVar g_cvRefillCost;
 ConVar g_cvChainsawCost;  // 第 6 类 武器箱 6 1: 增强电锯的积分价格
 ConVar g_cvRifleCost;     // 第 6 类 武器箱 6 2: 守望者脉冲步枪的积分价格
+ConVar g_cvRailgunCost;   // 第 6 类 武器箱 6 4: 导轨步枪的积分价格
+ConVar g_cvAvk36Cost;     // 第 6 类 武器箱 6 5: AVK-36 神射手步枪的积分价格
 ConVar g_cvArmorCost;     // 第 7 类 动力护甲: 在玩家身前掉落一件 L3a 重甲的积分价格
 ConVar g_cvAmmoDropCost;  // 第 9 类 掉落弹药: 掉在身前地面的弹药箱的积分价格
 ConVar g_cvExtraWeaponCost; // 第 6 类 隐藏武器 (6 3) 与第 8 类隐藏道具: 统一积分价格
@@ -480,6 +483,16 @@ public void OnPluginStart()
         "守望者脉冲步枪(sm_watcherdrop)积分价格 (0=不设积分门槛)",
         FCVAR_NOTIFY, true, 0.0
     );
+    g_cvRailgunCost = CreateConVar(
+        "sm_asrd_points_railgun_cost", "300",
+        "导轨步枪(sm_railgundrop)积分价格 (0=不设积分门槛; 射速与弹药由 asrd_railgun 的 sm_asrd_railgun_* ConVar 控制)",
+        FCVAR_NOTIFY, true, 0.0
+    );
+    g_cvAvk36Cost = CreateConVar(
+        "sm_asrd_points_avk36_cost", "300",
+        "AVK-36 神射手步枪(sm_avk36drop)积分价格 (0=不设积分门槛; 伤害/弹匣/备弹/射速由 asrd_avk36 的 sm_asrd_avk36_* ConVar 控制)",
+        FCVAR_NOTIFY, true, 0.0
+    );
     g_cvArmorCost = CreateConVar(
         "sm_asrd_points_armor_cost", "300",
         "动力护甲(#buy 7)积分价格: 给玩家掉落一件 L3a 重甲供拾取穿戴, 穿戴后减伤、对部分枪械及道具免伤、免疫寄生、提升移速, 护甲处于完全免伤状态时自动恢复血量 (0=不设积分门槛)",
@@ -547,7 +560,7 @@ public void OnPluginStart()
     );
     g_cvAuto = CreateConVar(
         "sm_asrd_points_auto", "1",
-        "自动掉落总开关: 积分够时自动给随机存活玩家掉 守望者步枪/动力护甲/增强电锯(单次一件), 危急时自动给力场护盾 (0=关 1=开)",
+        "自动掉落总开关: 积分够时自动给随机存活玩家掉 守望者步枪/增强电锯/导轨步枪/AVK-36(单次一件), 危急时自动给力场护盾 (0=关 1=开)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
     g_cvAutoInterval = CreateConVar(
@@ -655,6 +668,8 @@ void SpawnBuyHelpObjectives()
     int iRefill = GetScaledCost(g_cvRefillCost);
     int iChain  = GetScaledCost(g_cvChainsawCost);
     int iRifle  = GetScaledCost(g_cvRifleCost);
+    int iRail   = GetScaledCost(g_cvRailgunCost);
+    int iAvk    = GetScaledCost(g_cvAvk36Cost);
     int iArmor  = GetScaledCost(g_cvArmorCost);
 
     Format(sDesc1, sizeof(sDesc1),
@@ -664,8 +679,8 @@ void SpawnBuyHelpObjectives()
         "#buy 3 4 召唤盾甲虫x5 (%d分)\n#buy 3 5 召唤炮虫x10 (%d分)\n#buy 3 6 召唤治疗虫x5 (%d分)\n#buy 4 0 机枪哨戒塔 (%d分)\n#buy 4 1 炮塔哨戒塔 (%d分)\n#buy 5 哨戒塔补满弹药 (%d分)",
         iBetray, iBetray, iBetray, iSentry, iSentry, iRefill);
     Format(sDesc3, sizeof(sDesc3),
-        "#buy 6 1 增强电锯 (%d分)\n#buy 6 2 守望者脉冲步枪 (%d分)\n#buy 6 3 增强型黏弹发射器 (%d分)\n#buy 7 动力护甲 (%d分)",
-        iChain, iRifle, iExtra, iArmor);
+        "#buy 6 1 增强电锯 (%d分)\n#buy 6 2 守望者脉冲步枪 (%d分)\n#buy 6 3 增强型黏弹发射器 (%d分)\n#buy 6 4 导轨步枪 (%d分)\n#buy 6 5 AVK-36 神射手步枪 (%d分)\n#buy 7 动力护甲 (%d分)",
+        iChain, iRifle, iExtra, iRail, iAvk, iArmor);
     Format(sDesc4, sizeof(sDesc4),
         "#buy 8 1 瞬移 (%d分)\n#buy 8 2 喷气背包 (%d分)\n#buy 8 3 诱饵 (%d分)\n#buy 9 掉落弹药 (%d分)\n#hat 把哨戒塔放到头顶\n积分来源: 击杀虫族 (血量越多积分越多)",
         iExtra, iExtra, iExtra, GetScaledCost(g_cvAmmoDropCost));
@@ -1266,6 +1281,19 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
         return Plugin_Handled;
     }
 
+    // ── #hat / #hat_off: 不花积分, 直接转发给哨戒塔插件的 sm_hat / sm_hat_off ──
+    //    (# 不是 SourceMod 默认聊天触发符, 必须在这里显式转发才能与 /hat 等价)
+    if (StrEqual(sCmd, "hat", false) || StrEqual(sCmd, "hat_off", false))
+    {
+        char sRest[64];
+        JoinArgsFrom(sText, 1, sRest, sizeof(sRest));
+        if (sRest[0] != '\0')
+            FakeClientCommand(client, "sm_%s %s", sCmd, sRest);
+        else
+            FakeClientCommand(client, "sm_%s", sCmd);
+        return Plugin_Handled;
+    }
+
     return Plugin_Continue;
 }
 
@@ -1491,16 +1519,18 @@ void HandleBuyItem(int client, int iItem, const char[] sOpt)
 
         case 6:
         {
-            // #buy 6 [1-3] 与 /6 [1-3]: 第 6 类 = 武器
+            // #buy 6 [1-5] 与 /6 [1-5]: 第 6 类 = 武器
             //   6 1 = 增强电锯 (sm_chainsawdrop)
             //   6 2 = 守望者脉冲步枪 (sm_watcherdrop)
             //   6 3 = 增强型黏弹发射器 (本插件直接生成)
+            //   6 4 = 导轨步枪 (sm_railgundrop, 由 asrd_railgun 掉落/控制射速与弹药)
+            //   6 5 = AVK-36 神射手步枪 (sm_avk36drop, 由 asrd_avk36 掉落/控制伤害与弹匣备弹射速)
             int iSub = -1;
             if (sOpt[0] != '\0')
             {
                 if (!IsNumericArg(sOpt))
                 {
-                    PrintToChat(client, "\x04[积分]\x01 选项必须是数字: #buy 6 <1-3>");
+                    PrintToChat(client, "\x04[积分]\x01 选项必须是数字: #buy 6 <1-5>");
                     return;
                 }
                 iSub = StringToInt(sOpt);
@@ -1519,6 +1549,16 @@ void HandleBuyItem(int client, int iItem, const char[] sOpt)
                         "守望者脉冲步枪", "sm_asrd_watcher_enabled", "sm_asrd_watcher_drop_public");
                 }
                 case 3:  BuyExtraWeapon(client, EXTRA_WEAPON_FLECHETTE);
+                case 4:
+                {
+                    PurchaseFromChat(client, "sm_railgundrop", "", g_cvRailgunCost,
+                        "导轨步枪", "sm_asrd_railgun_enabled", "sm_asrd_railgun_drop_public");
+                }
+                case 5:
+                {
+                    PurchaseFromChat(client, "sm_avk36drop", "", g_cvAvk36Cost,
+                        "AVK-36 神射手步枪", "sm_asrd_avk36_enabled", "sm_asrd_avk36_drop_public");
+                }
                 default:
                 {
                     int iExtra = GetScaledCost(g_cvExtraWeaponCost);
@@ -1526,6 +1566,8 @@ void HandleBuyItem(int client, int iItem, const char[] sOpt)
                     PrintToChat(client, "        #buy 6 1 增强电锯 (%d 分)", GetScaledCost(g_cvChainsawCost));
                     PrintToChat(client, "        #buy 6 2 守望者脉冲步枪 (%d 分)", GetScaledCost(g_cvRifleCost));
                     PrintToChat(client, "        #buy 6 3 增强型黏弹发射器 (%d 分)", iExtra);
+                    PrintToChat(client, "        #buy 6 4 导轨步枪 (%d 分)", GetScaledCost(g_cvRailgunCost));
+                    PrintToChat(client, "        #buy 6 5 AVK-36 神射手步枪 (%d 分)", GetScaledCost(g_cvAvk36Cost));
                 }
             }
             return;
@@ -1615,8 +1657,8 @@ void BuyPowerFromChat(int client, bool bUp)
         // 不依赖镜像 g_iPlayerLevel — 镜像可能被 sm_power_set / sm_power_reset 干扰)
         if (!HasActiveNonMaxPlayer())
         {
-            // 全部满级 → 转为满级加血 (同样作用于全体在游戏玩家)
-            BuyMaxLevelHeal(client);
+            // 全部满级: 不做任何操作, 不扣分, 仅提示购买者
+            PrintToChat(client, "\x04[积分]\x01 全队强化已满级, 无法再购买");
             return;
         }
         BuyPowerLevelUpShared(client);
@@ -1642,7 +1684,7 @@ void BuyPowerFromChat(int client, bool bUp)
 }
 
 // ============================================================================
-//  有没有在游戏中且未满级的玩家 (决定 #buy 1 走升级还是满级加血)
+//  有没有在游戏中且未满级的玩家 (决定 #buy 1 是否还能升级; 全满则拒绝购买)
 // ============================================================================
 bool HasActiveNonMaxPlayer()
 {
@@ -2071,68 +2113,6 @@ bool IsMarineMaxLevel(int client)
 }
 
 // ============================================================================
-//  满级加血: 全部玩家满级后再购买 #buy 1 的后续逻辑
-//    全体在游戏玩家 (含购买者) 无论当前血量多少, 一律各 +200 (封顶其最大血量)
-//    已阵亡 (m_iHealth<=0) 的玩家不治疗
-// ============================================================================
-void BuyMaxLevelHeal(int client)
-{
-    // 积分机制关闭: 禁止购买 (聊天入口已拦截, 这里做兜底)
-    if (!g_cvEnabled.BoolValue)
-    {
-        PrintToChat(client, "\x04[积分]\x01 积分机制已关闭, 暂时无法购买强化加血");
-        return;
-    }
-
-    int iCostML = GetScaledCost(g_cvPowerCost);
-    // 价格=0: 不提供加血
-    if (iCostML <= 0)
-    {
-        PrintToChat(client, "\x04[积分]\x01 强化加血未设积分门槛, 已满级无额外加血");
-        return;
-    }
-
-    if (!IsActivePlayer(client))
-    {
-        PrintToChat(client, "\x04[积分]\x01 不在游戏中的玩家不能购买, 请先加入游戏");
-        return;
-    }
-
-    // 积分不足: 不做任何操作, 仅提示
-    if (g_iPoints < iCostML)
-    {
-        PrintToChat(client, "\x04[积分]\x01 积分不足: 强化加血需要 \x05%d\x01 积分, 当前 \x05%d\x01 积分",
-            iCostML, g_iPoints);
-        return;
-    }
-
-    g_iPoints -= iCostML;
-    RefreshHud();
-    PrintToChatAll("\x04[积分]\x01 %N 花费 \x05%d\x01 积分购买【满级加血】, 全队恢复 \x05%d\x01 血, 剩余 \x05%d\x01 积分",
-        client, iCostML, MAX_LEVEL_HEAL_AMOUNT, g_iPoints);
-
-    // 全体在游戏玩家统一加血: 当前血量 +200, 封顶各自最大血量
-    for (int i = 1; i <= MaxClients; i++)
-    {
-        if (!IsActivePlayer(i))
-            continue;
-        int marine = GetClientMarine(i);
-        if (marine <= 0)
-            continue;
-        int iHealth = GetEntProp(marine, Prop_Data, "m_iHealth");
-        if (iHealth <= 0)
-            continue;   // 阵亡不治疗
-
-        int iMaxHealth = GetEntProp(marine, Prop_Data, "m_iMaxHealth");
-        int iNew = iHealth + MAX_LEVEL_HEAL_AMOUNT;
-        if (iMaxHealth > 0 && iNew > iMaxHealth)
-            iNew = iMaxHealth;
-        SetEntProp(marine, Prop_Data, "m_iHealth", iNew);
-        PrintToChat(i, "\x04[积分]\x01 血量已升至 \x05%d/%d\x01", iNew, iMaxHealth);
-    }
-}
-
-// ============================================================================
 //  聊天命令解析辅助: 从 "!buy 3 5" 这类文本取第 n 个参数
 //  n=0 返回命令本体 (已去 / ! 前缀); 找不到返回 false
 // ============================================================================
@@ -2192,7 +2172,7 @@ void ShowBuyHelp(int client)
     PrintToChat(client, "\x04[积分]\x01 能买的东西 (聊天框输入 #buy 编号, 也可简写 #编号 如 #6 3):");
 
     // 属性强化 / 核弹
-    PrintToChat(client, "  \x05#buy 1\x01 全队属性强化 +1 级 (%d 分, 满 5 级后改为全体加血 200)", GetScaledCost(g_cvPowerCost));
+    PrintToChat(client, "  \x05#buy 1\x01 全队属性强化 +1 级 (%d 分, 满 5 级后无法再购买)", GetScaledCost(g_cvPowerCost));
     PrintToChat(client, "  \x05#buy 2\x01 战术核弹 (%d 分, cd %d 秒)", GetScaledCost(g_cvNukeCost), g_cvNukeCooldown.IntValue);
 
     // 召唤友军: 每个编号写全命令, 换行缩进
@@ -2217,6 +2197,8 @@ void ShowBuyHelp(int client)
     PrintToChat(client, "        #buy 6 2 守望者脉冲步枪 (%d 分)", GetScaledCost(g_cvRifleCost));
     int iExtra = GetScaledCost(g_cvExtraWeaponCost);
     PrintToChat(client, "        #buy 6 3 增强型黏弹发射器 (%d 分)", iExtra);
+    PrintToChat(client, "        #buy 6 4 导轨步枪 (%d 分, 射速/弹药见 asrd_railgun 配置)", GetScaledCost(g_cvRailgunCost));
+    PrintToChat(client, "        #buy 6 5 AVK-36 神射手步枪 (%d 分, 伤害/弹匣/射速见 asrd_avk36 配置)", GetScaledCost(g_cvAvk36Cost));
 
     // 动力护甲 / 隐藏道具
     PrintToChat(client, "  \x05#buy 7\x01 动力护甲 (%d 分, 大幅减伤、免疫寄生、跑得更快)", GetScaledCost(g_cvArmorCost));
@@ -2438,7 +2420,7 @@ public void OnGameFrame()
 //  自动掉落 (帧回调驱动): 等价"随机挑一名存活玩家购买", 价格/落点与手动购买
 //  完全一致 (掉落价 = 购买价, 同一配置项), 同样扣共享积分;
 //  但广播措辞是"系统随机掉落" (不是玩家购买)。
-//    - 可掉物品: 守望者步枪 / 动力护甲 / 增强电锯 / 增强型黏弹发射器 / 瞬移 / 喷气背包
+//    - 可掉物品: 守望者步枪 / 动力护甲 / 增强电锯 / 导轨步枪 / 增强型黏弹发射器 / 瞬移 / 喷气背包
 //    - 单次最多掉落一件: 从"积分够"的物品里随机选一件
 //      (价格=0 不自动掉, 防止免费无限刷)
 //  返回 true = 场上有存活玩家 (检查有意义, 推进完整间隔);
@@ -2453,33 +2435,37 @@ bool AutoDropTick()
         return false;
 
     // 各物品按各自配置价格判定
-    int iRifleCost = GetScaledCost(g_cvRifleCost);
-    int iArmorCost = GetScaledCost(g_cvArmorCost);
-    int iSawCost   = GetScaledCost(g_cvChainsawCost);
-    int iExtraCost = GetScaledCost(g_cvExtraWeaponCost);
+    int iRifleCost   = GetScaledCost(g_cvRifleCost);
+    int iSawCost     = GetScaledCost(g_cvChainsawCost);
+    int iRailCost    = GetScaledCost(g_cvRailgunCost);
+    int iAvkCost     = GetScaledCost(g_cvAvk36Cost);
+    int iExtraCost   = GetScaledCost(g_cvExtraWeaponCost);
 
     // 收集当前积分买得起的物品:
-    //   0=步枪 1=护甲 2=电锯 3+=隐藏武器/隐藏道具, 单次只掉一件
+    //   0=步枪 2=电锯 3=导轨步枪 4=AVK-36 5+=隐藏武器/隐藏道具, 单次只掉一件
+    //   (编号 1 原为动力护甲: 已取消自动掉落, 只保留 #buy 7 购买)
     //   隐藏武器/道具中只有 g_b*AutoDrop 标记为 true 的才参与自动掉落
-    int candidates[3 + EXTRA_WEAPON_COUNT + EXTRA_ITEM_COUNT];
+    int candidates[5 + EXTRA_WEAPON_COUNT + EXTRA_ITEM_COUNT];
     int nCand = 0;
     if (iRifleCost > 0 && g_iPoints >= iRifleCost)
         candidates[nCand++] = 0;
-    if (iArmorCost > 0 && g_iPoints >= iArmorCost)
-        candidates[nCand++] = 1;
     if (iSawCost > 0 && g_iPoints >= iSawCost)
         candidates[nCand++] = 2;
+    if (iRailCost > 0 && g_iPoints >= iRailCost)
+        candidates[nCand++] = 3;
+    if (iAvkCost > 0 && g_iPoints >= iAvkCost)
+        candidates[nCand++] = 4;
     if (iExtraCost > 0 && g_iPoints >= iExtraCost)
     {
         for (int i = 0; i < EXTRA_WEAPON_COUNT; i++)
         {
             if (g_bExtraWeaponAutoDrop[i])
-                candidates[nCand++] = 3 + i;
+                candidates[nCand++] = 5 + i;
         }
         for (int i = 0; i < EXTRA_ITEM_COUNT; i++)
         {
             if (g_bExtraItemAutoDrop[i])
-                candidates[nCand++] = 3 + EXTRA_WEAPON_COUNT + i;
+                candidates[nCand++] = 5 + EXTRA_WEAPON_COUNT + i;
         }
     }
     if (nCand == 0)
@@ -2487,27 +2473,31 @@ bool AutoDropTick()
 
     int pick = alive[GetRandomInt(0, n - 1)];
     int iChosen = candidates[GetRandomInt(0, nCand - 1)];
-    if (iChosen <= 2)
+    if (iChosen <= 4)
     {
         switch (iChosen)
         {
             case 0:
                 PurchaseFromChat(pick, "sm_watcherdrop", "", g_cvRifleCost,
                     "守望者脉冲步枪", "sm_asrd_watcher_enabled", "sm_asrd_watcher_drop_public", true);
-            case 1:
-                BuyArmorDrop(pick, true);
             case 2:
                 PurchaseFromChat(pick, "sm_chainsawdrop", "", g_cvChainsawCost,
                     "增强电锯", "sm_asrd_chainsaw_enabled", "sm_asrd_chainsaw_drop_public", true);
+            case 3:
+                PurchaseFromChat(pick, "sm_railgundrop", "", g_cvRailgunCost,
+                    "导轨步枪", "sm_asrd_railgun_enabled", "sm_asrd_railgun_drop_public", true);
+            case 4:
+                PurchaseFromChat(pick, "sm_avk36drop", "", g_cvAvk36Cost,
+                    "AVK-36 神射手步枪", "sm_asrd_avk36_enabled", "sm_asrd_avk36_drop_public", true);
         }
     }
-    else if (iChosen < 3 + EXTRA_WEAPON_COUNT)
+    else if (iChosen < 5 + EXTRA_WEAPON_COUNT)
     {
-        BuyExtraWeapon(pick, iChosen - 3, true);
+        BuyExtraWeapon(pick, iChosen - 5, true);
     }
     else
     {
-        BuyExtraItem(pick, iChosen - 3 - EXTRA_WEAPON_COUNT, true);
+        BuyExtraItem(pick, iChosen - 5 - EXTRA_WEAPON_COUNT, true);
     }
     return true;
 }
