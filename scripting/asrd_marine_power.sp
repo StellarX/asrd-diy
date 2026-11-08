@@ -37,7 +37,7 @@
  *   sm_asrd_power_enabled        总开关 (0=关 1=开, 默认 1)
  *   sm_asrd_power_public         是否允许普通玩家自行强化 (0=仅管理员 1=公开, 默认 1)
  *   sm_asrd_power_max_level      放大最大等级 (默认 5)
- *   血量上限(固定, 代码内配置): L1=200 / L2=300 / L3=500 / L4=800 / L5=1000
+ *   sm_asrd_power_hp_step       每级增加的最大血量 (默认 200; 血量 = 原生血量 + 该值 × 等级)
  *   sm_asrd_power_scale_step     每级体型增量 (默认 0.1, 5级=1.5)
  *   sm_asrd_power_shrink_max     缩小最大等级 (默认 3, 仅缩模型)
  *   sm_asrd_power_shrink_step    每级缩小比例 (默认 0.2, 3级=0.4倍)
@@ -81,7 +81,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Marine Power"
-#define PLUGIN_VERSION "1.5.0"
+#define PLUGIN_VERSION "1.5.2"
 
 // 重新断言周期(秒): 换陆战队员/复活后仍生效, 不回血
 #define REAPPLY_INTERVAL 1.0
@@ -89,12 +89,12 @@
 // 默认基础血量(AS:RD 陆战队员基础 100)
 #define DEFAULT_BASE_HEALTH 100
 
-// 各强化等级对应的血量上限(绝对上限值; 下标即等级)
-//   L1=200  L2=300  L3=500  L4=800  L5=1000;  等级超过 LEVEL_COUNT 按 L5 封顶
-#define LEVEL_COUNT 5
-int g_iHpForLevel[LEVEL_COUNT + 1] = { 0, 200, 300, 500, 800, 1000 };
+// 血量上限 = 陆战队员原生血量基准 + 每级增量 × 等级 (增量由 sm_asrd_power_hp_step 控制)
+//   原生 100、增量默认 200 时: L0=100  L1=300  L2=500  L3=700  L4=900  L5=1100
+//   即每升一级固定加 sm_asrd_power_hp_step 点血量
+//   (旧版是写死的 200/300/500/800/1000, 每级增量不一致)
 
-// 近战加成倍率表的最大等级 (与 LEVEL_COUNT 一致: 1~5 级 = x2 / x4 / x8 / x16 / x32)
+// 近战加成倍率表的最大等级 (1~5 级 = x2 / x4 / x8 / x16 / x32)
 #define MELEE_MULT_LEVELS 5
 
 // 电锯实体类名 (游戏源码: asw_weapon_chainsaw_shared.cpp)
@@ -105,6 +105,7 @@ int g_iHpForLevel[LEVEL_COUNT + 1] = { 0, 200, 300, 500, 800, 1000 };
 ConVar g_cvEnabled;
 ConVar g_cvPublic;
 ConVar g_cvMaxLevel;
+ConVar g_cvHpStep;
 ConVar g_cvScaleStep;
 ConVar g_cvMeleeEnabled;
 ConVar g_cvShrinkMax;
@@ -124,7 +125,12 @@ ConVar g_hCamPitch = null;
 // ─── 每玩家状态 ───────────────────────────────────────
 int  g_iLevel[MAXPLAYERS + 1];          // 当前强化等级 0..maxLevel
 int  g_iBaseMaxHealth[MAXPLAYERS + 1];  // 首次强化前记录的原生最大血量(等级0恢复用)
+bool g_bPendingRefill[MAXPLAYERS + 1];  // 下个重断言帧是否补满血量(换图/任务重启时一次性)
 Handle g_hReapplyTimer = null;
+
+// 保留等级用: SteamID → 强化等级 (插件跨图不卸载, 这张表随之保留)
+// 用于"下一关(换图)"时找回等级: 换图会触发 OnClientDisconnect, 原实现把等级清零
+StringMap g_smKeepLevel = null;
 
 // ─── 可被近战加成的虫族类名 (与 asrd_points 保持一致) ──
 char g_sAlienClasses[][] =
@@ -189,6 +195,11 @@ public void OnPluginStart()
         "最大强化等级 (1~10)",
         FCVAR_NOTIFY, true, 1.0, true, 10.0
     );
+    g_cvHpStep = CreateConVar(
+        "sm_asrd_power_hp_step", "200",
+        "每级增加的最大血量 (默认 200; 血量 = 原生血量 + 该值 × 等级, 例如 L1=300、L5=1100)",
+        FCVAR_NOTIFY, true, 0.0, true, 2000.0
+    );
     g_cvScaleStep = CreateConVar(
         "sm_asrd_power_scale_step", "0.1",
         "每级体型增量 (默认 0.1, 5级=1.5), 体型 = 1.0 + step*等级",
@@ -226,9 +237,12 @@ public void OnPluginStart()
     );
     g_cvKeepLevel = CreateConVar(
         "sm_asrd_power_keep_level", "0",
-        "任务重启/换图后是否保留强化等级 (0=每局重置 1=保留; 玩家断线重连仍会重置)",
+        "任务重启/换图(下一关)后是否保留强化等级 (0=每局重置 1=保留; 断线重连也会保留, 同一服务器进程内有效)",
         FCVAR_NOTIFY, true, 0.0, true, 1.0
     );
+
+    // 保留等级表: 按 SteamID 暂存, 换图后取回
+    g_smKeepLevel = new StringMap();
 
     // 视角高度(与俯视高度插件合并): 放大等级每级把相机距离调高 cam_step
     g_cvCamBase = CreateConVar(
@@ -285,7 +299,15 @@ public void Event_MissionRestart(Event event, const char[] name, bool dontBroadc
 {
     // 保留等级: 不清除; 重新生成的陆战队员由周期重断言 (Timer_Reapply) 重新应用
     if (g_cvKeepLevel.BoolValue)
+    {
+        // 重建的陆战队员血量是默认值, 标记一次性补满 (只补这一次, 之后不再回血)
+        for (int i = 1; i <= MaxClients; i++)
+        {
+            g_iBaseMaxHealth[i] = 0;
+            g_bPendingRefill[i] = (g_iLevel[i] > 0);
+        }
         return;
+    }
 
     // 该事件在游戏帧处理中段触发, 且 RestartMission 即刻重建陆战队员实体,
     // 延迟到实体重建后再恢复, 避免中途改写实体属性导致崩溃
@@ -326,13 +348,19 @@ public void OnMapStart()
 {
     bool bKeep = g_cvKeepLevel.BoolValue;
 
+    // 不保留时清掉旧表, 避免管理员关掉开关后旧等级又被下一局顶回来
+    if (!bKeep)
+        g_smKeepLevel.Clear();
+
     for (int i = 1; i <= MaxClients; i++)
     {
         if (bKeep)
         {
             // 保留等级: 不清 g_iLevel, 但清"原生血量基准"——新地图(可能换了难度)
-            // 的陆战队员由 ApplyPower 重新记录实际原生上限
+            // 的陆战队员由 ApplyPower 重新记录实际原生上限;
+            // 同时标记一次性补满 (新陆战队员血量是默认值)
             g_iBaseMaxHealth[i] = 0;
+            g_bPendingRefill[i] = (g_iLevel[i] > 0);
             continue;
         }
 
@@ -355,9 +383,19 @@ public void OnMapStart()
 
 public void OnClientDisconnect(int client)
 {
+    // 换图也会触发本回调 (SourceMod 的 OnClientDisconnect 在 changelevel 时对每个玩家都触发),
+    // 所以先按 SteamID 把等级存进表里, 玩家进入新地图后再取回
+    SaveKeptLevel(client);
+
     if (g_iLevel[client] > 0)
         RestoreMarine(client);
     ResetPlayer(client);
+}
+
+// 客户端身份校验完成(含换图后的新连接): 从保留表里找回强化等级
+public void OnClientPostAdminCheck(int client)
+{
+    RestoreKeptLevel(client);
 }
 
 public void OnClientPutInServer(int client)
@@ -385,6 +423,7 @@ public Action Cmd_PowerUp(int client, int args)
 
     g_iLevel[client]++;
     ApplyPower(client, true);
+    SaveKeptLevel(client);
     ShowStatus(client);
     return Plugin_Handled;
 }
@@ -404,6 +443,7 @@ public Action Cmd_PowerDown(int client, int args)
 
     g_iLevel[client]--;
     ApplyPower(client, true);
+    SaveKeptLevel(client);
     ShowStatus(client);
     return Plugin_Handled;
 }
@@ -415,6 +455,7 @@ public Action Cmd_PowerReset(int client, int args)
 
     g_iLevel[client] = 0;
     ApplyPower(client, true);
+    SaveKeptLevel(client);   // 等级 0 会直接删除表内条目, 防止被旧值顶回
     ShowStatus(client);
     return Plugin_Handled;
 }
@@ -456,6 +497,7 @@ public Action Cmd_PowerSet(int client, int args)
     // 写入目标玩家等级并应用(与普通玩家自调走同一套逻辑)
     g_iLevel[target] = level;
     ApplyPower(target, true);
+    SaveKeptLevel(target);
     ShowStatus(target);
 
     if (client > 0)
@@ -517,10 +559,10 @@ public Action Cmd_PowerStatus(int client, int args)
     if (client > 0)
     {
         PrintToChat(client, "\x04[强化]\x01 ============ 玩家强化状态 (v%s) ============", PLUGIN_VERSION);
-        PrintToChat(client, "\x04[强化]\x01 开关:%s | 公开:%s | 血量上限 %d/%d/%d/%d/%d | 体型+%.1f/级 | 移速+%.1f/级 | 等级%d~%d",
+        PrintToChat(client, "\x04[强化]\x01 开关:%s | 公开:%s | 血量 = 原生%d + %d×等级 | 体型+%.1f/级 | 移速+%.1f/级 | 等级%d~%d",
             g_cvEnabled.BoolValue ? "开" : "关",
             g_cvPublic.BoolValue ? "是" : "否",
-            g_iHpForLevel[1], g_iHpForLevel[2], g_iHpForLevel[3], g_iHpForLevel[4], g_iHpForLevel[5],
+            DEFAULT_BASE_HEALTH, g_cvHpStep.IntValue,
             g_cvScaleStep.FloatValue,
             g_cvSpeedStep.FloatValue,
             -g_cvShrinkMax.IntValue, g_cvMaxLevel.IntValue);
@@ -697,11 +739,10 @@ void RestoreMarine(int client)
 int GetHpForLevel(int client)
 {
     int level = g_iLevel[client];
+    int base = (g_iBaseMaxHealth[client] > 0) ? g_iBaseMaxHealth[client] : DEFAULT_BASE_HEALTH;
     if (level <= 0)
-        return (g_iBaseMaxHealth[client] > 0) ? g_iBaseMaxHealth[client] : DEFAULT_BASE_HEALTH;
-    if (level > LEVEL_COUNT)
-        level = LEVEL_COUNT;
-    return g_iHpForLevel[level];
+        return base;
+    return base + g_cvHpStep.IntValue * level;
 }
 
 float GetScaleForLevel(int client)
@@ -730,6 +771,14 @@ float GetSpeedForLevel(int client)
 public float ASRD_GetPowerSpeedMul(int client)
 {
     return GetSpeedForLevel(client);
+}
+
+// 跨插件公开: 玩家当前强化等级 (负数=缩小, 0=默认), 供 asrd_points 判断"是否满级"
+public int ASRD_GetPowerLevel(int client)
+{
+    if (client <= 0 || client > MaxClients)
+        return 0;
+    return g_iLevel[client];
 }
 
 // ============================================================================
@@ -915,6 +964,75 @@ void ResetPlayer(int client)
 {
     g_iLevel[client] = 0;
     g_iBaseMaxHealth[client] = 0;
+    g_bPendingRefill[client] = false;
+}
+
+// ============================================================================
+//  跨换图保留等级 (sm_asrd_power_keep_level=1)
+//  换图(changelevel, 即"下一关")时 SourceMod 也会对每个玩家触发 OnClientDisconnect,
+//  原实现在这里直接 ResetPlayer, 于是等级、体型、血量全被清零 ——
+//  这就是"重新开始游戏(同图重启)能保留、进下一关却复原"的原因。
+//  现在开启保留时按 SteamID 把等级存进内存表 (插件跨图不卸载, 表随图保留),
+//  玩家进入新地图后再取回。仅在同一服务器进程 / 插件未重载期间有效。
+// ============================================================================
+void SaveKeptLevel(int client)
+{
+    if (!g_cvKeepLevel.BoolValue)
+        return;
+    if (client <= 0 || client > MaxClients || IsFakeClient(client))
+        return;
+
+    char sAuth[64];
+    if (!GetClientAuthId(client, AuthId_Steam2, sAuth, sizeof(sAuth), true))
+        return;
+
+    // 等级 0 直接删条目: 避免玩家手动复位后又被上一轮的旧值顶回来
+    if (g_iLevel[client] != 0)
+        g_smKeepLevel.SetValue(sAuth, g_iLevel[client]);
+    else
+        g_smKeepLevel.Remove(sAuth);
+}
+
+// 从保留表取回等级; 取到后消费掉条目, 防止重复应用
+bool RestoreKeptLevel(int client)
+{
+    if (!g_cvEnabled.BoolValue || !g_cvKeepLevel.BoolValue)
+        return false;
+    if (client <= 0 || client > MaxClients || IsFakeClient(client))
+        return false;
+    if (g_iLevel[client] != 0)
+        return false;
+
+    char sAuth[64];
+    if (!GetClientAuthId(client, AuthId_Steam2, sAuth, sizeof(sAuth), true))
+        return false;
+
+    int level;
+    if (!g_smKeepLevel.GetValue(sAuth, level))
+        return false;
+    g_smKeepLevel.Remove(sAuth);
+
+    // 夹到当前配置允许范围 (管理员可能中途改过 max_level / shrink_max)
+    int minLevel = -g_cvShrinkMax.IntValue;
+    int maxLevel = g_cvMaxLevel.IntValue;
+    if (level < minLevel)
+        level = minLevel;
+    if (level > maxLevel)
+        level = maxLevel;
+    if (level == 0)
+        return false;
+
+    g_iLevel[client] = level;
+    g_iBaseMaxHealth[client] = 0;                  // 新地图重新记录原生血量基准
+    g_bPendingRefill[client] = (level > 0);        // 放大等级一次性补满血量
+
+    // 陆战队员可能还没生成: ApplyPower 会直接返回, 由周期重断言补上
+    ApplyPower(client, g_bPendingRefill[client]);
+
+    if (g_cvDebug.BoolValue)
+        PrintToServer("[强化] 找回保留等级 %N: L%d", client, level);
+
+    return true;
 }
 
 // ============================================================================
@@ -928,8 +1046,19 @@ public Action Timer_Reapply(Handle timer)
         {
             if (!IsClientInGame(i) || IsFakeClient(i))
                 continue;
+
+            // 换图后客户端可能没有重新触发 OnClientPostAdminCheck, 这里每秒兜底找回一次
+            if (g_iLevel[i] == 0)
+                RestoreKeptLevel(i);
+
             if (g_iLevel[i] != 0)
-                ApplyPower(i, false);
+            {
+                // 换图/任务重启后的首次应用: 补满血量, 之后恢复常规"不回血"重断言
+                bool bRefill = g_bPendingRefill[i];
+                ApplyPower(i, bRefill);
+                if (bRefill && GetPlayerMarine(i) > 0)
+                    g_bPendingRefill[i] = false;
+            }
             ApplyCamera(i);   // 视角高度定期重断言(换人/复活/地图重置后仍生效)
         }
     }

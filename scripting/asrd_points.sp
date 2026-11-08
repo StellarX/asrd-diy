@@ -159,7 +159,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Points"
-#define PLUGIN_VERSION "1.33.3"
+#define PLUGIN_VERSION "1.33.4"
 
 // 与 asrd_repulse 联动: 自动力场护盾经此 native 给玩家加限时 aura 护盾
 // (到期由 repulse 插件自动解除)。同样标记为可选, 未加载时静默跳过。
@@ -294,7 +294,6 @@ int  g_iBetrayCount[BUY_BETRAY_VARIANTS + 1] = { 0, 10, 20, 10, 5, 10, 5 };
 
 // ─── 满级加血 (全部玩家满级后再购买 #buy 1): 全体在游戏玩家统一加血 ─
 #define MAX_LEVEL_HEAL_AMOUNT   200    // 每次全体加血量 (每个玩家当前血量+200, 封顶其最大血量)
-#define MAX_POWER_LEVEL_MAXHP   1000   // 强化插件满级(L5)最大血量 (代码固定) — 满级判断以此为准
 
 // 友军虫统一 targetname (镜像 asrd_alien_civilwar 的 INFECTED_NAME)
 #define BETRAY_NAME     "asrd_betray_swarm"
@@ -2040,14 +2039,35 @@ void BuyExtraItem(int client, int iExtra, bool bAuto = false)
     }
 }
 
-// 满级判断: 玩家控制的陆战队员最大血量达到强化插件等级表上限(L5=1000)即视为满级
-// (强化插件 m_iMaxHealth 同样用 Prop_Data 读写, 与血量加血一致)
+// 跨插件读取强化真实等级 (asrd_marine_power 未加载/旧版本无该函数时返回 -1)
+int GetPowerPluginLevel(int client)
+{
+    Handle hPower = FindPluginByFile("asrd_marine_power.smx");
+    if (hPower == null || GetPluginStatus(hPower) != Plugin_Running)
+        return -1;
+    Function fn = GetFunctionByName(hPower, "ASRD_GetPowerLevel");
+    if (fn == INVALID_FUNCTION)
+        return -1;
+    int ret = -1;
+    Call_StartFunction(hPower, fn);
+    Call_PushCell(client);
+    Call_Finish(ret);
+    return ret;
+}
+
+// 满级判断: 只看强化等级 (读强化插件的真实等级, 不再判断血量)
 bool IsMarineMaxLevel(int client)
 {
-    int marine = GetClientMarine(client);
-    if (marine <= 0)
+    if (GetClientMarine(client) <= 0)
         return false;
-    return GetEntProp(marine, Prop_Data, "m_iMaxHealth") >= MAX_POWER_LEVEL_MAXHP;
+
+    // 强化插件未加载/旧版本无该函数时视为未满级 (此时 #buy 1 已被 ConVar 检查挡住)
+    int level = GetPowerPluginLevel(client);
+    if (level < 0)
+        return false;
+
+    ConVar cvMax = FindConVar("sm_asrd_power_max_level");
+    return level >= (cvMax != null ? cvMax.IntValue : 5);
 }
 
 // ============================================================================
@@ -2091,7 +2111,7 @@ void BuyMaxLevelHeal(int client)
     PrintToChatAll("\x04[积分]\x01 %N 花费 \x05%d\x01 积分购买【满级加血】, 全队恢复 \x05%d\x01 血, 剩余 \x05%d\x01 积分",
         client, iCostML, MAX_LEVEL_HEAL_AMOUNT, g_iPoints);
 
-    // 全体在游戏玩家统一加血: 当前血量 +200, 封顶各自最大血量 (满级=1000)
+    // 全体在游戏玩家统一加血: 当前血量 +200, 封顶各自最大血量
     for (int i = 1; i <= MaxClients; i++)
     {
         if (!IsActivePlayer(i))
@@ -2398,14 +2418,19 @@ public void OnGameFrame()
         ApplyFlechetteSettings();
     }
 
+    // 自动掉落/自动护盾只在任务进行中 (m_iGameState==ASW_GS_INGAME) 判定;
+    // 任务结束进入结算界面 (ASW_GS_DEBRIEF) 后陆战队员仍留在世界里,
+    // 若继续判定会一直重复触发 (曾出现结算/通关画面还在刷"局势危急")
+    bool bMissionRunning = (GameRules_GetProp("m_iGameState") == 3);  // ASW_GS_INGAME (asw_gamerules.h L625)
+
     // ── 自动掉落: 步枪/护甲 (每 auto_interval 秒; 开局/重开立即检查,
     //    场上暂无玩家时 1 秒后重试 → 开局玩家一进入就判断一次) ──
-    if (g_cvEnabled.BoolValue && g_cvAuto.BoolValue && fNow >= g_fNextAutoDrop)
+    if (bMissionRunning && g_cvEnabled.BoolValue && g_cvAuto.BoolValue && fNow >= g_fNextAutoDrop)
         g_fNextAutoDrop = fNow + (AutoDropTick() ? g_cvAutoInterval.FloatValue : 1.0);
 
     // ── 自动力场护盾: 条件每帧实时检查, 但两次触发之间至少间隔
     //    auto_shield_interval 秒 (冷却到了且条件仍满足就立即触发) ──
-    if (g_cvAuto.BoolValue && fNow >= g_fNextAutoShield && AutoShieldTick())
+    if (bMissionRunning && g_cvAuto.BoolValue && fNow >= g_fNextAutoShield && AutoShieldTick())
         g_fNextAutoShield = fNow + g_cvAutoShieldInterval.FloatValue;
 }
 

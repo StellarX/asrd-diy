@@ -544,7 +544,7 @@ void DrawArmorHud(int client, int left)
         if (g_bBlinkPhase)
         {
             SetHudTextParams(fX, fY, 0.6, 255, 30, 30, 255, 0, 0.0, 0.1, 0.1);
-            ShowHudText(client, g_HudChCv.IntValue, "防御层破损：%d", left);
+            ShowHudText(client, g_HudChCv.IntValue, "护甲破损：%d", left);
         }
         else
         {
@@ -555,7 +555,7 @@ void DrawArmorHud(int client, int left)
     {
         // 完全免伤: 保持原配置颜色
         SetHudTextParams(fX, fY, 0.6, g_HudRCv.IntValue, g_HudGCv.IntValue, g_HudBCv.IntValue, 210, 0, 0.0, 0.1, 0.1);
-        ShowHudText(client, g_HudChCv.IntValue, "防御层厚度：%d", left);
+        ShowHudText(client, g_HudChCv.IntValue, "护甲厚度：%d", left);
     }
     else
     {
