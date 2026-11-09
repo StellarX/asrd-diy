@@ -130,7 +130,8 @@
  *    玩家一进入游戏就检查)。
  *    护盾触发条件每帧实时检查 (不判断玩家人数):
  *    只要场上有存活玩家血量 < auto_shield_hp, 就给全场血量最低的那名玩家
- *    auto_shield_duration 秒力场护盾; 30 秒冷却只在"护盾真的加上"之后才开始计时,
+ *    auto_shield_duration 秒力场护盾 (倒地玩家不参与: 既不触发也不当选目标,
+ *    由其余玩家中血量最低者获得); 30 秒冷却只在"护盾真的加上"之后才开始计时,
  *    场上没人符合条件时不消耗冷却; 冷却结束瞬间若条件仍满足立即触发
  *    (单次只作用一人;
  *    asrd_repulse 的 aura 护盾, 不消耗积分; 需 repulse 插件已加载,
@@ -163,7 +164,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Points"
-#define PLUGIN_VERSION "1.34.2"
+#define PLUGIN_VERSION "1.34.3"
 
 // 与 asrd_repulse 联动: 自动力场护盾经此 native 给玩家加限时 aura 护盾
 // (到期由 repulse 插件自动解除)。同样标记为可选, 未加载时静默跳过。
@@ -2525,6 +2526,8 @@ bool AutoShieldTick()
         return false;
 
     // 触发前提: 存在低血玩家; 同时找出全场血量最低的玩家作为唯一目标
+    // 倒地玩家 (m_bKnockedOut=1, 可被队友扶起) 不具备拿盾资格:
+    // 既不参与"低血触发"的判定, 也不会被选为目标, 改由其余玩家中血量最低者获得
     bool bLowHp = false;
     int target = -1;
     int iLowestHp = 0;
@@ -2532,6 +2535,8 @@ bool AutoShieldTick()
     {
         int marine = GetClientMarine(alive[i]);
         if (marine <= 0)
+            continue;
+        if (IsMarineDowned(marine))
             continue;
         int hp = GetEntProp(marine, Prop_Data, "m_iHealth");
         if (hp < g_cvAutoShieldHp.IntValue)
@@ -2551,6 +2556,17 @@ bool AutoShieldTick()
 
     PrintToChatAll("\x04局势危急，\x05%N\x01 开启紧急力场护盾。", target);
     return true;   // 护盾已实际加上: 从这一刻起才开始计 auto_shield_interval 秒冷却
+}
+
+// 该陆战队员是否处于"倒地"状态 (被击倒但没死, 可被队友扶起)
+// 倒地时血量 = 最大血量-10 仍 > 0, 所以不能靠血量判断, 读网络字段 m_bKnockedOut
+bool IsMarineDowned(int marine)
+{
+    if (marine <= 0 || !IsValidEntity(marine))
+        return false;
+    if (!HasEntProp(marine, Prop_Send, "m_bKnockedOut"))
+        return false;
+    return GetEntProp(marine, Prop_Send, "m_bKnockedOut") != 0;
 }
 
 // 收集存活玩家 (控制陆战队员且 marine 血量>0), 返回人数

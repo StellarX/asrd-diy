@@ -54,6 +54,9 @@
  *   - 玩家控制的是"指挥官"实体, 真正带血量/模型/移速的是其 m_hInhabiting
  *     指向的 "asw_marine" 实体 (与 asrd_chainsaw_turbo 相同的查找方式)
  *   - 血量: 写 marine 的 m_iMaxHealth / m_iHealth (Prop_Data)
+ *     若该玩家是本局护送对象 (asrd_escort 在跑), 则体型/移速/血量/近战加成
+ *     全部跳过, 血量上限改由护送插件管理
+ *     (见 public ASRD_Escort_IsVipClient)
  *   - 体型: 写 marine 的 m_flModelScale (Prop_Send), 纯视觉缩放(不改变碰撞)
  *   - 移速: 写 marine 的 m_fSpeedScale (Prop_Send, AS:RD MaxSpeed 中的乘数)
  *   - 近战: SDKHook_OnTakeDamage 挂在虫族 victim 侧 (与 asrd_points 同模式),
@@ -81,7 +84,7 @@
 #pragma newdecls required
 
 #define PLUGIN_NAME    "[AS:RD] Marine Power"
-#define PLUGIN_VERSION "1.5.2"
+#define PLUGIN_VERSION "1.5.3"
 
 // 重新断言周期(秒): 换陆战队员/复活后仍生效, 不回血
 #define REAPPLY_INTERVAL 1.0
@@ -674,8 +677,12 @@ void ApplyPower(int client, bool refill)
 
     int level = g_iLevel[client];
 
+    // 护送对象不吃血量强化 (由 asrd_escort 自行设定上限);
+    // 也不为它记录原生血量, 以免把已被护送插件削减后的值当成基准
+    bool bEscortVip = IsEscortVip(client);
+
     // 首次放大前记录原生最大血量, 供等级0恢复
-    if (g_iBaseMaxHealth[client] <= 0 && level > 0)
+    if (!bEscortVip && g_iBaseMaxHealth[client] <= 0 && level > 0)
     {
         g_iBaseMaxHealth[client] = GetEntProp(marine, Prop_Data, "m_iMaxHealth");
         if (g_iBaseMaxHealth[client] <= 0)
@@ -683,16 +690,20 @@ void ApplyPower(int client, bool refill)
     }
 
     // 体型: 放大/缩小/默认 三态 (纯视觉, 不改变碰撞)
-    float newScale = GetScaleForLevel(client);
+    // 护送对象保持原生体型 (即使它之前被强化过, 选中后也会被还原成 1.0)
+    float newScale = bEscortVip ? 1.0 : GetScaleForLevel(client);
     if (HasEntProp(marine, Prop_Send, "m_flModelScale"))
         SetEntPropFloat(marine, Prop_Send, "m_flModelScale", newScale);
 
     // 移速: 仅放大时变快 (AS:RD MaxSpeed 中的 m_fSpeedScale 乘数), 缩小/默认保持 1.0
+    // 护送对象保持原生移速
+    float fSpeed = bEscortVip ? 1.0 : GetSpeedForLevel(client);
     if (HasEntProp(marine, Prop_Send, "m_fSpeedScale"))
-        SetEntPropFloat(marine, Prop_Send, "m_fSpeedScale", GetSpeedForLevel(client));
+        SetEntPropFloat(marine, Prop_Send, "m_fSpeedScale", fSpeed);
 
     // 血量: 缩小只缩模型不碰血量上限; 放大按等级缩放; 默认恢复
-    if (level >= 0)
+    // 护送对象的血量上限由 asrd_escort 独占管理, 这里完全不碰
+    if (!bEscortVip && level >= 0)
     {
         int newMax = GetHpForLevel(client);
         SetEntProp(marine, Prop_Data, "m_iMaxHealth", newMax);
@@ -708,7 +719,26 @@ void ApplyPower(int client, bool refill)
 
     if (g_cvDebug.BoolValue)
         PrintToServer("[强化] %N L%d: 体型=x%.2f 移速=x%.2f 近战=x%.2f",
-            client, level, newScale, GetSpeedForLevel(client), GetMeleeMultForLevel(level));
+            client, level, newScale, fSpeed,
+            bEscortVip ? 1.0 : GetMeleeMultForLevel(level));
+}
+
+// 该玩家是否为本局护送对象 (asrd_escort 未加载/未选人时返回 false)
+bool IsEscortVip(int client)
+{
+    Handle hEscort = FindPluginByFile("asrd_escort.smx");
+    if (hEscort == INVALID_HANDLE || GetPluginStatus(hEscort) != Plugin_Running)
+        return false;
+
+    Function fn = GetFunctionByName(hEscort, "ASRD_Escort_IsVipClient");
+    if (fn == INVALID_FUNCTION)
+        return false;
+
+    int ret = 0;
+    Call_StartFunction(hEscort, fn);
+    Call_PushCell(client);
+    Call_Finish(ret);
+    return (ret != 0);
 }
 
 // 恢复某玩家 marine 的原始血量/体型/移速
@@ -719,7 +749,8 @@ void RestoreMarine(int client)
         return;
 
     // 血量: 仅曾放大(记录过原生上限)才恢复; 缩小/未强化不碰血量
-    if (g_iBaseMaxHealth[client] > 0)
+    // 护送对象的血量由 asrd_escort 管理, 这里也不碰
+    if (g_iBaseMaxHealth[client] > 0 && !IsEscortVip(client))
     {
         int base = g_iBaseMaxHealth[client];
         SetEntProp(marine, Prop_Data, "m_iMaxHealth", base);
@@ -768,8 +799,11 @@ float GetSpeedForLevel(int client)
 }
 
 // 跨插件公开: 返回该玩家当前强化移速倍率(无强化=1.0), 供 asrd_armor 协调"取最大加成"
+// 护送对象不吃强化移速, 这里也返回 1.0, 避免护甲插件把强化倍率又写回去
 public float ASRD_GetPowerSpeedMul(int client)
 {
+    if (IsEscortVip(client))
+        return 1.0;
     return GetSpeedForLevel(client);
 }
 
@@ -779,6 +813,15 @@ public int ASRD_GetPowerLevel(int client)
     if (client <= 0 || client > MaxClients)
         return 0;
     return g_iLevel[client];
+}
+
+// 跨插件公开: 该玩家强化前的原生最大血量 (未强化过/无记录返回 0)
+// 供 asrd_escort 在削减护送对象血量时取"该角色原始上限"作基准
+public int ASRD_GetPowerBaseHealth(int client)
+{
+    if (client <= 0 || client > MaxClients)
+        return 0;
+    return g_iBaseMaxHealth[client];
 }
 
 // ============================================================================
@@ -829,6 +872,10 @@ public Action OnAlienDamaged(int victim, int &attacker, int &inflictor,
 
     int client = ResolveMeleeAttackerClient(attacker);
     if (client <= 0)
+        return Plugin_Continue;
+
+    // 护送对象不吃近战加成
+    if (IsEscortVip(client))
         return Plugin_Continue;
 
     float mult = GetMeleeMultForLevel(g_iLevel[client]);
