@@ -1,0 +1,7 @@
+UnlitGeneric
+{
+	$basetexture "vgui\challenges\asrd_points"
+	$vertexcolor 1
+	$vertexalpha 1
+	$ignorez 1
+}

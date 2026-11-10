@@ -1,0 +1,14 @@
+"AddonInfo"
+{
+	addonSteamAppID		563560
+	addontitle			"AS:RD 要员护送 C3"
+	addonversion		1.0
+	addontagline		"护送要员活到最后，击杀得积分，聊天框 #buy 购买全队强化"
+	addonauthor			"life"
+	addonSteamGroupName		""
+	addonauthorSteamID		""
+	addonContent_Campaign		"0"
+	addonURL0			""
+
+	addonDescription		"护送VIP完成游戏，VIP阵亡则任务失败；击杀虫子获取积分，聊天框输入 #buy 购买支援武器"
+}

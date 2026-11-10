@@ -1,0 +1,126 @@
+"CHALLENGE"
+{
+	"name"	"escort VIP C3"
+	"description"	"护送要员：随机多名要员，要员血量减半，无倒地状态，任意要员阵亡则任务失败。击杀虫族获得全队共享积分，可购买强化、核弹、武器、护甲等支援。C3 刷怪量。"
+	"icon"	"vgui/challenges/asrd_points"
+
+	"convars"
+	{
+		// 刷怪量与 Laidback Potato C3 保持一致 (carnage 区块 + director 时间)
+		"rd_carnage_scale"		"3"
+		"rd_prespawn_scale"		"0"
+		"rm_prespawn_num_shieldbugs"	"5"
+		"rm_prespawn_num_rangers"	"10"
+		"rm_prespawn_num_mortars"	"10"
+		"rm_prespawn_num_biomass"	"0"
+		"rm_prespawn_num_boomers"	"5"
+		"rm_prespawn_num_uber_drones"	"15"
+		"rd_horde_two_sided"		"1"
+		"asw_horde_override"		"1"
+		// 引擎 horde 刷怪距离: 离最近存活 marine 的最小距离 (默认 800), 精英波沿用此规则
+		// 见 asw_spawn_manager.cpp:37-38 (asw_horde_min_distance / asw_horde_max_distance) 与 :561
+		"asw_horde_min_distance"	"800"
+		"asw_wanderer_override"		"1"
+		"asw_director_peak_min_time"	"2"
+		"asw_director_peak_max_time"	"4"
+		"asw_horde_interval_min"	"15"
+		"asw_horde_interval_max"	"60"
+		"asw_director_relaxed_min_time"	"10"
+		"asw_director_relaxed_max_time"	"30"
+		"asw_adjust_difficulty_by_number_of_marines"	"1"
+
+		// 护送: 无倒地状态 (玩家血量归零直接阵亡, 要员阵亡即任务失败)
+		"rd_allow_revive"		"0"
+
+		// 强化护甲 (原 asrd_armor 默认值的等价配置, 10 层)
+		"asw_marine_passive_armor_scale"			"0.2"
+		"rd_marine_passive_armor_layers_amount"			"10"
+		"rd_marine_passive_armor_layer_protection_value"	"0.04"
+		"rd_marine_passive_armor_layer_update_interval_initial"	"3.0"
+		"rd_marine_passive_armor_layer_update_interval"		"1.0"
+		"rd_marine_passive_armor_layers_enabled"		"1"
+
+		// 导轨步枪 (原服务器配置: 弹匣 36 发, 总弹药 72 发 (弹匣36+备弹36), 射速 0.2 秒/发;
+		// asw_ammo_count_railgun = 弹匣容量/默认弹药; sk_max_asw_rg = 携带上限;
+		// 0.2 秒射速钳制由 challenge_asrd_points.nut 的 TickRailgun 实现 (原 asrd_railgun 的 fire_interval 方案,
+		// 原版装备表 fire rate=0, 弹匣大于 1 发后若不钳制会变成每帧可开火)
+		"asw_ammo_count_railgun"	"36"
+		"sk_max_asw_rg"		"72"
+
+		// 守望者脉冲步枪 / 增强电锯的伤害由 challenge_asrd_points.nut 的伤害钩子
+		// (OnTakeDamage_Alive_Any) 对掉落标记武器施加 (只作用于角色类目标, 用于虫子);
+		// 门 / 虫卵等非角色目标不吃钩子, 守望者的基础伤害另由下方 rd_ar2_dmg_base 抬高
+		// 与原插件"仅掉落枪增强"语义一致;
+		// 此处只保留能量球备弹上限 3 -> 10 (原插件 alt_ammo=10)
+		"sk_max_ar2_altfire"	"10"
+
+		// AVK-36 神射手步枪伤害 x8: 武器基础伤害 65 编译固定在装备清单 (asw_equipment_list.cpp:326),
+		// rd_sniper_dmg_base > 0 时整体覆盖基础伤害 (asw_weapon_sniper_rifle.cpp:320-328),
+		// 520 = 65 x 8
+		"rd_sniper_dmg_base"	"520"
+
+		// 哨戒塔炮塔伤害 x3: 覆盖炮塔榴弹基础伤害 60 -> 180 (asw_sentry_top_cannon.cpp:20)
+		"asw_sentry_top_cannon_dmg_override"	"180"
+
+		// 增强型黏弹发射器 (覆盖引擎默认 10; 原服务器配置单发 120)
+		"asw_skill_grenades_flechette_dmg_base"	"120"
+
+		// 35 式泵动霰弹枪 (8) 与 Potato 完全一致: Potato 在 challenge_laidback_potato__inc_convars.nut
+		// 里把 sk_max_asw_sg 设为 0, 否则 VScript GetMaxAmmo1() = 弹匣 4 + 备弹 48 = 52,
+		// 52/4 = 13 >= Potato 的 noClipPenalty(4), 它的 ammoCount.shotgun=16 永远不会生效 (弹匣只有 4);
+		// 备弹归零后 4/4 = 1 < 4, 才会走覆盖分支把弹匣撑到 16
+		"sk_max_asw_sg"	"0"
+
+		// 武器弹药 (原插件常用配置)
+		"asw_ammo_count_sniper_rifle"	"12"
+		"sk_max_asw_sniper"	"60"
+		"asw_ammo_count_ar2"	"200"
+		"asw_ammo_count_ar2_grenade"	"10"
+		"sk_max_ar2"	"600"
+		"asw_ammo_count_flechette"	"60"
+
+		// 守望者脉冲步枪单发伤害: 基础伤害走 rd_ar2_dmg_base (默认 0, 0 时 GetWeaponDamage 为 0,
+		// 引用代码会回退到 getammo 伤害), GetWeaponDamage() = rd_ar2_dmg_base + 精度技能加成
+		// (asw_weapon_shared.cpp:1452-1465), 该值直接写进子弹伤害, 对门 / asw_egg 等
+		// 非 CBaseCombatCharacter 目标同样生效 (伤害钩子 OnTakeDamage_Alive_Any 只挂
+		// CBaseCombatCharacter, 见 basecombatcharacter.cpp:2304, 所以钩子改不到了门的伤害)
+		// 100 与原服务器配置一致。sk_plr_dmg_ar2 仅作玩家实体开火时的回退值保留
+		"rd_ar2_dmg_base"	"100"
+		"sk_plr_dmg_ar2"	"100"
+
+		// 精英电甲爪虫: 引擎电击环绕材质依赖 m_bElectroStunned, 原值 0.3 会让虫眩晕减速, 设为 1 抵消
+		"asw_alien_stunned_speed"	"1"
+
+		// 精英自爆虫炮弹引信: 6s (原版默认 2.75, 这里放宽)
+		// asw_boomer_blob.cpp:23 默认 2.75; 实际 = 该值 + RandomFloat(-0.25, 0.66) (asw_boomer_blob.cpp:105)
+		// 即 6 对应 5.75~6.66 秒。显式写死, 避免沿用上一局残留值。
+		"asw_boomer_blob_fuse"		"6"
+
+		// ── Laidback Potato 机制整合 (来源: workshop addon 1921148014 laidback_potato_c3.txt) ──
+		// 全员可当技术员: 取消"必须带技术员"任务条件, 全员可破解电脑/门
+		"rd_techreq"		"0"
+		"rd_hackall"		"1"
+		// 取消职业限制: 改用白名单/黑名单控制武器, 任何职业都能用任意未禁用武器
+		"rd_weapon_requirement_override"	"1"
+		// 武器黑名单 (inverted=1 表示列表内禁用):
+		// 4 双持手枪 / 7 弹药背包 / 10 导轨步枪 / 16 AVK-36 神射手 / 17 燃烧哨戒 / 19 高速哨戒炮 / 20 榴弹发射器
+		"rd_weapons_regular_allowed"		"4 7 10 16 17 19 20"
+		"rd_weapons_regular_allowed_inverted"	"1"
+		// 额外道具黑名单: 1 焊枪 / 2 照明弹 / 4 战术重甲 / 8 肾上腺素 / 12 手电 / 13 动力拳套 / 15 夜视
+		"rd_weapons_extra_allowed"		"1 2 4 8 12 13 15"
+		"rd_weapons_extra_allowed_inverted"	"1"
+		// 空弹武器不自动销毁 (配合弹药回填) / 副武器自动补充 / 医疗枪无限弹药 / 隐藏弹匣数字
+		"rm_destroy_empty_weapon"		"0"
+		"rd_refill_secondary"		"1"
+		"rd_medgun_infinite_ammo"		"1"
+		"rd_hud_hide_clips"		"1"
+		// 原生回血 1 血 / 2 秒 (与护甲回血叠加)
+		"rd_hp_regen"			"1"
+		"rm_health_regen_amount"	"1"
+		"rm_health_regen_interval"	"2"
+		// 35 式泵动霰弹枪(8) 与 Potato 一致: 弹丸爆炸 (回填速率 shotgun=10 / 弹匣上限 16 见脚本 PO 表)
+		"rd_explosive_shotgun_pellets"	"1"
+
+		"rd_notify_about_out_of_ammo"	"0"
+	}
+}
