@@ -21,7 +21,6 @@
 //    #buy 2 / #2    强化核弹 (全图)        (200, 30s 冷却)
 //    #buy 3 [1-6]   叛变虫群 (友方)        (300)
 //    #buy 4 [0/1]   哨戒塔箱 0=机枪 1=炮塔 (300)
-//    #buy 5         补充全部哨戒塔弹药     (200)
 //    #buy 6 [1-5]   武器                   (300)
 //    #buy 7         动力护甲               (300)
 //    #buy 8 [1-3]   隐藏道具               (300)
@@ -38,7 +37,6 @@ COST_POWER   <- 800;
 COST_NUKE    <- 200;
 COST_BETRAY  <- 300;
 COST_SENTRY  <- 300;
-COST_REFILL  <- 200;
 COST_WEAPON  <- 300;
 COST_ARMOR   <- 300;
 COST_ITEM    <- 300;
@@ -96,17 +94,19 @@ SLIP_PUSH_UP              <- 300.0;  // 上抛速度 (slip.nut 原值 300)
 // 绝不卡墙/卡地板), 再把刷出的虫变异成精英 (改染色/体型/血量/特效, 见 drone_mutation 同款做法)
 PRESSURE_MIN_INTERVAL <- 20.0;    // 刷虫间隔: 20~40 秒随机
 PRESSURE_MAX_INTERVAL <- 40.0;
-ELITE_HP              <- 1000;    // 电甲爪虫血量 (红巨爪/蓝巨虫 各有独立血量, 见下)
-RED_GIANT_HP          <- 1000;    // 红巨爪虫血量
-BLUE_GIANT_HP         <- 2500;    // 蓝巨虫血量
-TRACKER_HP            <- 1000;    // 追踪虫血量
+ELITE_HP              <- 250;     // 电甲爪虫血量 (红巨爪/蓝巨虫 各有独立血量, 见下)
+RED_GIANT_HP          <- 250;     // 红巨爪虫血量
+BLUE_GIANT_HP         <- 625;     // 蓝巨虫血量
+TRACKER_HP            <- 250;     // 追踪虫血量
 TRACKER_SPEED_MULT    <- 2.0;     // 追踪虫移速倍率 (m_fSpeedScale, 原版 2 倍)
 TRACKER_DMG_MULT      <- 2.0;     // 追踪虫攻击力倍数 (近战伤害, 走 OnTakeDamage_Alive_Any 钩子)
 ELITE_NAMES           <- ["追踪虫", "红巨爪虫", "电甲爪虫", "蓝巨虫", "自爆虫", "寄生虫"];
 ELITE_WAVE_MIN        <- 5;       // 每波精英数量下限
-ELITE_WAVE_MAX        <- 15;      // 每波精英数量上限
+ELITE_WAVE_MAX        <- 10;      // 每波精英数量上限
+BOOMER_WAVE_MIN       <- 2;       // 自爆虫波数量下限 (炮弹太多会卡, 单独压低)
+BOOMER_WAVE_MAX       <- 5;       // 自爆虫波数量上限
 BOOMER_SCALE          <- 2.0;     // 自爆虫体型倍数
-BOOMER_HP             <- 10000;   // 自爆虫血量 (原版 asw_boomer_health 默认 800)
+BOOMER_HP             <- 2500;    // 自爆虫血量 (原版 asw_boomer_health 默认 800)
 BOOMER_MELEE_DMG      <- 200.0;   // 精英自爆虫脚踢固定伤害 (原版 sk_asw_boomer_melee_damage 4~6)
                                   // 小炸弹爆炸伤害保持原版 55, 钩子里遇 DMG_BLAST 直接原样放过
 BOOMER_EXTRA_BLOBS    <- 72;      // 自爆虫死亡时额外生成的炮弹数 (引擎最多 8 只, 8+72=80 = 原版 x10)
@@ -241,7 +241,6 @@ HUD_LINES <- 5;   // rd_hud_vscript 每个实体仅支持 1 个字符串 (索引
 
 // ── 运行时状态 ──────────────────────────────────────────
 g_points       <- POINTS_START;
-g_sentryPtAcc  <- 0.0;      // 哨戒塔伤害折算积分的小数累积 (每 100 伤害 1 分, 与击杀换算 POINTS_HP_SCALE 一致)
 g_huds         <- {};       // player entindex -> [HUD_LINES 个 rd_hud_vscript]
 g_hudAt        <- 0.0;
 g_powerAt      <- 0.0;
@@ -1854,39 +1853,6 @@ function TickSentryFastDismantle()
 	}
 }
 
-function BuyRefill(hPlayer)
-{
-	local bases = [];
-	local b = null;
-	while ((b = Entities.FindByClassname(b, "asw_sentry_base")) != null)
-	{
-		if (b != null && b.IsValid() && b.GetHealth() > 0)
-		{
-			bases.append(b);
-		}
-	}
-	if (bases.len() == 0)
-	{
-		Reply(hPlayer, "地图上没有哨戒塔");
-		return;
-	}
-	if (!Pay(COST_REFILL, hPlayer))
-	{
-		return;
-	}
-
-	foreach (base in bases)
-	{
-		base.SetHealth(base.GetMaxHealth());
-		local top = TryGetEntity(base, "m_hSentryTop");
-		if (top != null && top.IsValid())
-		{
-			TrySetInt(top, "m_nSentryAmmo", 200);
-		}
-	}
-	Broadcast(hPlayer.GetPlayerName() + " 补充了全部哨戒塔的弹药与耐久（" + bases.len() + " 座）");
-}
-
 function BuyWeapon(hPlayer, opt)
 {
 	if (opt == "")
@@ -2520,8 +2486,9 @@ function TickPressure(now)
 	g_pressureAt = now + RandomFloat(PRESSURE_MIN_INTERVAL, PRESSURE_MAX_INTERVAL);
 	g_pressureWave++;
 
-	// 数量: 每波完全随机 5~15 只 (不再随波次递增); 每波精英同一种, 波次轮换 6 种
+	// 数量: 每波完全随机 5~10 只 (不再随波次递增); 每波精英同一种, 波次轮换 6 种
 	// (寄生虫也作为其中一种精英, 第 1 波起就有概率抽到, 不再要求第 10 波之后)
+	// 自爆虫波单独压低到 2~5 只 (每只死亡补 72 只炮弹, 数量太多会卡)
 	local count = RandomInt(ELITE_WAVE_MIN, ELITE_WAVE_MAX);
 	g_mutatePending = count;
 	// 精英种类每波随机 (不与上一波重复, 避免连续两波同一种)
@@ -2542,6 +2509,7 @@ function TickPressure(now)
 	{
 		// 自爆虫 (asw_boomer 底材): 引擎 horde 不刷 boomer, 但绝不能用随机坐标生成 (会卡墙)。
 		// 仍让引擎刷普通虫 (nav mesh 合法选点), 由 TickMutate 把刷出的虫原位替换成 asw_boomer
+		count = RandomInt(BOOMER_WAVE_MIN, BOOMER_WAVE_MAX);
 		g_mutatePending = 0;
 		g_boomerPending = count;
 		g_boomerExpireAt = now + 30.0;
@@ -2948,6 +2916,10 @@ function TickZappers(now)
 		// (asw_inhabitable_npc.cpp:259-266), 客户端的 FX_ElectroStun 电环绕就消失
 		try { NetProps.SetPropFloat(a, "m_flElectroStunSlowMoveTime", now + 60.0); } catch (e) {}
 		try { NetProps.SetPropBool(a, "m_bElectroStunned", true); } catch (e) {}
+		// 抵消电晕减速: m_fHurtSlowMoveTime 是 ShouldMoveSlow() 的判据, 清成 0 后
+		// 即使 m_bElectroStunned=true, 速度也不会乘 asw_alien_stunned_speed;
+		// 这样 asw_alien_stunned_speed 可保持原版 0.3, 电枪/电炸弹对普通虫仍有减速效果
+		try { NetProps.SetPropFloat(a, "m_fHurtSlowMoveTime", 0.0); } catch (e) {}
 		if (now < nextZap)
 		{
 			continue;
@@ -3098,10 +3070,6 @@ function IsPlayerSource(ent)
 	}
 	local cls = ent.GetClassname();
 	if (cls == "player" || cls == "asw_marine")
-	{
-		return true;
-	}
-	if (cls.find("sentry") != null)
 	{
 		return true;
 	}
@@ -3264,23 +3232,7 @@ function OnTakeDamage_Alive_Any(victim, inflictor, attacker, weapon, damage, dam
 		}
 	}
 
-	// 哨戒塔伤害折算积分: 与被击杀时的换算保持一致 (伤害 x POINTS_HP_SCALE),
-	// 不足 1 分的小数部分累积到下一发 (机枪单发伤害低, 直接取整会永远是 0)
-	if (attacker != null && attacker.IsValid())
-	{
-		local sclsPt = "";
-		try { sclsPt = attacker.GetClassname(); } catch (e) { sclsPt = ""; }
-		if (sclsPt.find("sentry") != null)
-		{
-			g_sentryPtAcc = g_sentryPtAcc + damage * POINTS_HP_SCALE;
-			local whole = g_sentryPtAcc.tointeger();
-			if (whole > 0)
-			{
-				g_points += whole;
-				g_sentryPtAcc = g_sentryPtAcc - whole;
-			}
-		}
-	}
+	// 哨戒塔伤害不折算积分 (哨戒塔消耗靠购买时的积分, 击杀也不给分, 见 IsPlayerSource)
 
 	return damage;
 }
@@ -3378,7 +3330,6 @@ function OnGameEvent_player_say(params)
 	if (cmd == "2") { BuyNuke(hPlayer); return; }
 	if (cmd == "3") { BuyBetray(hPlayer, opt); return; }
 	if (cmd == "4") { BuySentry(hPlayer, opt); return; }
-	if (cmd == "5") { BuyRefill(hPlayer); return; }
 	if (cmd == "6") { BuyWeapon(hPlayer, opt); return; }
 	if (cmd == "7") { BuyArmor(hPlayer); return; }
 	if (cmd == "8") { BuyItem(hPlayer, opt); return; }
@@ -3417,7 +3368,6 @@ function Buy(cat, opt, hPlayer)
 		case 2: BuyNuke(hPlayer); return;
 		case 3: BuyBetray(hPlayer, opt); return;
 		case 4: BuySentry(hPlayer, opt); return;
-		case 5: BuyRefill(hPlayer); return;
 		case 6: BuyWeapon(hPlayer, opt); return;
 		case 7: BuyArmor(hPlayer); return;
 		case 8: BuyItem(hPlayer, opt); return;
@@ -3435,7 +3385,6 @@ function ShowHelp(hPlayer)
 	Reply(hPlayer, "　　1工蜂 2爆裂虫 3寄生虫 4蜂群 5盾甲虫 6治疗虫");
 	Reply(hPlayer, "#4 [0/1] 哨戒塔箱 (300):");
 	Reply(hPlayer, "　　0机枪 1炮塔");
-	Reply(hPlayer, "#5 哨戒塔补弹 (200)");
 	Reply(hPlayer, "#6 [1-5] 武器 (300):");
 	Reply(hPlayer, "　　1电锯 2守望者脉冲步枪 3增强黏弹发射器");
 	Reply(hPlayer, "　　4导轨步枪 5AVK-36神射手步枪");
@@ -3460,7 +3409,6 @@ function SpawnBuyHelpObjectives()
 		+ "#buy 3 1~6 叛变虫群 (" + COST_BETRAY + "分)\n"
 		+ "　1工蜂 2爆裂虫 3寄生虫\n　4蜂群 5盾甲虫 6治疗虫";
 	local d2 = "#buy 4 0/1 哨戒塔箱 (" + COST_SENTRY + "分): 0机枪 1炮塔\n"
-		+ "#buy 5 哨戒塔补满弹药 (" + COST_REFILL + "分)\n"
 		+ "#buy 6 1 增强电锯 (" + COST_WEAPON + "分)\n"
 		+ "#buy 6 2 守望者脉冲步枪 (" + COST_WEAPON + "分)";
 	local d3 = "#buy 6 3 增强型黏弹发射器 (" + COST_WEAPON + "分)\n"
