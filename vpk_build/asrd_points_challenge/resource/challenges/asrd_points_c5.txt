@@ -94,7 +94,7 @@
 
 		// 武器弹药 (原插件常用配置)
 		"asw_ammo_count_sniper_rifle"	"12"
-		"sk_max_asw_sniper"	"60"
+		"sk_max_asw_sniper"	"24"
 		"asw_ammo_count_ar2"	"200"
 		"asw_ammo_count_ar2_grenade"	"10"
 		"sk_max_ar2"	"400"	// 守望者共 2 个弹匣: 弹匣 200 + 备弹 200, 携带上限同步压到 400 防止弹药箱补回
@@ -105,9 +105,13 @@
 		// (asw_weapon_shared.cpp:1452-1465), 该值直接写进子弹伤害, 对门 / asw_egg 等
 		// 非 CBaseCombatCharacter 目标同样生效 (伤害钩子 OnTakeDamage_Alive_Any 只挂
 		// CBaseCombatCharacter, 见 basecombatcharacter.cpp:2304, 所以钩子改不到了门的伤害)
-		// 100 与原服务器配置一致。sk_plr_dmg_ar2 仅作玩家实体开火时的回退值保留
-		"rd_ar2_dmg_base"	"100"
-		"sk_plr_dmg_ar2"	"100"
+		// 88 (原 100, 本次下调)。sk_plr_dmg_ar2 仅作玩家实体开火时的回退值保留。
+		// 精度子技能 AMSC_ACCURACY_AR2_DMG 默认 base=0 / step=2 (asw_marine_skills.cpp:255),
+		// 满级会 +10 浮动; 写死 0/0 保证单发恒定 88。
+		"rd_ar2_dmg_base"	"88"
+		"sk_plr_dmg_ar2"	"88"
+		"asw_skill_accuracy_ar2_dmg_base"	"0"
+		"asw_skill_accuracy_ar2_dmg_step"	"0"
 
 		// ── 22A3-1 突击步枪 (asw_weapon_rifle) 伤害 ──
 		// 单发子弹 25: GetWeaponDamage() = 装备表基础伤害 + rd_rifle_dmg_base 覆盖值

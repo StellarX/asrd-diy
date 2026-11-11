@@ -95,8 +95,8 @@ RUSH_WINDOW_SECONDS    <- 15.0;  // 事件型节点 (按钮/焊接门) 触发的
 //  OnGameEvent_button_area_used / door_welded / door_unwelded 事件开窗口。
 //  门的 m_eDoorState 非 SendProp, VScript 读不到"正在开门", 故纯等待用事件窗口近似。
 ELITE_HP              <- 300;     // 电甲虫血量
-RED_GIANT_HP          <- 500;     // 武斗虫血量
-BLUE_GIANT_HP         <- 2000;    // 重甲虫血量
+RED_GIANT_HP          <- 1000;    // 武斗虫血量
+BLUE_GIANT_HP         <- 3000;    // 重甲虫血量
 BLUE_GIANT_SPEED_MULT <- 0.5;     // 重甲虫移速倍率 (m_fSpeedScale, 原速 50%)
 BLUE_GIANT_SCALE      <- 1.5;     // 重甲虫体型倍数
 BRAWLER_SPEED_MULT    <- 1.5;     // 武斗虫移速倍率 (原速 150%)
@@ -162,7 +162,7 @@ PARASITE_WAVE_MIN     <- 20;      // 寄生虫波单独放量下限 (原版 25 �
 PARASITE_WAVE_MAX     <- 60;      // 寄生虫波单独放量上限
 PARASITE_WAVE_CAP     <- 60;      // 寄生虫波数量硬上限: 人数倍率再高也不超过该值
                                  // (0.5x=10~30, 1.0x=20~60, 2.0x=40~60, 不刷出上百只卡服)
-HEAVY_WAVE_MIN        <- 2;       // 重甲虫波数量下限 (与泰坦自爆虫同为低量波: 2000 血 + 撞倒)
+HEAVY_WAVE_MIN        <- 2;       // 重甲虫波数量下限 (与泰坦自爆虫同为低量波: 3000 血 + 撞倒)
 HEAVY_WAVE_MAX        <- 5;       // 重甲虫波数量上限
 
 // ── 按在场人数缩放刷怪数量 (观战 / 旁观等待者不计入) ──
@@ -175,7 +175,7 @@ SPAWN_SCALE_LOW              <- 0.5;
 SPAWN_SCALE_MID              <- 1.0;
 SPAWN_SCALE_HIGH             <- 2.0;
 BOOMER_SCALE          <- 2.0;     // 自爆虫体型倍数
-BOOMER_HP             <- 5000;    // 自定义精英自爆虫血量 (仅脚本 MutateElite 变异体, 不改原版 asw_boomer_health)
+BOOMER_HP             <- 8000;    // 自定义精英自爆虫血量 (仅脚本 MutateElite 变异体, 不改原版 asw_boomer_health)
 BOOMER_MELEE_DMG      <- 200.0;   // 精英自爆虫脚踢固定伤害 (原版 sk_asw_boomer_melee_damage 4~6)
                                   // 小炸弹爆炸伤害保持原版 55, 钩子里遇 DMG_BLAST 直接原样放过
 BOOMER_EXTRA_BLOBS    <- 54;      // 自爆虫死亡时额外生成的炮弹数 (引擎最多 8 只, 8+54=62)
@@ -225,7 +225,7 @@ WEAPON_ENH <- {
 	asw_weapon_ar2          = { tint = [0, 200, 255],   clip1 = 200,  clip2 = 10,  ammo1 = 200, ammo2 = 10  },   // 青色染色; 弹匣 200 + 备弹 200 = 共 2 个弹匣
 	asw_weapon_flechette    = { tint = null,            clip1 = 60,   clip2 = -1,  ammo1 = 60,  ammo2 = -1  },
 	asw_weapon_railgun      = { tint = null,            clip1 = 36,   clip2 = -1,  ammo1 = 36,  ammo2 = -1  },
-	asw_weapon_sniper_rifle = { tint = null,            clip1 = 12,   clip2 = -1,  ammo1 = 60,  ammo2 = -1  }
+	asw_weapon_sniper_rifle = { tint = null,            clip1 = 12,   clip2 = -1,  ammo1 = 12,  ammo2 = -1  }   // 弹匣 12 发 + 备弹 12 = 共 2 个弹匣 (sk_max_asw_sniper 24)
 };
 CHAINSAW_TURBO_MULT <- 3.0;   // 增强电锯按住攻击键时的锯片转速倍率 (原插件 sm_asrd_chainsaw_speed 默认 3.0)
 RAILGUN_FIRE_INTERVAL <- 0.2; // 导轨步枪两次射击最小间隔 (原服务器配置 sm_asrd_railgun_fire_interval 0.2)
@@ -247,7 +247,7 @@ PDW_FIRE_MULT     <- 2.0;     // 射速倍率 (2 = 间隔减半)
 
 // ── Laidback Potato 弹药机制 (移植自 challenge_laidback_potato__inc_vars.nut) ──
 // 弹匣永远补满的武器 (照搬 Potato 的 infWeapon, 只去掉 sniper_rifle:
-// AVK-36 保留本挑战自己的 12 发弹匣 + 60 发备弹设定, 不走无限弹匣)
+// AVK-36 保留本挑战自己的 12 发弹匣 + 12 发备弹设定 (共 2 个弹匣), 不走无限弹匣)
 PO_INF_WEAPON <- {
 	asw_weapon_rifle = 1, asw_weapon_vindicator = 1, asw_weapon_prifle = 1,
 	asw_weapon_50calmg = 1, asw_weapon_autogun = 1, asw_weapon_deagle = 1,
@@ -275,11 +275,15 @@ PO_AMMO_COUNT <- {
 	asw_weapon_gas_grenades = 3, asw_weapon_stim = 2, asw_weapon_buff_grenade = 3,
 	asw_weapon_medical_satchel = 30, asw_weapon_sentry = 2105, asw_weapon_devastator = 200,
 	asw_weapon_pistol = 300, asw_weapon_flamer = 70, asw_weapon_grenade_launcher = 30,
-	asw_weapon_shotgun = 16, asw_weapon_mining_laser = 33, asw_weapon_fire_extinguisher = 140
+	asw_weapon_shotgun = 16, asw_weapon_mining_laser = 33, asw_weapon_fire_extinguisher = 140,
+	// AVK-36: 总弹药 24 / 弹匣 12 = 2 个弹匣, 低于 PO_NOCLIP_PENALTY(4) 会触发单弹匣惩罚
+	// 把弹匣压到 ceil(12 * (1 - 0.55/2)) = 9 发; 这里显式固定 12, 保证"12 发弹匣 x 2 个"。
+	asw_weapon_sniper_rifle = 12
 };
 // 副弹匣 (下挂榴弹/手雷) 回填间隔与上限 (照搬 Potato 的 regenInterval2 / undCount)
 PO_REGEN_INTERVAL2 <- {
-	asw_weapon_rifle = 8, asw_weapon_prifle = 9, asw_weapon_vindicator = 9,
+	// asw_weapon_rifle 是 22A3-1 下挂榴弹: 原 Potato 值 8 秒/发, 本挑战改为 16 秒/发 (x2)
+	asw_weapon_rifle = 16, asw_weapon_prifle = 9, asw_weapon_vindicator = 9,
 	asw_weapon_combat_rifle = 1, asw_weapon_heavy_rifle = 5
 };
 PO_UND_COUNT <- {
@@ -3045,7 +3049,7 @@ function TickPressure(now)
 
 	// 数量: 基础区间 5~10 只 (不再随波次递增), 再按在场人数倍率整体缩放;
 	// 每波精英同一种, 波次随机不重复 (寄生虫第 1 波起就有概率抽到)。
-	// 泰坦自爆虫 / 重甲虫同为 2~5 只低量波 (前者每只死亡补 54 只炮弹会卡, 后者 2000 血 + 撞倒);
+	// 泰坦自爆虫 / 重甲虫同为 2~5 只低量波 (前者每只死亡补 54 只炮弹会卡, 后者 3000 血 + 撞倒);
 	// 寄生虫波单独放量到 20~60 只 (原版 25 血, 走"虫潮"定位)。
 	// 倍率每波实时取 CountPlayers() (不含观战者), 所以中途人数变化下一波就生效。
 	local scale = GetSpawnScale();
@@ -4232,7 +4236,7 @@ function OnTakeDamage_Alive_Any(victim, inflictor, attacker, weapon, damage, dam
 	//   DMG_BLAST = 1<<6 = 64  小炸弹半径爆炸 (asw_boomer_blob.cpp:315 的 RadiusDamage,
 	//                          attacker 传的是 m_hFirer 即爆虫本体) -> 必须原样放过, 保持 55
 	//   DMG_GENERIC = 0        asw_ai_behavior_explode.cpp:264/275 自爆时给自己
-	//                          GetMaxHealth()*2 = 10000 的自伤 -> 必须原样放过,
+	//                          GetMaxHealth()*2 = 16000 的自伤 -> 必须原样放过,
 	//                          否则精英自爆虫自爆只吃 200 不死
 	// 早前把 DMG_SLASH 误当成 DMG_BLAST (写成 & 4), 结果脚踢被跳过、爆炸被放大成 200。
 	if (attacker != null && attacker.IsValid() && victim != attacker)
@@ -4301,7 +4305,7 @@ function OnTakeDamage_Alive_Any(victim, inflictor, attacker, weapon, damage, dam
 		catch (e) {}
 	}
 
-	// 精英重甲虫: 伤害保持原版, 但命中玩家按概率撞倒 (它本身是 2000 血的肉盾, 撞人最合逻辑)
+	// 精英重甲虫: 伤害保持原版, 但命中玩家按概率撞倒 (它本身是 3000 血的肉盾, 撞人最合逻辑)
 	if (attacker != null && attacker.IsValid())
 	{
 		try
@@ -4385,7 +4389,7 @@ function OnTakeDamage_Alive_Any(victim, inflictor, attacker, weapon, damage, dam
 
 	// 增强武器伤害 (仅购买/空投掉落的标记武器生效, 与原插件"仅掉落枪增强"一致):
 	// 增强电锯 x10。守望者脉冲步枪不在这里处理: 它的基础伤害统一由挑战 convar
-	// rd_ar2_dmg_base=100 抬高 (见 asrd_points_c3.txt), 这样对虫子/虫卵/门 都是同一个值
+	// rd_ar2_dmg_base=88 抬高 (见 asrd_points_c3.txt), 这样对虫子/虫卵/门 都是同一个值
 	if (weapon != null && weapon.IsValid() && (weapon.entindex() in g_tintWpn))
 	{
 		local wcls = weapon.GetClassname();
