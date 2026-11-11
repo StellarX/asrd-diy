@@ -17,9 +17,11 @@
 		"rm_prespawn_num_uber_drones"	"15"
 		"rd_horde_two_sided"		"1"
 		"asw_horde_override"		"1"
-		// 引擎 horde 刷怪距离: 离最近存活 marine 的最小距离 (默认 800), 精英波沿用此规则
-		// 见 asw_spawn_manager.cpp:37-38 (asw_horde_min_distance / asw_horde_max_distance) 与 :561
-		"asw_horde_min_distance"	"800"
+		// 引擎 horde 刷怪距离: 离最近 marine 的距离区间 [min, max], 精英波也走此规则
+		// 见 asw_spawn_manager.cpp:37-38 / :561。min 必须 < max, 否则无任何合法节点、刷不出怪
+		// 推远到 1200~2000: 让精英波在玩家视野外生成, 区间宽度保持 800 (原 800~1500)
+		"asw_horde_min_distance"	"1200"
+		"asw_horde_max_distance"	"2000"
 		"asw_wanderer_override"		"1"
 		"asw_director_peak_min_time"	"2"
 		"asw_director_peak_max_time"	"4"
@@ -32,11 +34,12 @@
 		// 护送: 无倒地状态 (玩家血量归零直接阵亡, 要员阵亡即任务失败)
 		"rd_allow_revive"		"0"
 
-		// 强化护甲 (原 asrd_armor 默认值的等价配置, 10 层)
-		"asw_marine_passive_armor_scale"			"0.2"
+		// 强化护甲: 引擎减伤设中性 (scale=1/每层值=0), 减伤与扣层由挑战脚本接管:
+		// 有层实受 20%, 0 层实受 100%; 火焰/寄生免疫与层数无关
+		"asw_marine_passive_armor_scale"			"1.0"
 		"rd_marine_passive_armor_layers_amount"			"10"
-		"rd_marine_passive_armor_layer_protection_value"	"0.04"
-		"rd_marine_passive_armor_layer_update_interval_initial"	"3.0"
+		"rd_marine_passive_armor_layer_protection_value"	"0.0"
+		"rd_marine_passive_armor_layer_update_interval_initial"	"8.0"
 		"rd_marine_passive_armor_layer_update_interval"		"1.0"
 		"rd_marine_passive_armor_layers_enabled"		"1"
 
@@ -59,8 +62,8 @@
 		// 520 = 65 x 8
 		"rd_sniper_dmg_base"	"520"
 
-		// 哨戒塔炮塔伤害 x3: 覆盖炮塔榴弹基础伤害 60 -> 180 (asw_sentry_top_cannon.cpp:20)
-		"asw_sentry_top_cannon_dmg_override"	"180"
+		// 哨戒塔炮塔伤害 x2: 覆盖炮塔榴弹基础伤害 60 -> 120 (asw_sentry_top_cannon.cpp:20)
+		"asw_sentry_top_cannon_dmg_override"	"120"
 
 		// 哨戒塔弹药无限: asw_sentry_infinite_ammo=1 时 OnFiredShots 不再递减 m_iAmmo
 		// (定义 asw_sentry_base.cpp:24, 判断 :422-425), 因此 HasAmmo() 恒为 true (asw_sentry_top.cpp:566-573)
@@ -80,7 +83,7 @@
 		"sk_max_asw_sniper"	"60"
 		"asw_ammo_count_ar2"	"200"
 		"asw_ammo_count_ar2_grenade"	"10"
-		"sk_max_ar2"	"600"
+		"sk_max_ar2"	"400"	// 守望者共 2 个弹匣: 弹匣 200 + 备弹 200, 携带上限同步压到 400 防止弹药箱补回
 		"asw_ammo_count_flechette"	"60"
 
 		// 守望者脉冲步枪单发伤害: 基础伤害走 rd_ar2_dmg_base (默认 0, 0 时 GetWeaponDamage 为 0,

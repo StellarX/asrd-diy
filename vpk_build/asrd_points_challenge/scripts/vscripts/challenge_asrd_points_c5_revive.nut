@@ -7,25 +7,23 @@
 //    - 默认开启护送模式: 开局立即随机指定护送对象 (VIP), 其最大生命减半;
 //      倒地是 VIP 特权 (仅第一次血量归零时倒地, 倒地后引擎原生流血, 耗尽则任务失败;
 //      其他玩家血量归零直接阵亡, 不存在倒地状态); VIP 彻底阵亡 = 任务失败
-//    - 护送激励: 全队 HUD 实时血量; 扶起倒地的 VIP 全队 +100 分
-//    - 定向刷虫: 每隔 30~60 秒 (随机) 在 VIP 周围刷一波虫, 每波保底 1 只精英
-//      (红色大爪虫 asw_drone_uber / 电甲爪虫 / 蓝巨虫 等概率) + 其余普通虫;
-//      刷怪点远离玩家且不在视线内, 与原生刷怪一致
+//    - 护送激励: 全队 HUD 实时血量
+//    - 定向刷虫: 每隔 20~40 秒 (随机) 刷一波精英 (任务节点期间 5 秒),
+//      从 6 种精英中随机一种 (红巨/电甲/蓝巨/追踪/自爆/寄生);
+//      用 SpawnAlienAuto 实时生成于引擎合法 nav 点, 与原版 horde 节奏解耦;
+//      刷怪点远离玩家且不在视线内
 //    - 保留自动空投 (每 120 秒随机一件)
 //    - 自动力场护盾: 任一存活玩家血量 < 30 时, 血量最低者获得 5 秒
 //      斥力护盾 (弹开近身虫族); 全队共享 120 秒冷却
 //
 //  命令:
 //    #buy           显示帮助
-//    #buy 1 / #1    全队强化等级 +1        (800)
+//    #buy 1 / #1    全队强化等级 +1        (500)
 //    #buy 2 / #2    强化核弹 (全图)        (200, 30s 冷却)
-//    #buy 3 [1-6]   叛变虫群 (友方)        (300)
 //    #buy 4 [0/1]   哨戒塔箱 0=机枪 1=炮塔 (300)
-//    #buy 5         补充全部哨戒塔弹药     (500)
 //    #buy 6 [1-5]   武器                   (300)
 //    #buy 7         动力护甲               (300)
-//    #buy 8 [1-3]   隐藏道具               (300)
-//    #buy 9         弹药掉落               (300)
+//    #buy 9         弹药掉落               (100)
 // ============================================================
 
 // ── 积分 ────────────────────────────────────────────────
@@ -34,15 +32,12 @@ POINTS_HP_SCALE     <- 0.01;      // 击杀得分 = 最大血量 x 该比例, �
 POINTS_AUTO_INTERVAL<- 120.0;     // 自动空投间隔(秒)
 
 // ── 价格 ────────────────────────────────────────────────
-COST_POWER   <- 800;
+COST_POWER   <- 500;
 COST_NUKE    <- 200;
-COST_BETRAY  <- 300;
 COST_SENTRY  <- 300;
-COST_REFILL  <- 500;
 COST_WEAPON  <- 300;
 COST_ARMOR   <- 300;
-COST_ITEM    <- 300;
-COST_AMMO    <- 300;
+COST_AMMO    <- 100;
 
 // ── 强化等级 ────────────────────────────────────────────
 POWER_MAX_LEVEL   <- 5;
@@ -74,45 +69,69 @@ SHIELD_DURATION     <- 5.0;     // 护盾作用时长
 SHIELD_RADIUS       <- 300.0;   // 斥力半径
 SHIELD_PUSH_SPEED   <- 1000.0;  // 弹开虫族的速度
 
-// ── 叛变虫群 ────────────────────────────────────────────
-BETRAY_TYPES <- ["asw_drone", "asw_boomer", "asw_parasite", "asw_buzzer", "asw_shieldbug", "asw_shaman"];
-BETRAY_COUNT        <- 10;
-BETRAY_HEALTH_MULT  <- 10.0;
-
 // ── 护送 ────────────────────────────────────────────────
 ESCORT_HP_RATIO           <- 0.5;
-ESCORT_REVIVE_POINTS      <- 100;    // 扶起倒地的 VIP 全队加分
+// VIP 阵亡后延迟结算: 引擎 MissionComplete(false) 会立即 SetGameState(ASW_GS_DEBRIEF)
+// (asw_gamerules.cpp:4955), 瞬间切到结算界面; 这里留出时间让玩家看到失败提示
+ESCORT_FAIL_DELAY         <- 5.0;
+// VIP 滑倒 (娱乐效果, 移植自 slip.nut): 每 2~5 分钟随机挑 1 名存活护送目标摔倒
+SLIP_MIN_INTERVAL         <- 120.0;
+SLIP_MAX_INTERVAL         <- 300.0;
+SLIP_PUSH_SPEED           <- 700.0;  // 前冲速度 (slip.nut 原值 700)
+SLIP_PUSH_UP              <- 300.0;  // 上抛速度 (slip.nut 原值 300)
 
 // ── 定向刷虫压力 (护送) ─────────────────────────────────
-// 机制与 Blue Giant 挑战一致: 调用引擎原生刷怪系统 (SpawnHordeSoon, 引擎用合法点生成,
-// 绝不卡墙/卡地板), 再把刷出的虫变异成精英 (改染色/体型/血量/特效, 见 drone_mutation 同款做法)
-PRESSURE_MIN_INTERVAL <- 30.0;    // 刷虫间隔: 30~45 秒随机
-PRESSURE_MAX_INTERVAL <- 45.0;
-ELITE_HP              <- 2000;    // 红巨爪/电甲/蓝巨 统一血量
-TRACKER_HP            <- 1000;    // 追踪虫血量
-TRACKER_SPEED_MULT    <- 1.3;     // 追踪虫移速倍率 (m_fSpeedScale)
-ELITE_NAMES           <- ["追踪虫", "红巨爪虫", "电甲爪虫", "蓝巨虫", "自爆虫"];
-ELITE_CAP             <- 10;      // 精英数量封顶 (第 1 波 2 只, 每隔 2 波 +1)
-BOOMER_SCALE          <- 3.0;     // 自爆虫体型倍数
-BOOMER_HP_MULT        <- 20.0;    // 自爆虫血量倍数 (原版 asw_boomer_health 默认 800 -> 16000)
-BOOMER_DMG_MULT       <- 5.0;     // 自爆虫爆炸伤害倍率
-BOOMER_EXTRA_BLOBS    <- 16;      // 自爆虫死亡时额外生成的炮弹数 (引擎硬编码最多 8 只, x3=24, 补 16)
+// 用 Director.SpawnAlienAuto 在引擎合法 nav 点实时生成普通虫 (不碰 horde 计时器,
+// 与原版刷怪解耦; 引擎选点带路线校验, 绝不卡墙/卡地板), 再把虫变异成精英
+// (改染色/体型/血量/特效, 见 drone_mutation 同款做法)
+PRESSURE_MIN_INTERVAL <- 20.0;    // 刷虫间隔: 20~40 秒随机
+PRESSURE_MAX_INTERVAL <- 40.0;
+// 任务节点 (黑客/开门) 期间的高频刷虫
+PRESSURE_RUSH_INTERVAL <- 5.0;    // 任务节点期间: 每 5 秒一波 (替代 20~40)
+RUSH_WINDOW_SECONDS    <- 15.0;  // 事件型节点 (按钮/焊接门) 触发的高频窗口时长
+//  可检测信号: asw_button_area.m_fHackProgress (0<x<1 = 正在黑客) / m_bIsInUse
+//  (asw_button_area.cpp:64-66 是 SendProp, VScript 可读);
+//  OnGameEvent_button_area_used / door_welded / door_unwelded 事件开窗口。
+//  门的 m_eDoorState 非 SendProp, VScript 读不到"正在开门", 故纯等待用事件窗口近似。
+ELITE_HP              <- 400;     // 电甲爪虫血量 (红巨爪/蓝巨虫 各有独立血量, 见下)
+RED_GIANT_HP          <- 500;     // 红巨爪虫血量
+BLUE_GIANT_HP         <- 2000;    // 蓝巨虫血量
+BLUE_GIANT_SPEED_MULT <- 0.7;     // 蓝巨虫移速倍率 (m_fSpeedScale, 原版 0.7 倍)
+TRACKER_HP            <- 250;     // 追踪虫血量
+TRACKER_SPEED_MULT    <- 2.0;     // 追踪虫移速倍率 (m_fSpeedScale, 原版 2 倍)
+TRACKER_DMG_MULT      <- 2.0;     // 追踪虫攻击力倍数 (近战伤害, 走 OnTakeDamage_Alive_Any 钩子)
+ELITE_NAMES           <- ["追踪虫", "红巨爪虫", "电甲爪虫", "蓝巨虫", "自爆虫", "寄生虫"];
+ELITE_WAVE_MIN        <- 5;       // 每波精英数量下限
+ELITE_WAVE_MAX        <- 10;      // 每波精英数量上限
+BOOMER_WAVE_MIN       <- 2;       // 自爆虫波数量下限 (炮弹太多会卡, 单独压低)
+BOOMER_WAVE_MAX       <- 5;       // 自爆虫波数量上限
+BOOMER_SCALE          <- 2.0;     // 自爆虫体型倍数
+BOOMER_HP             <- 5000;    // 自定义精英自爆虫血量 (仅脚本 MutateElite 变异体, 不改原版 asw_boomer_health)
+BOOMER_MELEE_DMG      <- 200.0;   // 精英自爆虫脚踢固定伤害 (原版 sk_asw_boomer_melee_damage 4~6)
+                                  // 小炸弹爆炸伤害保持原版 55, 钩子里遇 DMG_BLAST 直接原样放过
+BOOMER_EXTRA_BLOBS    <- 54;      // 自爆虫死亡时额外生成的炮弹数 (引擎最多 8 只, 8+54=62)
+// 脚本补的炮弹要对齐引擎炮弹数值, 否则会走 CASW_Boomer_Blob::Spawn 的默认值 80 伤害 / 165 半径
+// (asw_boomer_blob.cpp:71-72); 引擎走的是 Boomer_Blob_Create 传入的
+// sk_asw_boomer_bomb_damage(默认 55) 与 keyvalue radius(240) (asw_boomer.cpp:317-318)
+BOOMER_BLOB_DAMAGE    <- 55.0;    // 原版炮弹伤害
+BOOMER_BLOB_RADIUS    <- 240.0;   // 原版炮弹爆炸半径
 
 // ── 哨戒塔增强 (原 asrd_sentry_enhancer 复刻) ─────────────
-// 伤害 x3: m_fDamageScale 未注册 netprop/datamap 无法脚本写,
-//          机枪/喷火走 OnTakeDamage 钩子 x3, 炮塔走 txt 下发 asw_sentry_top_cannon_dmg_override 180 (60x3)
+// 伤害 x2: m_fDamageScale 未注册 netprop/datamap 无法脚本写,
+//          机枪/喷火走 OnTakeDamage 钩子 x2, 炮塔走 txt 下发 asw_sentry_top_cannon_dmg_override 120 (60x2)
 // 弹药 x4: m_iMaxAmmo/m_iAmmo 网络属性直接写 (原版 机枪450/炮40, 见原插件 GetSentryMaxAmmo)
 // 射速 x3: 炮口 m_fNextFireTime (datamap FIELD_TIME) 间隔压缩为 1/3
-SENTRY_DMG_MULT       <- 3.0;
+SENTRY_DMG_MULT       <- 2.0;
 SENTRY_AMMO_MULT      <- 4;
 SENTRY_RATE_MULT      <- 3.0;
 SENTRY_MG_AMMO        <- 450;    // 机枪塔原版满弹药 (拾取箱 BulletsInGun 必须写满, 默认 1 会导致部署提示弹药耗尽)
 SENTRY_CANNON_AMMO    <- 40;     // 炮塔原版满弹药
-PARA_AFTER_WAVE       <- 10;      // 第 10 波精英后开始刷寄生虫
-PARA_MIN_COUNT        <- 10;
-PARA_MAX_COUNT        <- 30;
-PARA_MIN_INTERVAL     <- 30.0;
-PARA_MAX_INTERVAL     <- 45.0;
+// 部署/拆卸加速 (引擎两个时长都是编译期常量, 没有对应 convar, 只能写网络属性绕过):
+//   装配时长 #define SENTRY_ASSEMBLE_TIME 7.0f      (asw_sentry_base.cpp:307)
+//   拆卸按住时长 #define ASW_USE_KEY_HOLD_SENTRY_TIME 2.0 (asw_player_shared.h:20)
+SENTRY_FAST_ASSEMBLE      <- 0.999;  // 装配进度预置值, 按住 E 后第一拍即满
+SENTRY_DISMANTLE_HOLD     <- 0.25;   // 按住超过该秒数才视为"要拆卸" (轻点仍为旋转炮塔)
+SENTRY_DISMANTLE_BACKDATE <- 3.0;    // 把 m_flUseKeyDownTime 前推到 now-3.0, 一定超过 2.0 秒阈值
 ZAP_RADIUS      <- 70.0;    // 电甲爪虫触电半径
 ZAP_DAMAGE      <- 8.0;     // 每次触电伤害
 ZAP_INTERVAL    <- 1.0;     // 同一只电甲虫的触电间隔
@@ -120,6 +139,7 @@ ZAP_INTERVAL    <- 1.0;     // 同一只电甲虫的触电间隔
 // ── 护甲 ────────────────────────────────────────────────
 ARMOR_CLASS       <- "asw_weapon_normal_armor";
 ARMOR_LAYERS      <- 10;
+ARMOR_HIT_SCALE   <- 0.2;   // 有层时实受伤害倍率 (减伤 80%); 0 层实受 100%
 ARMOR_SPEED_BONUS <- 1.3;
 ARMOR_REGEN       <- 2.0;
 
@@ -133,27 +153,78 @@ ARMOR_REGEN       <- 2.0;
 //           增强电锯按住攻击键时锯片转速 x3 (原 asrd_chainsaw_turbo 的 m_flPlaybackRate 方案)
 WEAPON_ENH <- {
 	asw_weapon_chainsaw     = { tint = [255, 255, 255], clip1 = -1,   clip2 = -1,  ammo1 = -1,  ammo2 = -1  },   // 纯白染色 (原插件默认)
-	asw_weapon_ar2          = { tint = [0, 200, 255],   clip1 = 200,  clip2 = 10,  ammo1 = 400, ammo2 = 10  },   // 青色染色 (原插件默认)
+	asw_weapon_ar2          = { tint = [0, 200, 255],   clip1 = 200,  clip2 = 10,  ammo1 = 200, ammo2 = 10  },   // 青色染色; 弹匣 200 + 备弹 200 = 共 2 个弹匣
 	asw_weapon_flechette    = { tint = null,            clip1 = 60,   clip2 = -1,  ammo1 = 60,  ammo2 = -1  },
 	asw_weapon_railgun      = { tint = null,            clip1 = 36,   clip2 = -1,  ammo1 = 36,  ammo2 = -1  },
 	asw_weapon_sniper_rifle = { tint = null,            clip1 = 12,   clip2 = -1,  ammo1 = 60,  ammo2 = -1  }
 };
 CHAINSAW_TURBO_MULT <- 3.0;   // 增强电锯按住攻击键时的锯片转速倍率 (原插件 sm_asrd_chainsaw_speed 默认 3.0)
-BETRAY_TINT <- [37, 217, 73]; // 叛变虫群染色 (原 asrd_alien_civilwar 的 sm_asrd_betray_color 默认绿色)
 RAILGUN_FIRE_INTERVAL <- 0.2; // 导轨步枪两次射击最小间隔 (原服务器配置 sm_asrd_railgun_fire_interval 0.2)
-WATCHER_DAMAGE       <- 100.0; // 守望者脉冲步枪单发伤害 (原服务器配置; 仅掉落标记枪生效, 经伤害钩子)
 AR2_BALL_DAMAGE      <- 10000.0; // 守望者下挂能量球 (prop_combine_ball) 单发伤害
 CHAINSAW_DAMAGE_MULT <- 10.0; // 增强电锯伤害倍率 (原插件默认; 仅掉落标记电锯生效, 经伤害钩子)
 
-WEAPONS      <- ["asw_weapon_chainsaw", "asw_weapon_ar2", "asw_weapon_flechette", "asw_weapon_railgun", "asw_weapon_sniper_rifle"];
-WEAPON_NAMES <- ["电锯", "守望者脉冲步枪", "增强型黏弹发射器", "导轨步枪", "AVK-36 神射手步枪"];
+// ── Laidback Potato 弹药机制 (移植自 challenge_laidback_potato__inc_vars.nut) ──
+// 弹匣永远补满的武器 (照搬 Potato 的 infWeapon, 只去掉 sniper_rifle:
+// AVK-36 保留本挑战自己的 12 发弹匣 + 60 发备弹设定, 不走无限弹匣)
+PO_INF_WEAPON <- {
+	asw_weapon_rifle = 1, asw_weapon_vindicator = 1, asw_weapon_prifle = 1,
+	asw_weapon_50calmg = 1, asw_weapon_autogun = 1, asw_weapon_deagle = 1,
+	asw_weapon_pdw = 1, asw_weapon_ricochet = 1, asw_weapon_tesla_gun = 1,
+	asw_weapon_medrifle = 1, asw_weapon_heavy_rifle = 1, asw_weapon_combat_rifle = 1,
+	asw_weapon_pistol = 1, asw_weapon_minigun = 1
+};
+// 慢速回填: 数值 = 补满一次弹匣需要的秒数 (每发间隔 = 0.1 + 数值 / 总备弹)
+PO_REGEN_INTERVAL <- {
+	asw_weapon_mines = 125, asw_weapon_electrified_armor = 95, asw_weapon_freeze_grenades = 70,
+	asw_weapon_grenades = 50, asw_weapon_laser_mines = 75, asw_weapon_tesla_trap = 40,
+	asw_weapon_hornet_barrage = 130, asw_weapon_heal_grenade = 60, asw_weapon_gas_grenades = 125,
+	asw_weapon_stim = 130, asw_weapon_buff_grenade = 105, asw_weapon_devastator = 10,
+	asw_weapon_pistol = 20, asw_weapon_grenade_launcher = 50, asw_weapon_shotgun = 10,
+	asw_weapon_medical_satchel = 30, asw_weapon_medkit = 30, asw_weapon_jump_jet = 100,
+	asw_weapon_blink = 50, asw_weapon_fire_extinguisher = 25, asw_weapon_flechette = 50,
+	asw_weapon_mining_laser = 2, asw_weapon_flashlight = 0, asw_weapon_night_vision = 0,
+	asw_weapon_bait = 100, asw_weapon_flares = 100
+};
+// 单弹匣武器的弹匣上限覆盖 (照搬 Potato 的 ammoCount)
+PO_AMMO_COUNT <- {
+	asw_weapon_mines = 3, asw_weapon_electrified_armor = 3, asw_weapon_freeze_grenades = 3,
+	asw_weapon_grenades = 5, asw_weapon_laser_mines = 9, asw_weapon_tesla_trap = 8,
+	asw_weapon_hornet_barrage = 2, asw_weapon_medkit = 5, asw_weapon_heal_grenade = 6,
+	asw_weapon_gas_grenades = 3, asw_weapon_stim = 2, asw_weapon_buff_grenade = 3,
+	asw_weapon_medical_satchel = 30, asw_weapon_sentry = 2105, asw_weapon_devastator = 200,
+	asw_weapon_pistol = 300, asw_weapon_flamer = 70, asw_weapon_grenade_launcher = 30,
+	asw_weapon_shotgun = 16, asw_weapon_mining_laser = 33, asw_weapon_fire_extinguisher = 140
+};
+// 副弹匣 (下挂榴弹/手雷) 回填间隔与上限 (照搬 Potato 的 regenInterval2 / undCount)
+PO_REGEN_INTERVAL2 <- {
+	asw_weapon_rifle = 8, asw_weapon_prifle = 9, asw_weapon_vindicator = 9,
+	asw_weapon_combat_rifle = 1, asw_weapon_heavy_rifle = 5
+};
+PO_UND_COUNT <- {
+	asw_weapon_rifle = 5, asw_weapon_prifle = 5, asw_weapon_vindicator = 6,
+	asw_weapon_combat_rifle = 5, asw_weapon_heavy_rifle = 5
+};
+// 开火后多久才开始回填 (照搬 Potato 的 regenDelay; 表内没有的武器默认 5 秒)
+PO_REGEN_DELAY <- {
+	asw_weapon_mines = 0, asw_weapon_electrified_armor = 0, asw_weapon_freeze_grenades = 0,
+	asw_weapon_grenades = 0, asw_weapon_laser_mines = 0, asw_weapon_tesla_trap = 0,
+	asw_weapon_hornet_barrage = 0, asw_weapon_heal_grenade = 0, asw_weapon_gas_grenades = 0,
+	asw_weapon_stim = 0, asw_weapon_buff_grenade = 0, asw_weapon_medkit = 0,
+	asw_weapon_medical_satchel = 0, asw_weapon_jump_jet = 0, asw_weapon_blink = 0,
+	asw_weapon_flashlight = 0, asw_weapon_bait = 0, asw_weapon_night_vision = 0,
+	asw_weapon_flares = 0
+};
+PO_DEFAULT_REGEN_DELAY <- 5.0;   // 表外武器 (枪械类) 开火后 5 秒延迟
+PO_REFILL_TICK         <- 0.1;    // 回填检查间隔 (秒)
+PO_SINGLE_CLIP_PENALTY <- 0.55;   // 单弹匣武器弹匣容量惩罚
+PO_NOCLIP_PENALTY      <- 4;      // 弹匣数低于该值时套用上面的惩罚
 
-ITEMS      <- ["asw_weapon_blink", "asw_weapon_jump_jet", "asw_weapon_bait"];
-ITEM_NAMES <- ["瞬移装置", "喷气背包", "诱饵"];
+WEAPONS      <- ["asw_weapon_chainsaw", "asw_weapon_ar2", "asw_weapon_flechette", "asw_weapon_railgun", "asw_weapon_sniper_rifle"];
+WEAPON_NAMES <- ["增强型电锯", "守望者脉冲步枪", "增强型黏弹发射器", "导轨步枪", "AVK-36 神射手步枪"];
 
 // 自动空投 (与原积分插件当前候选一致; 电锯不启用高速旋转)
 AUTO_DROPS <- [
-	{ cls = "asw_weapon_chainsaw",       name = "电锯" },
+	{ cls = "asw_weapon_chainsaw",       name = "增强型电锯" },
 	{ cls = "asw_weapon_ar2",            name = "守望者脉冲步枪" },
 	{ cls = "asw_weapon_railgun",        name = "导轨步枪" },
 	{ cls = "asw_weapon_sniper_rifle",   name = "AVK-36 神射手步枪" },
@@ -162,12 +233,22 @@ AUTO_DROPS <- [
 ];
 
 // ── HUD ────────────────────────────────────────────────
-HUD_LINES <- 5;   // rd_hud_vscript 每个实体仅支持 1 个字符串 (索引 0, 见 rd_hud_vscript_shared.cpp),
-                  // 故每名玩家创建 5 个实体各显示一行: 0 积分 / 1 强化 / 2 护甲 / 3 护送 / 4 护盾
+// rd_hud_vscript 每个实体仅支持 1 个字符串 (索引 0, 见 rd_hud_vscript_shared.cpp),
+// 故每行一个实体。行数动态: 0 积分 / 1 强化 / 2 护甲 / 3.. 护送 (每位 VIP 独占一行,
+// 多 VIP 时换行显示) / 末行 护盾。护送人数变化时 EnsureHuds 整组重建。
+function HudLineNeed()
+{
+	local n = g_escorts.len();
+	if (n < 1)
+	{
+		n = 1;   // 无护送目标时保留 1 个护送空行, 行结构稳定
+	}
+	return 4 + n;
+}
 
 // ── 运行时状态 ──────────────────────────────────────────
 g_points       <- POINTS_START;
-g_huds         <- {};       // player entindex -> [HUD_LINES 个 rd_hud_vscript]
+g_huds         <- {};       // player entindex -> [HudLineNeed() 个 rd_hud_vscript]
 g_hudAt        <- 0.0;
 g_powerAt      <- 0.0;
 g_lastTick     <- 0.0;
@@ -175,30 +256,37 @@ g_nextAutoDrop <- 0.0;
 g_nukeAt       <- 0.0;
 g_nukeReadyAt  <- 0.0;
 // 护送目标集合: marine 实体句柄 -> { player, name, downAt, usedDown }
-// 人数: 开局随机 1 ~ floor(玩家数/2); 选人: 完全随机
+// 人数: 开局随机 1 ~ floor(玩家数/3); 选人: 完全随机
 g_escorts      <- {};
 g_escortDone   <- false;
+g_failBroadcasted <- false;    // 失败播报去重: VIP 阵亡与引擎 mission_failed 都可能触发, 只播一次
+g_escortPicked <- false;    // 是否已完成过开局点名 (true 后护送名单清空 = 补选场景, 只补 1 名)
+g_escortFailAt <- -1.0;     // VIP 阵亡后延迟结算的触发时刻 (-1=无待结算失败)
 g_pressureAt   <- 0.0;      // 下一次定向刷虫时刻
+g_rushUntil    <- 0.0;      // 任务节点高频刷虫窗口到期时刻 (事件型; 0=无窗口)
+g_slipAt       <- 0.0;      // 下一次 VIP 滑倒时刻 (2~5 分钟随机)
 g_pressureWave <- 0;        // 已刷波数 (决定每波数量)
 g_zappers      <- {};       // 电甲爪虫 entindex -> 下次触电时刻
 g_shieldEnd    <- {};       // marine entindex -> 护盾结束时刻
 g_shieldReadyAt<- 0.0;      // 全队共享的护盾冷却截止时刻
-g_camLevel     <- -1;       // 已下发的视角高度等级 (-1=未下发)
-g_betrayIdx    <- {};       // 友方虫群的 entindex -> true
+g_camDist      <- -1;       // 已下发的相机距离 (-1=未下发)
 g_eliteIdx     <- {};       // 已变异精英的 entindex -> true (防重复变异)
 g_mutatePending<- 0;        // 本波待变异的精英数量 (引擎 horde 刷出后逐只变异)
-g_mutateType   <- 0;        // 本波精英种类 (每波同一种, 波次轮换 5 种)
+g_mutateType   <- 0;        // 本波精英种类 (每波同一种, 波次轮换 6 种, 寄生虫也在其中)
 g_trackers     <- {};       // 追踪虫 entindex -> true (每拍强制仇恨指向最近存活要员)
 g_trackersAt   <- 0.0;      // 追踪虫仇恨刷新节流
-g_paraAt       <- 0.0;      // 下一次寄生虫波时刻 (第 10 波精英后启动, 与精英波独立)
-g_tintWpn      <- {};       // 需每拍重涂染色的实体 entindex -> {r,g,b} (增强武器/叛变虫群)
+g_tintWpn      <- {};       // 需每拍重涂染色的实体 entindex -> {r,g,b} (增强武器)
 g_sentryEnh    <- {};       // 哨戒塔底座 entindex -> true (弹药已 x4 增强)
 g_sentryFire   <- {};       // 哨戒塔炮口 entindex -> 上次压缩后的 m_fNextFireTime (射速 x3 用)
 g_boomers      <- {};       // 精英自爆虫 entindex -> true (死亡瞬间补生成 BOOMER_EXTRA_BLOBS 只炮弹)
+g_boomerEnt    <- {};       // 精英自爆虫 entindex -> 实体句柄 (TickBoomerDeaths 兜底检测死亡)
+g_boomerPos    <- {};       // 精英自爆虫 entindex -> 最后一个存活位置
 g_paraPending  <- 0;        // 待替换的寄生虫数量 (引擎 horde 刷出普通虫后逐只 Kill 原位换成寄生虫)
 g_paraExpireAt <- 0.0;      // 寄生虫替换超时 (超时清零防卡 pending)
 g_boomerPending<- 0;        // 待替换成自爆虫的数量 (引擎 horde 刷出普通虫后逐只 Kill 原位换成 asw_boomer)
 g_boomerExpireAt<- 0.0;     // 自爆虫替换超时
+g_redPending   <- 0;        // 待替换成红巨爪虫的数量 (需新建实体才能关掉 flinchable, 见 TickMutate)
+g_redExpireAt  <- 0.0;      // 红巨爪虫替换超时
 g_lastMutateType<- -1;      // 上一波精英种类 (随机时避免连续重复)
 g_balls        <- {};       // 能量球 prop_combine_ball entindex -> 上一拍位置 (爆炸时给门补足伤害)
 g_rockets      <- {};       // 黏弹火箭 asw_rocket entindex -> 上一拍位置
@@ -206,8 +294,17 @@ g_railClip     <- {};       // 导轨步枪 entindex -> 上一拍弹匣数 (检�
 g_railFireAt   <- {};       // 导轨步枪 entindex -> 上次开火时刻
 g_armorHinted  <- {};       // 已提示过护甲功能的 marine entindex -> true
 g_regenAccum   <- {};       // 护甲回血浮点累积: marine entindex -> float (攒够 1 点再加)
+g_armorMissing <- {};       // 护甲击前"已损失层数"缓存: marine entindex -> m_iLayersMissing (0..10)
+                            // 引擎先扣层再触发脚本钩子 (asw_marine.cpp:1996 -> 1655), 钩子读到的
+                            // m_iLayersMissing 已扣过, 故用上一拍缓存的击前值判定: pre<10 = 还有层。
 g_nukeText     <- null;     // 核弹倒计时 game_text 实体 (全员可见红字)
 g_nukeEtaShown <- -1;       // 已显示的倒计时秒数 (避免重复刷新)
+// Laidback Potato 弹药回填状态
+g_poNext       <- {};       // weapon entindex -> 下次回填时刻 (弹匣)
+g_poLast       <- {};       // weapon entindex -> 上次看到的弹匣数
+g_poNext2      <- {};       // weapon entindex -> 下次回填时刻 (副弹匣)
+g_poLast2      <- {};       // weapon entindex -> 上次看到的副弹匣数
+g_poAt         <- 0.0;      // 回填节流时刻
 
 // ============================================================
 //  入口: 挑战脚本加载时执行
@@ -217,6 +314,14 @@ g_nukeEtaShown <- -1;       // 已显示的倒计时秒数 (避免重复刷新)
 g_errShown <- {};   // 子系统名 -> true (同一错误只打印一次)
 g_booted   <- false;
 g_bootAt   <- 0.0;      // 开局玩法广播/购买说明的生成时刻 (0=已完成)
+
+// ── 任务结束清理 ──────────────────────────────────────────
+// 挑战脚本绑定在 asw_challenge_thinker 上, 换图时该实体销毁、脚本作用域重建
+// (asw_gamerules_vscript.cpp:1297-1350), 引擎没有 shutdown 回调。
+// mission_success / mission_failed 在换图前触发 (asw_gamerules.cpp:4781/4797),
+// 是可靠的清理时机: 任务结束后停掉主循环并清掉自定义实体, 不再每帧操作实体。
+g_finished <- false;    // true = 任务已结束, Update 不再创建或操作任何实体
+g_objHelp  <- null;     // 购买说明 asw_objective_dummy 实体句柄 (原先是局部变量, 无法清理)
 
 printl("[要员护送] 脚本加载成功, 等待主循环启动...");
 
@@ -235,10 +340,121 @@ function Guard(name, fn)
 }
 
 // ============================================================
+//  任务结束清理 (换图前调用, 避免自定义实体与失效句柄跨图残留)
+//  mission_success / mission_failed 是唯一早于 Host_Changelevel 的回调时机
+// ============================================================
+function CleanupOnMissionEnd()
+{
+	// 1) 每名玩家的多行 HUD: rd_hud_vscript 带 client_vscript 引用, 数量最多
+	foreach (idx, huds in g_huds)
+	{
+		if (huds == null)
+		{
+			continue;
+		}
+		foreach (h in huds)
+		{
+			if (h != null && h.IsValid())
+			{
+				try { DoEntFire("!self", "Kill", "", 0, null, h); } catch (e) {}
+			}
+		}
+	}
+	g_huds = {};
+
+	// 2) 核弹倒计时 game_text
+	NukeKillText();
+
+	// 3) 任务详情里的购买说明 asw_objective_dummy
+	if (g_objHelp != null)
+	{
+		if (g_objHelp.IsValid())
+		{
+			try { DoEntFire("!self", "Kill", "", 0, null, g_objHelp); } catch (e) {}
+		}
+		g_objHelp = null;
+	}
+
+	// 4) 清空持有实体句柄 / 实体索引的全局表, 不让失效引用随作用域一起销毁
+	//    (其中 g_escorts 的 key、g_boomerEnt 的 value 是实体句柄)
+	g_escorts     = {};
+	g_boomerEnt   = {};
+	g_boomerPos   = {};
+	g_boomers     = {};
+	g_trackers    = {};
+	g_zappers     = {};
+	g_shieldEnd   = {};
+	g_tintWpn     = {};
+	g_sentryEnh   = {};
+	g_sentryFire  = {};
+	g_balls       = {};
+	g_rockets     = {};
+	g_railClip    = {};
+	g_railFireAt  = {};
+	g_armorHinted = {};
+	g_regenAccum  = {};
+	g_armorMissing = {};
+	g_poNext      = {};
+	g_poLast      = {};
+	g_poNext2     = {};
+	g_poLast2     = {};
+	g_eliteIdx    = {};
+
+	g_bootAt     = 0.0;
+	g_pressureAt = 0.0;
+	g_rushUntil  = 0.0;
+	g_slipAt     = 0.0;
+	g_nukeAt     = 0.0;
+	printl("[要员护送] 任务结束: 自定义实体已清理, 主循环已停止, 等待换图");
+}
+
+function FinishMission()
+{
+	if (g_finished)
+	{
+		return;   // 幂等: 成功与失败事件可能都来
+	}
+	g_finished = true;
+	CleanupOnMissionEnd();
+}
+
+// 任务正常完成: 播报胜利 + 走统一收尾流程 (与 VIP 阵亡的 FailEscort 对称)
+// 引擎 MissionComplete(true) 里先 fire mission_success 再切 debrief, 故在此广播
+function SucceedMission()
+{
+	if (g_finished)
+	{
+		return;
+	}
+	g_escortDone = true;
+	Broadcast("护送成功！VIP安全抵达，干得漂亮！");
+	FinishMission();
+}
+
+// 换图会重建脚本作用域 (g_finished 初始即 false);
+// 同一张图重试时由此恢复主循环与护送判定, 避免清理后玩法失效
+function OnMissionStart()
+{
+	g_finished     = false;
+	g_escortDone   = false;
+	g_failBroadcasted = false;
+	g_escortPicked = false;
+	g_escorts      = {};
+	g_booted       = false;   // 重新走一次开局广播 + 重建购买说明 (ResetPowerLevels 幂等)
+}
+
+// ============================================================
 //  主循环 (返回下一次调用间隔, 秒)
 // ============================================================
 function Update()
 {
+	// 任务已结束: 不再创建或操作任何实体, 直到换图时作用域重建
+	// (否则 mission 结束到 Host_Changelevel 之间仍会每帧重建 HUD / 刷虫 / 生成物品)
+	if (g_finished)
+	{
+		return 0.001;
+	}
+
 	local now = Time();
 
 	// 开局 5 秒后: 广播玩法说明 + 生成任务详情里的购买说明 (一次性)
@@ -246,6 +462,7 @@ function Update()
 	{
 		g_booted = true;
 		g_bootAt = now + 5.0;
+		Guard("resetpower", ResetPowerLevels);
 	}
 	if (g_bootAt > 0 && now >= g_bootAt)
 	{
@@ -261,17 +478,22 @@ function Update()
 	TickNuke(now);
 	TickNukeEta(now);
 	TickEnhancedWeapons(now);
+	TickPotatoAmmo(now);
 	TickRailgun(now);
 	TickAutoDrop(now);
 	TickShield(now);
 	TickEscort(now);
+	TickEscortFail(now);
+	TickVipSlip(now);
 	TickDownedRule();
 	TickPressure(now);
 	Guard("mutate", TickMutate);
+	Guard("boomerdeath", TickBoomerDeaths);
 	Guard("sentry", TickSentry);
+	Guard("sentrybuild", TickSentryFastBuild);
+	Guard("sentrydismantle", TickSentryFastDismantle);
 	Guard("doorball", TickDoorBall);
 	TickTrackers(now);
-	TickParaPressure(now);
 	TickZappers(now);
 
 	g_lastTick = now;
@@ -292,7 +514,7 @@ function EnsureHuds()
 	{
 		local idx = hPlayer.entindex();
 		local huds = (idx in g_huds) ? g_huds[idx] : null;
-		local ok = (huds != null && huds.len() == HUD_LINES);
+		local ok = (huds != null && huds.len() == HudLineNeed());
 		if (ok)
 		{
 			foreach (h in huds)
@@ -320,7 +542,7 @@ function EnsureHuds()
 			}
 		}
 		huds = [];
-		for (local k = 0; k < HUD_LINES; k++)
+		for (local k = 0; k < HudLineNeed(); k++)
 		{
 			local hHud = Entities.CreateByClassname("rd_hud_vscript");
 			if (hHud == null)
@@ -346,8 +568,8 @@ function UpdateHud(now)
 	}
 	g_hudAt = now + 0.5;
 
-	// 护送行对所有玩家相同, 先拼好
-	local segs = [];
+	// 护送行对所有玩家相同, 先拼好 (每位 VIP 独占一行, 避免 VIP 较多时一行过长)
+	local escortLines = [];
 	foreach (hVip, e in g_escorts)
 	{
 		local seg = e.name;
@@ -366,9 +588,12 @@ function UpdateHud(now)
 				}
 			}
 		}
-		segs.append(seg);
+		escortLines.append("护送  " + seg);
 	}
-	local escortLine = (segs.len() > 0) ? ("护送  " + JoinStrings(segs, " | ")) : "";
+	if (escortLines.len() == 0)
+	{
+		escortLines.append("");
+	}
 
 	local hPlayer = null;
 	while ((hPlayer = Entities.FindByClassname(hPlayer, "player")) != null)
@@ -380,7 +605,7 @@ function UpdateHud(now)
 		}
 		local huds = g_huds[idx];
 
-		// 行序: 0 积分 / 1 强化 / 2 护甲 / 3 护送 / 4 护盾
+		// 行序: 0 积分 / 1 强化 / 2 护甲 / 3.. 护送(每 VIP 一行) / 末行 护盾
 		local lines = [];
 		lines.append("积分  " + g_points);
 
@@ -410,7 +635,10 @@ function UpdateHud(now)
 			lines.append("");
 			lines.append("");
 		}
-		lines.append(escortLine);
+		foreach (el in escortLines)
+		{
+			lines.append(el);
+		}
 
 		local shieldLine = "";
 		if (hMarine != null)
@@ -428,7 +656,7 @@ function UpdateHud(now)
 		}
 		lines.append(shieldLine);
 
-		for (local k = 0; k < HUD_LINES && k < huds.len(); k++)
+		for (local k = 0; k < lines.len() && k < huds.len(); k++)
 		{
 			local hHud = huds[k];
 			if (hHud != null && hHud.IsValid())
@@ -586,6 +814,26 @@ function GetPowerHolder(hMarine)
 	return hMarine;
 }
 
+// 重开任务必须把强化等级清零。
+// 引擎的"即时重开" (asw_instant_restart 默认 1, asw_gamerules.cpp:1676) 不会重载地图,
+// 只销毁地图实体再重新解析 (asw_gamerules.cpp:3241-3291), 而 "player" 在保留名单里
+// (asw_gamerules.cpp:1715 AddKeepEntity("player")), 玩家实体与其脚本作用域不会重建,
+// 于是 asrdPowerLevel 会残留下上一局的等级。挑战脚本本身随 asw_challenge_thinker
+// 重建而重新执行 (asw_gamerules.cpp:10178-10194), 故在脚本首帧统一清零。
+function ResetPowerLevels()
+{
+	local p = null;
+	while ((p = Entities.FindByClassname(p, "player")) != null)
+	{
+		if (p == null || !p.IsValid())
+		{
+			continue;
+		}
+		p.ValidateScriptScope();
+		p.GetScriptScope().asrdPowerLevel <- 0;
+	}
+}
+
 function GetPowerLevel(hMarine)
 {
 	if (hMarine == null || !hMarine.IsValid())
@@ -609,21 +857,19 @@ function SetPowerLevel(hMarine, lvl)
 	holder.GetScriptScope().asrdPowerLevel <- lvl;
 }
 
-function GetBaseHp(hMarine)
+// 该 marine 已经应用到的强化等级 (存 marine 自身作用域)
+// 血量走"增量"而不是"基准血量 + 50 x 等级"重算: 后者的基准缓存一旦被重置
+// (GetCommander 在 player / marine 之间切换时 holder 变了), 就会把已经强化过的
+// 血量当成新基准, 导致高级时血量暴涨 (例如 4->5 级一次加了 250)
+function GetAppliedLvl(hMarine)
 {
-	local holder = GetPowerHolder(hMarine);
-	holder.ValidateScriptScope();
-	local ss = holder.GetScriptScope();
-	if (!("asrdBaseHp" in ss) || ss.asrdBaseHp <= 0)
+	hMarine.ValidateScriptScope();
+	local ss = hMarine.GetScriptScope();
+	if (!("asrdAppliedLvl" in ss))
 	{
-		local baseHp0 = hMarine.GetMaxHealth();
-		if (baseHp0 <= 0)
-		{
-			baseHp0 = 100;
-		}
-		ss.asrdBaseHp <- baseHp0;
+		ss.asrdAppliedLvl <- 0;
 	}
-	return ss.asrdBaseHp;
+	return ss.asrdAppliedLvl;
 }
 
 function ApplyPower(hMarine)
@@ -638,15 +884,15 @@ function ApplyPower(hMarine)
 	}
 
 	local lvl = GetPowerLevel(hMarine);
-	local baseHp = GetBaseHp(hMarine);
-	local newMax = baseHp + POWER_HP_STEP * lvl;
-	if (newMax < 1)
+	local applied = GetAppliedLvl(hMarine);
+	if (lvl > applied)
 	{
-		newMax = 1;
+		// 每级只加 POWER_HP_STEP (50) 点, 4->5 级同样只加 50
+		local add = POWER_HP_STEP * (lvl - applied);
+		hMarine.SetMaxHealth(hMarine.GetMaxHealth() + add);
+		hMarine.SetHealth(hMarine.GetHealth() + add);
+		hMarine.GetScriptScope().asrdAppliedLvl <- lvl;
 	}
-
-	hMarine.SetMaxHealth(newMax);
-	hMarine.SetHealth(newMax);
 
 	TrySetModelScale(hMarine, 1.0 + POWER_SCALE_STEP * lvl);
 
@@ -679,12 +925,6 @@ function TickPower(now)
 			continue;
 		}
 
-		// 先记录原生血量基准 (护送目标除外, 避免把减半后的值当基准)
-		if (!IsEscort(m))
-		{
-			GetBaseHp(m);
-		}
-
 		local lvl = GetPowerLevel(m);
 		if (lvl > maxLvl)
 		{
@@ -701,26 +941,17 @@ function TickPower(now)
 			continue;
 		}
 
-		local newMax = GetBaseHp(m) + POWER_HP_STEP * lvl;
-		if (newMax > 0 && m.GetMaxHealth() != newMax)
-		{
-			m.SetMaxHealth(newMax);
-		}
-		TrySetModelScale(m, 1.0 + POWER_SCALE_STEP * lvl);
-
-		local speed = 1.0 + POWER_SPEED_STEP * lvl;
-		if (FindArmor(m) != null && speed < ARMOR_SPEED_BONUS)
-		{
-			speed = ARMOR_SPEED_BONUS;
-		}
-		TrySetFloat(m, "m_fSpeedScale", speed);
+		// 每秒兜底: 新加入的队员 (applied=0) 或等级已提升但还没应用过血量
+		ApplyPower(m);
 	}
 
-	// 视角高度: 全队共享等级, 相机距离全服统一 (等级变化时才下发)
-	if (maxLvl != g_camLevel)
+	// 视角高度: 全队共享等级
+	// asw_cam_marine_dist 是全服唯一 convar, 无法按玩家区分
+	local camDist = CAM_BASE + CAM_STEP * maxLvl;
+	if (camDist != g_camDist)
 	{
-		g_camLevel = maxLvl;
-		Convars.SetValue("asw_cam_marine_dist", CAM_BASE + CAM_STEP * maxLvl);
+		g_camDist = camDist;
+		Convars.SetValue("asw_cam_marine_dist", camDist);
 	}
 }
 
@@ -845,7 +1076,7 @@ function TickArmor(now)
 			try { pc = owner.GetCommander(); } catch (e) { pc = null; }
 			if (pc != null && pc.IsValid())
 			{
-				Reply(pc, "动力护甲: 减伤(" + ARMOR_LAYERS + "层护甲) | 移速提升 | 防火 | 防毒 | 防寄生/小爆虫");
+				Reply(pc, "动力护甲: 每层减伤 80% (层耗尽失效) | 免疫火/寄生/毒气 | 移速提升 | 防小爆虫");
 			}
 		}
 
@@ -857,6 +1088,9 @@ function TickArmor(now)
 		// 护甲满层时缓慢回血 (2 生命/秒, 浮点累积攒够 1 点再加, 与原插件一致;
 		//  不能每拍取整后保底 +1, 否则每 tick 跑时会变成每秒 +33)
 		local missing = TryGetInt(armor, "m_iLayersMissing", 0);
+		// 同步击前层数缓存: 引擎的回层/扣层都反映在 m_iLayersMissing 上, 每拍刷新,
+		// 供伤害钩子在"引擎已扣本击的层"后仍能判定击前是否还有层可挡。
+		g_armorMissing[midx] <- missing;
 		if (missing > 0)
 		{
 			continue;
@@ -1147,7 +1381,7 @@ function TintColorValue(c)
 
 function TickEnhancedWeapons(now)
 {
-	// 1) 重涂染色 (增强武器 + 叛变虫群共用一张表)
+	// 1) 重涂染色 (增强武器)
 	local del = [];
 	foreach (idx, c in g_tintWpn)
 	{
@@ -1185,6 +1419,151 @@ function TickEnhancedWeapons(now)
 		local buttons = TryGetInt(p, "m_nButtons", 0);
 		local rate = ((buttons & 1) != 0) ? CHAINSAW_TURBO_MULT : 1.0;   // 1 = IN_ATTACK
 		TrySetFloat(w, "m_flPlaybackRate", rate);
+	}
+}
+
+// ============================================================
+//  Laidback Potato 弹药系统 (每 0.1 秒检查一次)
+//  - PO_INF_WEAPON 内的武器弹匣始终补满 (无限弹匣)
+//  - 其余武器按 PO_REGEN_INTERVAL 逐发回填 (弹药耗尽后自动恢复)
+//  - 副弹匣 (下挂榴弹等) 按 PO_REGEN_INTERVAL2 回填
+//  - 单弹匣武器套用 Potato 的弹匣容量惩罚
+// ============================================================
+function TickPotatoAmmo(now)
+{
+	if (now < g_poAt)
+	{
+		return;
+	}
+	g_poAt = now + PO_REFILL_TICK;
+
+	local m = null;
+	while ((m = Entities.FindByClassname(m, "asw_marine")) != null)
+	{
+		if (m == null || !m.IsValid() || m.GetHealth() <= 0)
+		{
+			continue;
+		}
+
+		local w = null;
+		for (w = m.FirstMoveChild(); w != null; w = w.NextMovePeer())
+		{
+			if (w == null || !w.IsValid() || !("GetMaxClip1" in w))
+			{
+				continue;
+			}
+
+			local cls = w.GetClassname();
+			local idx = w.entindex();
+			local maxClip1 = w.GetMaxClip1();
+			if (maxClip1 < 1)
+			{
+				continue;
+			}
+
+			if (cls in PO_INF_WEAPON)
+			{
+				if (w.Clip1() < maxClip1)
+				{
+					w.SetClip1(maxClip1);
+				}
+			}
+			else
+			{
+				local maxAmmo = w.GetMaxAmmo1();
+				if (maxAmmo < maxClip1)
+				{
+					maxAmmo = maxClip1;
+				}
+
+				local capClip = maxClip1;
+				local clips = maxAmmo / maxClip1;
+				if (clips < PO_NOCLIP_PENALTY)
+				{
+					if (cls in PO_AMMO_COUNT)
+					{
+						capClip = PO_AMMO_COUNT[cls];
+					}
+					else
+					{
+						local scaled = ceil(maxClip1 * (1.0 - PO_SINGLE_CLIP_PENALTY / clips));
+						capClip = scaled.tointeger();
+					}
+				}
+				if (capClip < 1)
+				{
+					capClip = 1;
+				}
+				if (w.Clip1() > capClip)
+				{
+					w.SetClip1(capClip);
+				}
+
+				local rate = (cls in PO_REGEN_INTERVAL) ? PO_REGEN_INTERVAL[cls] : 50;
+				local perShot = rate.tofloat() / maxAmmo;
+				// 开火后延迟: 手雷/护甲类 0 秒, 枪械类 5 秒 (与 Potato regenDelay 一致)
+				local delay0 = (cls in PO_REGEN_DELAY) ? PO_REGEN_DELAY[cls].tofloat() : PO_DEFAULT_REGEN_DELAY;
+
+				if (!(idx in g_poNext))
+				{
+					// 35 式泵动霰弹枪: 引擎给新枪的 m_iClip1 是原版 4 发, 本挑战把弹匣上限
+					// 提到 16 (PO_AMMO_COUNT), 首次装备时直接补满, 否则只能靠逐发回填慢慢涨到 16
+					if (cls == "asw_weapon_shotgun" && w.Clip1() < capClip)
+					{
+						w.SetClip1(capClip);
+					}
+					g_poNext[idx] <- now + perShot;
+					g_poLast[idx] <- w.Clip1();
+				}
+				else if (w.Clip1() != g_poLast[idx])
+				{
+					// 刚开过枪: 重置回填计时 (含开火后延迟)
+					g_poLast[idx] = w.Clip1();
+					g_poNext[idx] = now + delay0 + perShot;
+				}
+				else if (g_poNext[idx] <= now && w.Clip1() < capClip)
+				{
+					w.SetClip1(w.Clip1() + 1);
+					g_poLast[idx] = w.Clip1();
+					g_poNext[idx] = now + PO_REFILL_TICK + perShot;
+				}
+			}
+
+			// 副弹匣 (下挂榴弹/手雷)
+			if (!("GetMaxClip2" in w))
+			{
+				continue;
+			}
+			local cap2 = (cls in PO_UND_COUNT) ? PO_UND_COUNT[cls] : w.GetMaxClip2();
+			if (cap2 < 1)
+			{
+				continue;
+			}
+			if (w.Clip2() > cap2)
+			{
+				w.SetClip2(cap2);
+			}
+			if ((cls in PO_REGEN_INTERVAL2) && w.Clip2() < cap2)
+			{
+				local rate2 = PO_REGEN_INTERVAL2[cls].tofloat();
+				if (!(idx in g_poNext2))
+				{
+					g_poNext2[idx] <- now + rate2;
+					g_poLast2[idx] <- w.Clip2();
+				}
+				else if (w.Clip2() != g_poLast2[idx])
+				{
+					g_poLast2[idx] = w.Clip2();
+					g_poNext2[idx] = now + rate2;
+				}
+				else if (g_poNext2[idx] <= now)
+				{
+					w.SetClip2(w.Clip2() + 1);
+					g_poLast2[idx] = w.Clip2();
+					g_poNext2[idx] = now + rate2;
+				}
+			}
+		}
 	}
 }
 
@@ -1249,95 +1628,28 @@ function TickRailgun(now)
 }
 
 // ============================================================
-//  叛变虫群 (简化为召唤友方虫群)
+//  精英虫生成 (供 TickMutate 原位替换用)
 // ============================================================
-function SpawnAlien(cls, org)
+// kv 可选: 生成前写入的 KeyValue (字符串->字符串), 只对 Spawn 前的实体有效
+function SpawnAlien(cls, org, kv = null)
 {
 	local alien = Entities.CreateByClassname(cls);
 	if (alien == null)
 	{
 		return null;
 	}
+	if (kv != null)
+	{
+		foreach (k, v in kv)
+		{
+			try { alien.__KeyValueFromString(k, v); } catch (e) {}
+		}
+	}
 	alien.SetOrigin(org);
 	alien.SetAngles(0, RandomFloat(0.0, 360.0), 0);
 	alien.Spawn();
 	try { alien.Activate(); } catch (e) {}
 	return alien;
-}
-
-function MakeAlienFriendly(alien, hMarine)
-{
-	local faction = null;
-	local team = null;
-	try { faction = NetProps.GetPropInt(hMarine, "m_nFaction"); } catch (e) { faction = null; }
-	try { team = NetProps.GetPropInt(hMarine, "m_iTeamNum"); } catch (e) { team = null; }
-
-	if (faction != null)
-	{
-		try { NetProps.SetPropInt(alien, "m_nFaction", faction); } catch (e) {}
-	}
-	if (team != null)
-	{
-		try { NetProps.SetPropInt(alien, "m_iTeamNum", team); } catch (e) {}
-	}
-}
-
-function BuyBetray(hPlayer, opt)
-{
-	local hMarine = GetMarineOfPlayer(hPlayer);
-	if (hMarine == null)
-	{
-		Reply(hPlayer, "你当前没有陆战队员");
-		return;
-	}
-
-	local idx = 1;
-	if (opt != "")
-	{
-		idx = opt.tointeger();
-	}
-	if (idx < 1 || idx > BETRAY_TYPES.len())
-	{
-		idx = 1;
-	}
-
-	if (!Pay(COST_BETRAY, hPlayer))
-	{
-		return;
-	}
-
-	local cls = BETRAY_TYPES[idx - 1];
-	local org = hMarine.GetOrigin();
-	local n = 0;
-	for (local i = 0; i < BETRAY_COUNT; i++)
-	{
-		local ang = RandomFloat(0.0, 6.28318);
-		local r = RandomFloat(30.0, 150.0);
-		local pos = Vector(org.x + cos(ang) * r, org.y + sin(ang) * r, org.z + 16.0);
-		local alien = SpawnAlien(cls, pos);
-		if (alien != null)
-		{
-			MakeAlienFriendly(alien, hMarine);
-			local maxHp = alien.GetMaxHealth();
-			if (maxHp <= 0)
-			{
-				maxHp = 100;
-			}
-			maxHp = maxHp * BETRAY_HEALTH_MULT;
-			alien.SetMaxHealth(maxHp);
-			alien.SetHealth(maxHp);
-			g_betrayIdx[alien.entindex()] <- true;
-			g_tintWpn[alien.entindex()] <- { r = BETRAY_TINT[0], g = BETRAY_TINT[1], b = BETRAY_TINT[2] };   // 绿色, 与原插件 sm_asrd_betray_color 一致
-			n++;
-		}
-	}
-	if (n == 0)
-	{
-		g_points += COST_BETRAY;
-		Reply(hPlayer, "召唤失败（当前地图可能不支持该虫种），积分已退还");
-		return;
-	}
-	Broadcast(hPlayer.GetPlayerName() + " 召唤了 " + n + " 只友方虫群");
 }
 
 // ============================================================
@@ -1400,7 +1712,7 @@ function BuySentry(hPlayer, opt)
 }
 
 // ============================================================
-//  哨戒塔增强 (伤害 x3 见 OnTakeDamage 钩子 + txt 炮塔 ConVar; 此处每拍):
+//  哨戒塔增强 (伤害 x2 见 OnTakeDamage 钩子 + txt 炮塔 ConVar; 此处每拍):
 //    弹药 x4 (首次见到塔时记录原版 m_iMaxAmmo 再放大, 并把当前弹药补满)
 //    射速 x3 (引擎开火时重设 m_fNextFireTime, 检测其跳变后把剩余间隔压缩为 1/3)
 // ============================================================
@@ -1535,37 +1847,75 @@ function TickSentry()
 	}
 }
 
-function BuyRefill(hPlayer)
+// 哨戒塔部署加速: 未装配的 asw_sentry_base 装配进度预置到 99.9%,
+// 玩家按住 E 后 NPCUsing 第一拍 (deltatime/7) 就跨过 1.0 完成装配并生成炮头
+function TickSentryFastBuild()
 {
-	local bases = [];
 	local b = null;
 	while ((b = Entities.FindByClassname(b, "asw_sentry_base")) != null)
 	{
-		if (b != null && b.IsValid() && b.GetHealth() > 0)
+		if (b == null || !b.IsValid())
 		{
-			bases.append(b);
+			continue;
 		}
+		try
+		{
+			if (NetProps.GetPropBool(b, "m_bAssembled"))
+			{
+				continue;
+			}
+			if (NetProps.GetPropFloat(b, "m_fAssembleProgress") < SENTRY_FAST_ASSEMBLE)
+			{
+				NetProps.SetPropFloat(b, "m_fAssembleProgress", SENTRY_FAST_ASSEMBLE);
+			}
+		}
+		catch (e) {}
 	}
-	if (bases.len() == 0)
-	{
-		Reply(hPlayer, "地图上没有哨戒塔");
-		return;
-	}
-	if (!Pay(COST_REFILL, hPlayer))
-	{
-		return;
-	}
+}
 
-	foreach (base in bases)
+// 哨戒塔拆卸加速: 原版要按住 E 满 2 秒 (asw_player_shared.h:20) 才判定 ASW_USE_HOLD_RELEASE_FULL。
+// 玩家按住的实体是已装配的哨戒塔、且已按住 SENTRY_DISMANTLE_HOLD 秒时,
+// 把玩家网络属性 m_flUseKeyDownTime 往前推, 让 "curtime - 按下时刻 >= 2.0" 立刻成立
+function TickSentryFastDismantle()
+{
+	local now = Time();
+	local p = null;
+	while ((p = Entities.FindByClassname(p, "player")) != null)
 	{
-		base.SetHealth(base.GetMaxHealth());
-		local top = TryGetEntity(base, "m_hSentryTop");
-		if (top != null && top.IsValid())
+		if (p == null || !p.IsValid())
 		{
-			TrySetInt(top, "m_nSentryAmmo", 200);
+			continue;
+		}
+		local holdEnt = null;
+		local t0 = 0.0;
+		try
+		{
+			holdEnt = NetProps.GetPropEntity(p, "m_hUseKeyDownEnt");
+			t0 = NetProps.GetPropFloat(p, "m_flUseKeyDownTime");
+		}
+		catch (e) { continue; }
+		if (holdEnt == null || !holdEnt.IsValid() || holdEnt.GetClassname() != "asw_sentry_base")
+		{
+			continue;
+		}
+		try
+		{
+			if (!NetProps.GetPropBool(holdEnt, "m_bAssembled"))
+			{
+				continue;   // 正在装配的不处理, 那是部署流程
+			}
+		}
+		catch (e) { continue; }
+		// 轻点 E 是旋转炮塔, 按满 SENTRY_DISMANTLE_HOLD 秒才算想拆卸
+		if (now - t0 < SENTRY_DISMANTLE_HOLD)
+		{
+			continue;
+		}
+		if (t0 > now - SENTRY_DISMANTLE_BACKDATE)
+		{
+			try { NetProps.SetPropFloat(p, "m_flUseKeyDownTime", now - SENTRY_DISMANTLE_BACKDATE); } catch (e) {}
 		}
 	}
-	Broadcast(hPlayer.GetPlayerName() + " 补充了全部哨戒塔的弹药与耐久（" + bases.len() + " 座）");
 }
 
 function BuyWeapon(hPlayer, opt)
@@ -1623,41 +1973,6 @@ function BuyArmor(hPlayer)
 	Broadcast(hPlayer.GetPlayerName() + " 购买了动力护甲");
 }
 
-function BuyItem(hPlayer, opt)
-{
-	if (opt == "")
-	{
-		for (local i = 0; i < ITEMS.len(); i++)
-		{
-			Reply(hPlayer, "#buy 8 " + (i + 1) + " = " + ITEM_NAMES[i]);
-		}
-		return;
-	}
-	if (GetMarineOfPlayer(hPlayer) == null)
-	{
-		Reply(hPlayer, "你当前没有陆战队员");
-		return;
-	}
-
-	local idx = opt.tointeger();
-	if (idx < 1 || idx > ITEMS.len())
-	{
-		Reply(hPlayer, "道具编号只能是 1~" + ITEMS.len());
-		return;
-	}
-	if (!Pay(COST_ITEM, hPlayer))
-	{
-		return;
-	}
-	if (SpawnNear(hPlayer, ITEMS[idx - 1], 60.0) == null)
-	{
-		g_points += COST_ITEM;
-		Reply(hPlayer, "生成道具失败，积分已退还");
-		return;
-	}
-	Broadcast(hPlayer.GetPlayerName() + " 购买了 " + ITEM_NAMES[idx - 1]);
-}
-
 function BuyAmmo(hPlayer)
 {
 	if (GetMarineOfPlayer(hPlayer) == null)
@@ -1710,7 +2025,6 @@ function TickShield(now)
 			}
 			sh.beacon = (beacon != null) ? beacon.entindex() : 0;
 			sh.disarmed = false;
-			sh.attached = false;
 		}
 		if (beacon != null && beacon.IsValid())
 		{
@@ -1720,14 +2034,11 @@ function TickShield(now)
 			{
 				sh.disarmed = DisarmShieldBeacon(beacon);
 			}
-			if (!sh.attached)
-			{
-				// 不能用 SetParent: 带 parent 的实体被引擎 PhysicsPushEntity 推动时会刷
-				// "pushing entity (asw_buffgrenade_projectile) that has parent"
-				// (physics_main.cpp:1343-1347), 改为每拍传送到 marine 脚下跟随
-				try { beacon.SetOrigin(m.GetOrigin()); } catch (e) {}
-				sh.attached = true;
-			}
+			// 不能用 SetParent: 带 parent 的实体被引擎 PhysicsPushEntity 推动时会刷
+			// "pushing entity (asw_buffgrenade_projectile) that has parent"
+			// (physics_main.cpp:1343-1347), 改为每拍传送到 marine 脚下跟随
+			// (必须每拍都传, 只传一次的话人一走特效就留在原地)
+			try { beacon.SetOrigin(m.GetOrigin()); } catch (e) {}
 		}
 	}
 	foreach (idx in del)
@@ -1784,7 +2095,7 @@ function TickShield(now)
 		return;
 	}
 
-	g_shieldEnd[target.entindex()] <- { end = now + SHIELD_DURATION, beacon = 0, disarmed = false, attached = false };
+	g_shieldEnd[target.entindex()] <- { end = now + SHIELD_DURATION, beacon = 0, disarmed = false };
 	g_shieldReadyAt = now + SHIELD_COOLDOWN;
 
 	local name = "陆战队员";
@@ -1877,10 +2188,6 @@ function PushAliensAway(hMarine)
 		{
 			continue;
 		}
-		if (ent.entindex() in g_betrayIdx)
-		{
-			continue;
-		}
 		local d = ent.GetOrigin() - origin;
 		local flat = Vector(d.x, d.y, 0.0);
 		if (flat.Length() < 1.0)
@@ -1907,10 +2214,11 @@ function TickEscort(now)
 		return;
 	}
 
-	// 开局立即指定 (陆战队员尚未生成时每次 Update 重试, 无延迟)
+	// 开局立即指定 (陆战队员尚未生成时每次 Update 重试, 无延迟);
+	// 中途最后一名护送对象离开导致名单清空时, 从剩余玩家补选恰好 1 名
 	if (g_escorts.len() == 0)
 	{
-		PickEscort();
+		PickEscort(g_escortPicked);
 		return;
 	}
 
@@ -1926,7 +2234,7 @@ function TickEscort(now)
 				dropList.append(hVip);
 				continue;
 			}
-			FailEscort(e.name);
+			FailEscort();
 			return;
 		}
 
@@ -1960,17 +2268,17 @@ function TickEscort(now)
 			// 血量流失由引擎倒地机制处理, 脚本只检测耗尽阵亡
 			if (hVip.GetHealth() <= 0)
 			{
-				FailEscort(e.name);
+				FailEscort();
 				return;
 			}
 			continue;
 		}
-		e.downAt = 0.0;   // 未倒地: 复位倒地标记 (扶起奖励由 marine_revived 事件发放)
+		e.downAt = 0.0;   // 未倒地: 复位倒地标记
 
 		// 未倒地且血量 <= 0 = 彻底阵亡
 		if (hVip.GetHealth() <= 0)
 		{
-			FailEscort(e.name);
+			FailEscort();
 			return;
 		}
 	}
@@ -1980,14 +2288,50 @@ function TickEscort(now)
 	}
 }
 
-function FailEscort(vname)
+// 失败播报 (统一出口, 去重): VIP 阵亡走 FailEscort, 其余失败 (超时/全灭/objective)
+// 由引擎 fire mission_failed 走 OnGameEvent_mission_failed, 两条路径都必须广播。
+function BroadcastFail()
 {
+	if (g_failBroadcasted)
+	{
+		return;
+	}
+	g_failBroadcasted = true;
+	Broadcast("任务失败！别灰心，再接再厉。");
+}
+
+function FailEscort()
+{
+	if (g_escortDone)
+	{
+		return;
+	}
 	g_escortDone = true;
-	Broadcast("护送目标 " + vname + " 已阵亡，任务失败！");
+	BroadcastFail();
+	// 不立即 MissionComplete: 引擎会当场 SetGameState(ASW_GS_DEBRIEF) 直接切结算界面,
+	// 改为延迟结算, 由 TickEscortFail 到点触发
+	g_escortFailAt = Time() + ESCORT_FAIL_DELAY;
+}
+
+// VIP 阵亡延迟结算: 到点后才真正结束任务
+function TickEscortFail(now)
+{
+	if (g_escortFailAt < 0.0)
+	{
+		return;
+	}
+	if (now < g_escortFailAt)
+	{
+		return;
+	}
+	g_escortFailAt = -1.0;
 	Director.MissionComplete(false);
 }
 
-function PickEscort()
+// single = false: 开局点名, 人数随机 1 ~ floor(玩家数/3), 完全随机选人
+// single = true : 补选 (最后一名护送对象离开后), 从剩余玩家固定补 1 名;
+//                 两种路径都走同一套血量减半 (ESCORT_HP_RATIO) 与强化排除逻辑
+function PickEscort(single)
 {
 	local list = [];
 	local hPlayer = null;
@@ -2019,13 +2363,17 @@ function PickEscort()
 		list[j] = tmp;
 	}
 
-	// 人数: 随机 1 ~ floor(玩家数/2)
-	local maxVip = list.len() / 2;
-	if (maxVip < 1)
+	// 人数: 开局随机 1 ~ floor(玩家数/3) (整数除法, 至少 1 名); 补选固定 1 名
+	local nVip = 1;
+	if (!single)
 	{
-		maxVip = 1;
+		local maxVip = list.len() / 3;
+		if (maxVip < 1)
+		{
+			maxVip = 1;
+		}
+		nVip = RandomInt(1, maxVip);
 	}
-	local nVip = RandomInt(1, maxVip);
 
 	local names = [];
 	for (local i = 0; i < nVip; i++)
@@ -2040,9 +2388,15 @@ function PickEscort()
 			usedDown = false
 		};
 
-		// 护送对象不再吃强化加成; 最大生命 = 原生血量 x 比例 (用已记录的原生基准,
-		// 避免中途换员时把已被强化后的血量当基准)
-		local baseHp = GetBaseHp(pick.marine);
+		// 护送对象不再吃强化加成; 最大生命 = 原生血量 x 比例
+		// 原生血量 = 当前最大血量 - 已应用的强化增量 (introduced by GetAppliedLvl),
+		// 避免把已经被强化过的血量当成原生值
+		local appliedLvl = GetAppliedLvl(pick.marine);
+		local baseHp = pick.marine.GetMaxHealth() - POWER_HP_STEP * appliedLvl;
+		if (baseHp < 1)
+		{
+			baseHp = pick.marine.GetMaxHealth();
+		}
 		local newMax = (baseHp * ESCORT_HP_RATIO).tointeger();
 		if (newMax < 1)
 		{
@@ -2058,9 +2412,89 @@ function PickEscort()
 	}
 
 	g_pressureAt = Time() + RandomFloat(PRESSURE_MIN_INTERVAL, PRESSURE_MAX_INTERVAL);
+	g_escortPicked = true;
 
-	Broadcast("护送目标 " + nVip + " 名：" + JoinStrings(names, "、"));
-	Broadcast("任意护送目标阵亡则任务失败，积分可用于购买支援武器，输入#buy查看");
+	if (single)
+	{
+		Broadcast("最后一名护送对象已离开，从剩余队员中补选新护送目标：" + JoinStrings(names, "、") + "（血量减半）");
+	}
+	else
+	{
+		Broadcast("护送目标 " + nVip + " 名：" + JoinStrings(names, "、"));
+		Broadcast("任意护送目标阵亡则任务失败，积分可用于购买支援武器，输入#buy查看");
+	}
+
+	// 选完 VIP 后按身份单独私聊每位玩家 (上面两条是全体广播, 这里是各收各的)
+	// 遍历 list (本次全部存活玩家); g_escorts 的 key 就是 VIP 的 marine 实体,
+	// 用 IsEscort 判定身份。补选场景同样适用: 新 VIP 收 VIP 提示, 其余收护送提示。
+	for (local i = 0; i < list.len(); i++)
+	{
+		local pick = list[i];
+		local pc = pick.player;
+		if (pc == null || !pc.IsValid())
+		{
+			continue;
+		}
+		if (IsEscort(pick.marine))
+		{
+			Reply(pc, "你是 VIP，血量减半，阵亡则任务失败。");
+		}
+		else
+		{
+			Reply(pc, "你是护送人员，护送VIP到达终点");
+		}
+	}
+}
+
+// ============================================================
+//  VIP 滑倒 (娱乐): 移植自 slip.nut 的 Collapse + 冲量写法
+//  - 每 SLIP_MIN_INTERVAL ~ SLIP_MAX_INTERVAL 秒 (2~5 分钟) 随机一次
+//  - 每次只作用于 1 名存活的护送目标, 其他玩家/非 VIP 一律不受影响
+//  - Knockdown 是引擎原生脚本函数 (asw_marine.cpp:409 ScriptKnockdown 绑定为 "Knockdown")
+// ============================================================
+function TickVipSlip(now)
+{
+	// 开局先上弦: 第一次滑倒也要等满 2~5 分钟, 不能开局就摔
+	if (g_slipAt <= 0)
+	{
+		g_slipAt = now + RandomFloat(SLIP_MIN_INTERVAL, SLIP_MAX_INTERVAL);
+		return;
+	}
+	if (now < g_slipAt)
+	{
+		return;
+	}
+	g_slipAt = now + RandomFloat(SLIP_MIN_INTERVAL, SLIP_MAX_INTERVAL);
+
+	if (g_escortDone || g_escorts.len() == 0)
+	{
+		return;
+	}
+
+	// 收集存活且未倒地的护送目标
+	local vips = [];
+	foreach (hVip, e in g_escorts)
+	{
+		if (hVip == null || !hVip.IsValid())
+		{
+			continue;
+		}
+		if (e.downAt > 0 || hVip.GetHealth() <= 0)
+		{
+			continue;
+		}
+		vips.append(hVip);
+	}
+	if (vips.len() == 0)
+	{
+		return;
+	}
+
+	local v = vips[RandomInt(0, vips.len() - 1)];
+	// 摔倒: 先给 knockdown 状态 (播摔倒动画), 再按 slip.nut 给前冲 + 上抛速度
+	try { v.Knockdown(Vector(2, 2, 2)); } catch (e) { return; }
+	try { v.SetVelocity(v.GetForwardVector() * SLIP_PUSH_SPEED + Vector(0, 0, SLIP_PUSH_UP)); } catch (e) {}
+	Broadcast(g_escorts[v].name + " 滑倒了！！！怎么这么不小心？？？");
 }
 
 // ============================================================
@@ -2096,11 +2530,38 @@ function TickDownedRule()
 }
 
 // ============================================================
-//  定向刷虫压力: 每隔 30~45 秒 (随机) 刷一波精英
-//    机制与 Blue Giant 挑战一致: 调引擎原生刷怪系统 SpawnHordeSoon()
-//    (引擎用 nav mesh 选合法点, 不会卡墙/卡地板), 再由 TickMutate 把刷出的
-//    普通虫逐只变异成精英 (红巨爪/电甲/蓝巨, 血量统一 ELITE_HP)
+//  定向刷虫压力: 每隔 20~40 秒 (随机) 刷一波精英
+//    用 Director.SpawnAlienAuto 在引擎合法 nav 节点实时生成普通虫 (不碰 horde 计时器,
+//    与原版刷怪节奏解耦), 再由 TickMutate 把刷出的普通虫逐只变异/替换成精英。
+//    引擎选点自带路线校验, 不会卡墙/卡地板。
 // ============================================================
+
+// 判断此刻是否处于"任务节点" (黑客面板进行中 / 事件型高频窗口未过期)
+//  黑客面板: asw_button_area 的 m_fHackProgress (0<x<1) 或 m_bIsInUse (均为 SendProp)
+function IsTaskRush(now)
+{
+	if (now < g_rushUntil)
+	{
+		return true;
+	}
+	local btn = null;
+	while ((btn = Entities.FindByClassname(btn, "asw_button_area")) != null)
+	{
+		if (btn == null || !btn.IsValid())
+		{
+			continue;
+		}
+		local progress = 0.0;
+		try { progress = NetProps.GetPropFloat(btn, "m_fHackProgress"); } catch (e) {}
+		local inUse = TryGetInt(btn, "m_bIsInUse", 0);
+		if ((progress > 0.0 && progress < 1.0) || inUse != 0)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 function TickPressure(now)
 {
 	if (g_escortDone || g_escorts.len() == 0)
@@ -2111,29 +2572,34 @@ function TickPressure(now)
 	{
 		return;
 	}
-	// 随机选一名仍存活的 VIP 用于广播 (引擎 horde 自行选择玩家附近的合法刷点)
-	local vips = [];
+	// 仅在有存活 VIP 时才刷 (引擎 horde 自行选择玩家附近的合法刷点)
+	local liveVips = 0;
 	foreach (hVip, e in g_escorts)
 	{
 		if (hVip != null && hVip.IsValid() && hVip.GetHealth() > 0)
 		{
-			vips.append(hVip);
+			liveVips++;
 		}
 	}
-	if (vips.len() == 0)
+	if (liveVips == 0)
 	{
 		return;
 	}
-	g_pressureAt = now + RandomFloat(PRESSURE_MIN_INTERVAL, PRESSURE_MAX_INTERVAL);
+	// 任务节点期间加速到每 5 秒一波, 节点过后恢复 20~40 秒
+	if (IsTaskRush(now))
+	{
+		g_pressureAt = now + PRESSURE_RUSH_INTERVAL;
+	}
+	else
+	{
+		g_pressureAt = now + RandomFloat(PRESSURE_MIN_INTERVAL, PRESSURE_MAX_INTERVAL);
+	}
 	g_pressureWave++;
 
-	// 数量: 第 1 波 2 只, 之后每隔 2 波 +1, 10 只封顶; 每波精英同一种, 波次轮换 5 种
-	local count = 2 + ((g_pressureWave - 1) / 2);
-	if (count > ELITE_CAP)
-	{
-		count = ELITE_CAP;
-	}
-	g_mutatePending = count;
+	// 数量: 每波完全随机 5~10 只 (不再随波次递增); 每波精英同一种, 波次轮换 6 种
+	// (寄生虫也作为其中一种精英, 第 1 波起就有概率抽到, 不再要求第 10 波之后)
+	// 自爆虫波单独压低到 2~5 只 (每只死亡补 54 只炮弹, 数量太多会卡)
+	local count = RandomInt(ELITE_WAVE_MIN, ELITE_WAVE_MAX);
 	// 精英种类每波随机 (不与上一波重复, 避免连续两波同一种)
 	local nTypes = ELITE_NAMES.len();
 	local t = RandomInt(0, nTypes - 1);
@@ -2150,26 +2616,75 @@ function TickPressure(now)
 	g_lastMutateType = t;
 	if (g_mutateType == 4)
 	{
-		// 自爆虫 (asw_boomer 底材): 引擎 horde 不刷 boomer, 但绝不能用随机坐标生成 (会卡墙)。
-		// 仍让引擎刷普通虫 (nav mesh 合法选点), 由 TickMutate 把刷出的虫原位替换成 asw_boomer
-		g_mutatePending = 0;
-		g_boomerPending = count;
-		g_boomerExpireAt = now + 30.0;
+		// 自爆虫波单独压低数量 (炮弹太多会卡)
+		count = RandomInt(BOOMER_WAVE_MIN, BOOMER_WAVE_MAX);
 	}
-	// 引擎一波 horde 的数量由 carnage 配置决定, 可能不足 count 只; 多调一次提高虫量,
-	// 剩余名额由 TickMutate 在后续引擎刷怪中继续补足
-	try { SpawnHordeSoon(); } catch (e) {}
-	try { SpawnHordeSoon(); } catch (e) {}
-
-	local tname = g_escorts[vips[RandomInt(0, vips.len() - 1)]].name;
-	Broadcast("虫群闻到了 " + tname + " 的味道……（第 " + g_pressureWave + " 波，" + ELITE_NAMES[g_mutateType] + " ×" + count + "）");
+	// 实时生成精英波: 在引擎验证过的合法远点直接生成目标精英 (SpawnEliteDirect)。
+	// 关键: 不再用 Entities.FindByClassname 全场扫描普通虫来变异 —— 那会把地图预刷虫
+	// (txt 的 rm_prespawn_num_uber_drones / boomers 等) 和引擎自然刷的虫一起变异,
+	// 导致红巨爪/自爆等在玩家附近"突然冒出来"。现在只动本次生成的虫, 预刷虫完全不碰。
+	// 刷怪点由 Director.FindHordePosition 提供 (距离区间 + 路线校验 + 防不可破坏门后),
+	// 且**不碰 director 的 horde 计时器** —— 精英波与原版刷怪节奏彻底解耦。
+	for (local i = 0; i < count; i++)
+	{
+		SpawnEliteDirect(g_mutateType);
+	}
 }
 
-// 变异引擎刷出的普通虫为精英 (Blue Giant drone_mutation 同款思路:
-// 引擎生成保证位置合法, 变异只改特性不改实体类型)
-// 每波同一种精英: 自爆虫波用 asw_boomer 底材, 其余用爪虫系底材
+// 在引擎验证过的合法刷怪点直接生成一只精英 (不扫描全场, 不动地图预刷虫)。
+// Director.FindHordePosition 内部 UpdateCandidateNodes + FindHordePos: 带距离区间
+// (asw_horde_min/max_distance) + BuildRouteForHull 路线校验 + 防刷在不可破坏门后,
+// 返回的点是远的、合法的、玩家视野外的 (asw_gamerules_vscript.cpp:253-272)。
+function SpawnEliteDirect(t)
+{
+	local pos = null;
+	try { pos = Director.FindHordePosition(RandomInt(0, 1) == 0); } catch (e) {}
+	if (pos == null)
+	{
+		return;   // 无合法点则本只放弃, 下一波再试 (不会误伤预刷虫)
+	}
+
+	local a = null;
+	if (t == 4)       // 自爆虫
+	{
+		a = SpawnAlien("asw_boomer", pos);
+	}
+	else if (t == 5)  // 寄生虫
+	{
+		a = SpawnAlien("asw_parasite", pos);
+	}
+	else if (t == 1)  // 红巨爪: 必须生成前写 flinchable=0
+	{
+		a = SpawnAlien("asw_drone_uber", pos, { flinchable = "0" });
+	}
+	else              // 追踪/电甲/蓝巨: 普通爪虫底材
+	{
+		a = SpawnAlien("asw_drone", pos);
+	}
+	if (a == null)
+	{
+		return;
+	}
+	if (t == 5)
+	{
+		// 寄生虫: 保持原语义 —— 不进 g_eliteIdx, 不加自爆虫那套特效, 只锁敌
+		try { a.ChaseNearestMarine(); } catch (e) {}
+	}
+	else
+	{
+		MutateElite(a, t);
+	}
+}
+
+// 旧机制 (全场扫描普通虫变异) 已废弃, 由 SpawnEliteDirect 直接生成精英替代。
+// 保留函数体仅为回退参考; 立刻返回, 不执行任何实体操作。
+// 废弃原因: Entities.FindByClassname 会扫到地图预刷虫 (uber_drones=15 / boomers=5)
+// 和引擎自然刷的虫, 导致精英在玩家附近突然冒出来。
 function TickMutate()
 {
+	return;
+
+	/* 以下为废弃的旧实现 (不可达)
 	// 寄生虫波: 引擎 horde 刷出的普通虫 Kill 掉, 原位换成 asw_parasite
 	// (引擎不刷寄生虫; 引擎选点合法, 替换后绝不卡墙)
 	if (g_paraPending > 0)
@@ -2191,7 +2706,7 @@ function TickMutate()
 						continue;
 					}
 					local aidx = a.entindex();
-					if ((aidx in g_eliteIdx) || (aidx in g_betrayIdx) || (aidx in killed))
+					if ((aidx in g_eliteIdx) || (aidx in killed))
 					{
 						continue;
 					}
@@ -2229,7 +2744,7 @@ function TickMutate()
 						continue;
 					}
 					local bidx = ba.entindex();
-					if ((bidx in g_eliteIdx) || (bidx in g_betrayIdx) || (bidx in bKilled))
+					if ((bidx in g_eliteIdx) || (bidx in bKilled))
 					{
 						continue;
 					}
@@ -2242,6 +2757,44 @@ function TickMutate()
 						MutateElite(nb, 4);
 					}
 					g_boomerPending--;
+				}
+			}
+		}
+	}
+	// 红巨爪虫波: 引擎 horde 刷出的普通虫 Kill 掉, 原位换成 asw_drone_uber
+	// 只有新建实体才能在 Spawn 前写 flinchable=0 (m_bFlinchable 非网络属性, 已刷出的虫改不了)
+	if (g_redPending > 0)
+	{
+		if (Time() > g_redExpireAt)
+		{
+			g_redPending = 0;
+		}
+		else
+		{
+			local rKilled = {};
+			foreach (cls in ["asw_drone", "asw_drone_jumper", "asw_drone_uber"])
+			{
+				local ra = null;
+				while (g_redPending > 0 && (ra = Entities.FindByClassname(ra, cls)) != null)
+				{
+					if (ra == null || !ra.IsValid() || ra.GetHealth() <= 0)
+					{
+						continue;
+					}
+					local ridx = ra.entindex();
+					if ((ridx in g_eliteIdx) || (ridx in rKilled))
+					{
+						continue;
+					}
+					rKilled[ridx] <- true;
+					local rpos = ra.GetOrigin();
+					try { EntFireByHandle(ra, "Kill", "", 0, null, null); } catch (e) {}
+					local nr = SpawnAlien("asw_drone_uber", rpos, { flinchable = "0" });
+					if (nr != null)
+					{
+						MutateElite(nr, 1);
+					}
+					g_redPending--;
 				}
 			}
 		}
@@ -2261,36 +2814,42 @@ function TickMutate()
 				continue;
 			}
 			local aidx = a.entindex();
-			if ((aidx in g_eliteIdx) || (aidx in g_betrayIdx))
+			if (aidx in g_eliteIdx)
 			{
-				continue;   // 已是精英或是叛变友军, 跳过
+				continue;   // 已是精英, 跳过
 			}
 			MutateElite(a, g_mutateType);
 			g_mutatePending--;
 		}
 	}
+	*/
 }
 
-// 把一只虫变异为本波指定精英类型:
-// 0 追踪虫(血200,优先攻击要员) / 1 红巨爪 / 2 电甲 / 3 蓝巨 / 4 自爆虫(体型3倍,爆炸伤害5倍)
+// 把一只虫变异为本波指定精英类型 (血量均以顶部常量为准):
+// 0 追踪虫(TRACKER_HP,速度x2,优先攻击要员) / 1 红巨爪(RED_GIANT_HP,免硬直) /
+// 2 电甲(ELITE_HP) / 3 蓝巨(BLUE_GIANT_HP) / 4 自爆虫(BOOMER_HP,体型2倍,炮弹62只)
 function MutateElite(a, t)
 {
 	g_eliteIdx[a.entindex()] <- true;
 	if (t == 0)
 	{
-		// 追踪虫: 黄色 + 血 1000 + 移速 x1.3, TickTrackers 每拍强制仇恨 = 最近存活要员
-		try { EntFireByHandle(a, "Color", "255 255 0", 0, a, a); } catch (e) {}
+		// 追踪虫: 高饱和品红 (Color 是 m_clrRender 乘色, 只留红/蓝通道去掉绿,
+		// 与纯红红巨爪/蓝巨虫/黄色系都拉开差距, 暗色场景里最跳) + TRACKER_HP + 移速 x2,
+		// TickTrackers 每拍强制仇恨 = 最近存活要员
+		try { EntFireByHandle(a, "Color", "255 0 255", 0, a, a); } catch (e) {}
 		a.SetMaxHealth(TRACKER_HP);
 		a.SetHealth(TRACKER_HP);
-		// 移速 x1.3: m_fSpeedScale 直接参与 GetIdealSpeed() 计算 (asw_inhabitable_npc.cpp:466)
+		// 移速 x2: m_fSpeedScale 直接参与 GetIdealSpeed() 计算 (asw_inhabitable_npc.cpp:466)
 		try { NetProps.SetPropFloat(a, "m_fSpeedScale", TRACKER_SPEED_MULT); } catch (e) {}
 		g_trackers[a.entindex()] <- true;
 	}
 	else if (t == 1)
 	{
-		// 红巨爪虫: 红色 + 体型放大
-		a.SetMaxHealth(ELITE_HP);
-		a.SetHealth(ELITE_HP);
+		// 红巨爪虫: 红色 + 体型放大 + RED_GIANT_HP
+		// 免硬直: 实体是由 SpawnAlien(..., {flinchable="0"}) 新建的,
+		// m_bFlinchable=False 后 ShouldStumble 直接返回 false (asw_ai_behavior_flinch.cpp:221)
+		a.SetMaxHealth(RED_GIANT_HP);
+		a.SetHealth(RED_GIANT_HP);
 		try { EntFireByHandle(a, "Color", "255 0 0", 0, a, a); } catch (e) {}
 		TrySetModelScale(a, 1.2);
 	}
@@ -2313,26 +2872,27 @@ function MutateElite(a, t)
 	}
 	else if (t == 3)
 	{
-		// 蓝巨虫: ASBI Blue Giant 同款 (高饱和蓝 0 80 255 + 体型 1.05)
-		a.SetMaxHealth(ELITE_HP);
-		a.SetHealth(ELITE_HP);
+		// 蓝巨虫: ASBI Blue Giant 同款 (高饱和蓝 0 80 255 + 体型 1.05) + BLUE_GIANT_HP
+		a.SetMaxHealth(BLUE_GIANT_HP);
+		a.SetHealth(BLUE_GIANT_HP);
 		try { EntFireByHandle(a, "Color", "0 80 255", 0, a, a); } catch (e) {}
 		TrySetModelScale(a, 1.05);
+		// 移速 0.7 倍: m_fSpeedScale 默认 1.0, 直接乘进 GetIdealSpeed()
+		// (asw_inhabitable_npc.cpp:466), 设 0.7 即原速 70%
+		try { NetProps.SetPropFloat(a, "m_fSpeedScale", BLUE_GIANT_SPEED_MULT); } catch (e) {}
 	}
 	else
 	{
-		// 自爆虫 (asw_boomer 底材): 体型 3 倍, 爆炸伤害 x5 (OnTakeDamage 钩子里乘),
-		// 死亡瞬间补生成 BOOMER_EXTRA_BLOBS 只炮弹 (引擎硬编码最多 8 只, 补到 x3=24)
+		// 自爆虫 (asw_boomer 底材): 体型 2 倍, 脚踢固定 200 (OnTakeDamage 钩子按 g_eliteIdx 改写),
+		// 死亡瞬间补生成 BOOMER_EXTRA_BLOBS 只炮弹 (引擎硬编码最多 8 只, 8+54=62)
 		TrySetModelScale(a, BOOMER_SCALE);
-		// 血量 x20: 原版 asw_boomer_health 默认 800 (asw_boomer.cpp:35) -> 16000
-		local bhp = a.GetMaxHealth();
-		if (bhp < 1)
-		{
-			bhp = 800;
-		}
-		a.SetMaxHealth((bhp * BOOMER_HP_MULT).tointeger());
-		a.SetHealth((bhp * BOOMER_HP_MULT).tointeger());
-		g_boomers[a.entindex()] <- true;
+		// 血量 BOOMER_HP (仅此精英变异体; 原版 asw_boomer 由 txt 的 asw_boomer_health 控制, 未改)
+		a.SetMaxHealth(BOOMER_HP);
+		a.SetHealth(BOOMER_HP);
+		local bidx = a.entindex();
+		g_boomers[bidx] <- true;
+		g_boomerEnt[bidx] <- a;
+		g_boomerPos[bidx] <- a.GetOrigin();
 	}
 	// 强制锁敌: 引擎索敌有距离限制, 远距刷出的精英会一直发呆;
 	// 直接把仇恨指向最近的存活陆战队员 (m_hEnemy, 与追踪虫同一接口)
@@ -2355,6 +2915,89 @@ function MutateElite(a, t)
 	if (best != null)
 	{
 		try { NetProps.SetPropEntity(a, "m_hEnemy", best); } catch (e) {}
+	}
+}
+
+// ============================================================
+//  精英自爆虫: 死亡补生成炮弹
+// ============================================================
+// 引擎自身爆炸最多 8 只炮弹 (asw_boomer.cpp:310 max_projectiles="8";
+// 实际数量 = (8+1)*蓄气进度 再 clamp 到 1~8, 见 asw_ai_behavior_explode.cpp:374-376),
+// 这里在死亡瞬间补 BOOMER_EXTRA_BLOBS 只, 合计 8+54=62。
+// 生成顺序必须与 Boomer_Blob_Create 一致 (asw_boomer_blob.cpp:261-281):
+// 先 Spawn 再 SetOrigin/SetVelocity; 否则 Spawn() 内的模型/移动类型/引信初始化会覆盖先前设置。
+// 必须给初速度: 引擎的炮弹是朝四周甩出去的 (min_velocity 150 / max_velocity 450),
+// 若速度为零会全部堆在自爆虫脚下、同一帧一起炸, 看起来和原版几只没有区别。
+function SpawnBoomerExtraBlobs(pos, owner)
+{
+	if (g_escortDone)
+	{
+		return 0;
+	}
+	local n = 0;
+	for (local i = 0; i < BOOMER_EXTRA_BLOBS; i++)
+	{
+		local blob = null;
+		try { blob = Entities.CreateByClassname("asw_boomer_blob"); } catch (e) { blob = null; }
+		if (blob == null)
+		{
+			continue;
+		}
+		try { blob.Spawn(); } catch (e) { blob = null; }
+		if (blob == null)
+		{
+			continue;
+		}
+		local ang = RandomFloat(0.0, 6.2831853);
+		local spd = RandomFloat(150.0, 450.0);
+		try
+		{
+			// Spawn() 内部会把 m_flDamage/m_DmgRadius 写成 80/165, 必须之后覆盖
+			// (两者都在 CBaseGrenade 的 datamap 与 sendtable 里, basegrenade_shared.cpp:37-41/65-66)
+			NetProps.SetPropFloat(blob, "m_flDamage", BOOMER_BLOB_DAMAGE);
+			NetProps.SetPropFloat(blob, "m_DmgRadius", BOOMER_BLOB_RADIUS);
+			blob.SetOrigin(Vector(pos.x + RandomFloat(-16.0, 16.0), pos.y + RandomFloat(-16.0, 16.0), pos.z + 40.0));
+			blob.SetVelocity(Vector(cos(ang) * spd, sin(ang) * spd, RandomFloat(150.0, 450.0)));
+			if (owner != null && owner.IsValid())
+			{
+				blob.SetOwner(owner);
+			}
+		}
+		catch (e) {}
+		n++;
+	}
+	if (n > 0)
+	{
+		printl("[escort VIP] 自爆虫死亡, 额外生成炮弹 " + n + " 只");
+	}
+	return n;
+}
+
+// 兜底: 伤害钩子没拦到的自爆虫 (例如被引擎行为直接 Kill) 每拍检查一次,
+// 句柄失效或血量归零即视为死亡, 在最后存活位置补炮弹
+function TickBoomerDeaths()
+{
+	if (g_boomerEnt.len() < 1)
+	{
+		return;
+	}
+	local gone = [];
+	foreach (idx, e in g_boomerEnt)
+	{
+		if (e != null && e.IsValid() && e.GetHealth() > 0)
+		{
+			g_boomerPos[idx] = e.GetOrigin();
+			continue;
+		}
+		gone.append(idx);
+		local pos = (idx in g_boomerPos) ? g_boomerPos[idx] : Vector(0, 0, 0);
+		SpawnBoomerExtraBlobs(pos, null);
+	}
+	foreach (idx in gone)
+	{
+		if (idx in g_boomerEnt) { delete g_boomerEnt[idx]; }
+		if (idx in g_boomers) { delete g_boomers[idx]; }
+		if (idx in g_boomerPos) { delete g_boomerPos[idx]; }
 	}
 }
 
@@ -2406,44 +3049,6 @@ function TickTrackers(now)
 	}
 }
 
-// 第 10 波精英后启动: 每隔 30~45 秒刷一波寄生虫 (10~30 只随机, 与精英波互不影响)
-// 与精英波同款机制: 调引擎原生刷怪系统 SpawnHordeSoon (引擎 nav mesh 选点, 绝不卡墙),
-// 引擎不刷寄生虫, 故 TickMutate 把刷出的普通虫逐只 Kill 并原位换成 asw_parasite
-function TickParaPressure(now)
-{
-	if (g_pressureWave < PARA_AFTER_WAVE)
-	{
-		return;
-	}
-	if (now < g_paraAt)
-	{
-		return;
-	}
-	g_paraAt = now + RandomFloat(PARA_MIN_INTERVAL, PARA_MAX_INTERVAL);
-
-	local marines = [];
-	local m = null;
-	while ((m = Entities.FindByClassname(m, "asw_marine")) != null)
-	{
-		if (m.GetHealth() > 0)
-		{
-			marines.append(m);
-		}
-	}
-	if (marines.len() == 0)
-	{
-		return;
-	}
-	g_paraPending = RandomInt(PARA_MIN_COUNT, PARA_MAX_COUNT);
-	g_paraExpireAt = now + 30.0;   // 30 秒内引擎刷不够数则放弃剩余名额
-	// 引擎一波 horde 的数量由 carnage 配置决定, 多调几次提高虫量以凑满寄生虫名额
-	try { SpawnHordeSoon(); } catch (e) {}
-	try { SpawnHordeSoon(); } catch (e) {}
-	try { SpawnHordeSoon(); } catch (e) {}
-	Broadcast("大量寄生虫正在逼近！（" + g_paraPending + " 只）");
-}
-
-
 // 电甲爪虫: 贴近的玩家每秒被电 8 点血 (伤害类型 256=DMG_SHOCK, 音效用游戏原生电击声)
 function TickZappers(now)
 {
@@ -2460,6 +3065,10 @@ function TickZappers(now)
 		// (asw_inhabitable_npc.cpp:259-266), 客户端的 FX_ElectroStun 电环绕就消失
 		try { NetProps.SetPropFloat(a, "m_flElectroStunSlowMoveTime", now + 60.0); } catch (e) {}
 		try { NetProps.SetPropBool(a, "m_bElectroStunned", true); } catch (e) {}
+		// 抵消电晕减速: m_fHurtSlowMoveTime 是 ShouldMoveSlow() 的判据, 清成 0 后
+		// 即使 m_bElectroStunned=true, 速度也不会乘 asw_alien_stunned_speed;
+		// 这样 asw_alien_stunned_speed 可保持原版 0.3, 电枪/电炸弹对普通虫仍有减速效果
+		try { NetProps.SetPropFloat(a, "m_fHurtSlowMoveTime", 0.0); } catch (e) {}
 		if (now < nextZap)
 		{
 			continue;
@@ -2493,38 +3102,6 @@ function TickZappers(now)
 }
 
 // ============================================================
-//  扶起 VIP: 全队 +100 分 (事件 marine_revived { entindex, reviver })
-// ============================================================
-function OnGameEvent_marine_revived(params)
-{
-	if (g_escortDone || !("entindex" in params))
-	{
-		return;
-	}
-	local hVip = EntIndexToHScript(params["entindex"]);
-	if (hVip == null || !(hVip in g_escorts))
-	{
-		return;
-	}
-	local who = "队友";
-	if ("reviver" in params)
-	{
-		local r = EntIndexToHScript(params["reviver"]);
-		if (r != null && r.IsValid())
-		{
-			local p = null;
-			try { p = r.GetCommander(); } catch (e) { p = null; }
-			if (p != null && p.IsValid())
-			{
-				who = p.GetPlayerName();
-			}
-		}
-	}
-	g_points += ESCORT_REVIVE_POINTS;
-	Broadcast(who + " 扶起了护送对象 " + g_escorts[hVip].name + "，全队 +" + ESCORT_REVIVE_POINTS + " 分！");
-}
-
-// ============================================================
 //  自动空投
 // ============================================================
 function TickAutoDrop(now)
@@ -2550,6 +3127,30 @@ function TickAutoDrop(now)
 }
 
 // ============================================================
+//  任务节点事件: 玩家使用面板 / 焊接门 -> 开 15 秒高频刷虫窗口
+//  (button_area_used / door_welded / door_unwelded 均在 VScript 事件白名单内,
+//   see ScriptGameEventListener.cpp:415-417, 383-386)
+// ============================================================
+// 开任务窗口: 同时把"下一次刷怪"提前到最多 5 秒后, 让玩家立刻感到压力上升
+function StartTaskRush()
+{
+	if (g_finished)
+	{
+		return;
+	}
+	g_rushUntil = Time() + RUSH_WINDOW_SECONDS;
+	local due = Time() + PRESSURE_RUSH_INTERVAL;
+	if (g_pressureAt > due)
+	{
+		g_pressureAt = due;
+	}
+}
+
+function OnGameEvent_button_area_used(params) { StartTaskRush(); }
+function OnGameEvent_door_welded(params)      { StartTaskRush(); }
+function OnGameEvent_door_unwelded(params)    { StartTaskRush(); }
+
+// ============================================================
 //  击杀计分
 // ============================================================
 function OnGameEvent_entity_killed(params)
@@ -2569,13 +3170,6 @@ function OnGameEvent_entity_killed(params)
 	try { isAlien = victim.IsAlien(); } catch (e) { isAlien = false; }
 	if (!isAlien)
 	{
-		return;
-	}
-
-	local vidx = victim.entindex();
-	if (vidx in g_betrayIdx)
-	{
-		delete g_betrayIdx[vidx];
 		return;
 	}
 
@@ -2613,10 +3207,6 @@ function IsPlayerSource(ent)
 	{
 		return true;
 	}
-	if (cls.find("sentry") != null)
-	{
-		return true;
-	}
 	local isAlien = false;
 	try { isAlien = ent.IsAlien(); } catch (e) { isAlien = false; }
 	if (isAlien)
@@ -2638,56 +3228,132 @@ function OnTakeDamage_Alive_Any(victim, inflictor, attacker, weapon, damage, dam
 		return damage;
 	}
 
-	// 动力护甲防寄生 (原插件 asrd_armor.sp:283-287 同款):
-	// 寄生吸血伤害 (DMG_INFEST = 1<<25) 完全归零, 寄生虫对穿甲玩家攻击完全无效
+	// 动力护甲免伤 (原插件 asrd_armor.sp:283-287 同款):
+	//   寄生吸血 DMG_INFEST=1<<25 (33554432)
+	//   火焰     DMG_BURN=1<<3 (8) / DMG_PLASMA=1<<24 (16777216)
+	// 火焰 DoT 常带 DMG_DIRECT(1<<28) 走 ASW_Ignite 持续伤害路径, 引擎
+	// ApplyPassiveArmorEffects 覆盖不到, 故在 VScript 钩子里直接归零。
+	// asw_fire.cpp:1185 确认自然火/燃烧地雷=DMG_BURN, 其它火=DMG_PLASMA。
 	local isMarine = false;
 	try { isMarine = (victim.GetClassname() == "asw_marine"); } catch (e) { isMarine = false; }
-	if (isMarine && (damageType & 33554432) != 0)
+
+	// ── 动力护甲减伤判定 ──────────────────────────────────
+	// 引擎 ApplyPassiveArmorEffects 在 VScript 钩子之前先扣层 (asw_marine.cpp:1996
+	// 再 1655 调 BaseClass), 钩子里直接读 m_iLayersMissing 拿到的是击后值。
+	// 故用 TickArmor 每拍同步的击前缓存 pre (已损失层数) 判定: pre<10 有层实受 20%,
+	// pre>=10 (0 层) 实受 100%。
+	// 引擎 ConVar 已设中性 (armor_scale=1, protection=0), 减伤全由这里接管。
+	local armorEnt = null;
+	local armorMul = 1.0;
+	if (isMarine)
 	{
-		if (FindArmor(victim) != null)
+		armorEnt = FindArmor(victim);
+		if (armorEnt != null)
+		{
+			local vidx = victim.entindex();
+			local pre = (vidx in g_armorMissing) ? g_armorMissing[vidx] : TryGetInt(armorEnt, "m_iLayersMissing", ARMOR_LAYERS);
+			armorMul = (pre < ARMOR_LAYERS) ? ARMOR_HIT_SCALE : 1.0;
+			// 同步缓存到击后值, 保证同帧多击/下一击判定正确 (引擎每击扣 1 层, 上限层数)
+			g_armorMissing[vidx] <- (pre < ARMOR_LAYERS) ? (pre + 1) : ARMOR_LAYERS;
+		}
+	}
+
+	// 动力护甲免伤 (火焰/寄生吸血/毒气手雷): 只要穿着护甲就免疫, 与层数无关
+	//   寄生吸血 DMG_INFEST  =1<<25 (33554432)
+	//   火焰     DMG_BURN    =1<<3  (8) / DMG_PLASMA=1<<24 (16777216)
+	//   毒气手雷 DMG_NERVEGAS=1<<16 (65536)
+	// 火焰 DoT 常带 DMG_DIRECT(1<<28) 走 ASW_Ignite 持续伤害路径, 引擎
+	// ApplyPassiveArmorEffects 覆盖不到, 故在 VScript 钩子里直接归零。
+	// asw_fire.cpp:1185 确认自然火/燃烧地雷=DMG_BURN, 其它火=DMG_PLASMA。
+	// 毒气: asw_gamerules.cpp:1509 弹药类型=DMG_NERVEGAS; 毒云伤害由
+	// asw_radiation_volume.cpp:142-145 设置 (weapon=asw_gas_grenade_projectile)。
+	// 类名兜底: 防 DMG_NERVEGAS 位值在不同二进制有差异 (原插件 asrd_armor.sp:80
+	// 的免伤列表同时含 asw_gas_grenade_projectile)。
+	if (armorEnt != null)
+	{
+		local immune = (damageType & (33554432 | 8 | 16777216 | 65536)) != 0;
+		if (!immune)
+		{
+			try
+			{
+				if (weapon != null && weapon.IsValid() && weapon.GetClassname() == "asw_gas_grenade_projectile")
+				{
+					immune = true;
+				}
+			}
+			catch (e) {}
+		}
+		if (immune)
 		{
 			return 0.0;
 		}
 	}
 
-	// 精英自爆虫: 爆炸伤害 x5 (victim 是玩家, 必须在 alien 检查之前拦截)
+	// 精英自爆虫脚踢: 固定 200 (引擎原版 4~6, 见 asw_boomer.cpp:39-40);
+	// 仅精英波变异出的自爆虫 (g_eliteIdx), 地图预刷的普通自爆虫保持原版 4~6
+	// 小炸弹爆炸 (DMG_BLAST = 1<<2 = 4) 保持原版 55, 不做放大
+	// (炮弹 attacker 就是爆虫本体, 见 asw_ai_behavior_explode.cpp:415 / asw_boomer_blob.cpp:315)
 	if (attacker != null && attacker.IsValid())
 	{
 		try
 		{
-			if (attacker.GetClassname() == "asw_boomer" && (attacker.entindex() in g_eliteIdx))
+			if (attacker.GetClassname() == "asw_boomer")
 			{
-				return damage * BOOMER_DMG_MULT;
+				local bidx = attacker.entindex();
+				local inElite = (bidx in g_eliteIdx);
+				local isBlast = ((damageType & 4) != 0);
+				// 诊断日志: 确认脚踢分支为何命中/未命中 (仅 boomer 攻击时打印, 不刷屏)
+				try
+				{
+					printl("[护送][脚踢诊断] boomer idx=" + bidx
+						+ " elite=" + (inElite ? "1" : "0")
+						+ " blast=" + (isBlast ? "1" : "0")
+						+ " dtype=" + damageType
+						+ " rawDmg=" + damage
+						+ " armorMul=" + armorMul);
+				}
+				catch (e) {}
+				if (inElite && !isBlast)
+				{
+					return BOOMER_MELEE_DMG * armorMul;
+				}
 			}
 		}
 		catch (e) {}
 	}
 
-	// 精英自爆虫被打死: 引擎爆炸炮弹数硬编码最多 8 只 (asw_boomer.cpp:310 max_projectiles="8"),
-	// 死亡瞬间在此补生成 BOOMER_EXTRA_BLOBS 只, 凑到 x3=24
+	// 精英追踪虫: 攻击力 x2 (追踪虫由引擎普通虫变异而来, 种类不固定,
+	// 故按 g_trackers 记录的 entindex 判定, 不做 classname 判断)
+	if (attacker != null && attacker.IsValid())
+	{
+		try
+		{
+			if (attacker.entindex() in g_trackers)
+			{
+				return damage * TRACKER_DMG_MULT * armorMul;
+			}
+		}
+		catch (e) {}
+	}
+
+	// 精英自爆虫被打死: 引擎爆炸炮弹数硬编码最多 8 只 (asw_boomer.cpp:310 max_projectiles="8",
+	// 实际数量 = (8+1)*buildup进度, 上限 8, 见 asw_ai_behavior_explode.cpp:374-377),
+	// 死亡瞬间在此补生成 BOOMER_EXTRA_BLOBS 只, 凑到 8+54=62
 	try
 	{
 		local vidx = victim.entindex();
 		if ((vidx in g_boomers) && victim.GetClassname() == "asw_boomer" && (victim.GetHealth() - damage) <= 0)
 		{
+			// 先注销记录, TickBoomerDeaths 就不会再补一次
 			delete g_boomers[vidx];
-			local bpos = victim.GetOrigin();
-			for (local i = 0; i < BOOMER_EXTRA_BLOBS; i++)
-			{
-				local blob = null;
-				try { blob = Entities.CreateByClassname("asw_boomer_blob"); } catch (e) { blob = null; }
-				if (blob != null)
-				{
-					blob.SetOrigin(Vector(bpos.x + RandomFloat(-80.0, 80.0), bpos.y + RandomFloat(-80.0, 80.0), bpos.z + 30.0));
-					blob.Spawn();
-				}
-			}
+			if (vidx in g_boomerEnt) { delete g_boomerEnt[vidx]; }
+			SpawnBoomerExtraBlobs(victim.GetOrigin(), victim);
 		}
 	}
 	catch (e) {}
 
-	// 增强哨戒塔: 机枪/喷火塔伤害 x3 (m_fDamageScale 无 netprop/datamap 注册无法脚本写;
-	// 炮塔走 txt 下发的 asw_sentry_top_cannon_dmg_override 180, 此处不叠乘)
+	// 增强哨戒塔: 机枪/喷火塔伤害 x2 (m_fDamageScale 无 netprop/datamap 注册无法脚本写;
+	// 炮塔走 txt 下发的 asw_sentry_top_cannon_dmg_override 120, 此处不叠乘)
 	if (attacker != null && attacker.IsValid())
 	{
 		local scls = "";
@@ -2720,15 +3386,12 @@ function OnTakeDamage_Alive_Any(victim, inflictor, attacker, weapon, damage, dam
 	}
 
 	// 增强武器伤害 (仅购买/空投掉落的标记武器生效, 与原插件"仅掉落枪增强"一致):
-	// 守望者脉冲步枪单发固定 100, 增强电锯 x10
+	// 增强电锯 x10。守望者脉冲步枪不在这里处理: 它的基础伤害统一由挑战 convar
+	// rd_ar2_dmg_base=100 抬高 (见 asrd_points_c3.txt), 这样对虫子/虫卵/门 都是同一个值
 	if (weapon != null && weapon.IsValid() && (weapon.entindex() in g_tintWpn))
 	{
 		local wcls = weapon.GetClassname();
-		if (wcls == "asw_weapon_ar2")
-		{
-			damage = WATCHER_DAMAGE;
-		}
-		else if (wcls == "asw_weapon_chainsaw")
+		if (wcls == "asw_weapon_chainsaw")
 		{
 			damage = damage * CHAINSAW_DAMAGE_MULT;
 		}
@@ -2743,7 +3406,7 @@ function OnTakeDamage_Alive_Any(victim, inflictor, attacker, weapon, damage, dam
 	try { isAlien = victim.IsAlien(); } catch (e) { isAlien = false; }
 	if (!isAlien)
 	{
-		return damage;
+		return damage * armorMul;
 	}
 
 
@@ -2769,7 +3432,9 @@ function OnTakeDamage_Alive_Any(victim, inflictor, attacker, weapon, damage, dam
 		}
 	}
 
-	return damage;
+	// 哨戒塔伤害不折算积分 (哨戒塔消耗靠购买时的积分, 击杀也不给分, 见 IsPlayerSource)
+
+	return damage * armorMul;
 }
 
 // ============================================================
@@ -2796,16 +3461,26 @@ function OnGameEvent_weapon_fire(params)
 }
 
 // ============================================================
-//  任务结束: 停止护送判定, 避免胜利后被误判为失败
+//  任务结束: 停止护送判定 + 清理自定义实体 (必须早于换图, 否则残留实体跨作用域)
 // ============================================================
 function OnGameEvent_mission_success(params)
 {
-	g_escortDone = true;
+	SucceedMission();
 }
 
 function OnGameEvent_mission_failed(params)
 {
+	// 引擎判负 (超时/全灭/objective 失败) 不经过 FailEscort, 必须在这里补播失败文案
+	BroadcastFail();
 	g_escortDone = true;
+	FinishMission();
+}
+
+// 即时重开 (!restart) 会直接 ChangeLevel, 且不会触发 mission_success/failed
+// (asw_gamerules.cpp:3191 发事件, 3221-3225 换图), 必须同样清理
+function OnGameEvent_asw_mission_restart(params)
+{
+	FinishMission();
 }
 
 // ============================================================
@@ -2863,12 +3538,9 @@ function OnGameEvent_player_say(params)
 	}
 	if (cmd == "1") { BuyPower(hPlayer); return; }
 	if (cmd == "2") { BuyNuke(hPlayer); return; }
-	if (cmd == "3") { BuyBetray(hPlayer, opt); return; }
 	if (cmd == "4") { BuySentry(hPlayer, opt); return; }
-	if (cmd == "5") { BuyRefill(hPlayer); return; }
 	if (cmd == "6") { BuyWeapon(hPlayer, opt); return; }
 	if (cmd == "7") { BuyArmor(hPlayer); return; }
-	if (cmd == "8") { BuyItem(hPlayer, opt); return; }
 	if (cmd == "9") { BuyAmmo(hPlayer); return; }
 
 	if (cmd == "points")
@@ -2879,7 +3551,6 @@ function OnGameEvent_player_say(params)
 
 	// 兼容原功能命令
 	if (cmd == "nukepub") { BuyNuke(hPlayer); return; }
-	if (cmd == "betraypub") { BuyBetray(hPlayer, opt); return; }
 	if (cmd == "power_up" || cmd == "powerup") { BuyPower(hPlayer); return; }
 	if (cmd == "power_down" || cmd == "powerdown")
 	{
@@ -2902,12 +3573,9 @@ function Buy(cat, opt, hPlayer)
 	{
 		case 1: BuyPower(hPlayer); return;
 		case 2: BuyNuke(hPlayer); return;
-		case 3: BuyBetray(hPlayer, opt); return;
 		case 4: BuySentry(hPlayer, opt); return;
-		case 5: BuyRefill(hPlayer); return;
 		case 6: BuyWeapon(hPlayer, opt); return;
 		case 7: BuyArmor(hPlayer); return;
-		case 8: BuyItem(hPlayer, opt); return;
 		case 9: BuyAmmo(hPlayer); return;
 	}
 	Reply(hPlayer, "未知购买分类：" + cat + "（#buy 查看帮助）");
@@ -2916,20 +3584,15 @@ function Buy(cat, opt, hPlayer)
 function ShowHelp(hPlayer)
 {
 	Reply(hPlayer, "当前积分：" + g_points + "  |  输入 #buy <分类> [编号] 购买");
-	Reply(hPlayer, "#1 全队强化 +1 (800)  ※护送目标不参与强化");
+	Reply(hPlayer, "#1 全队强化 +1 (500)  ※护送目标不参与强化");
 	Reply(hPlayer, "#2 强化核弹 (200)");
-	Reply(hPlayer, "#3 [1-6] 叛变虫群 (300):");
-	Reply(hPlayer, "　　1工蜂 2爆裂虫 3寄生虫 4蜂群 5盾甲虫 6治疗虫");
 	Reply(hPlayer, "#4 [0/1] 哨戒塔箱 (300):");
 	Reply(hPlayer, "　　0机枪 1炮塔");
-	Reply(hPlayer, "#5 哨戒塔补弹 (500)");
 	Reply(hPlayer, "#6 [1-5] 武器 (300):");
-	Reply(hPlayer, "　　1电锯 2守望者脉冲步枪 3增强黏弹发射器");
+	Reply(hPlayer, "　　1增强型电锯 2守望者脉冲步枪 3增强黏弹发射器");
 	Reply(hPlayer, "　　4导轨步枪 5AVK-36神射手步枪");
 	Reply(hPlayer, "#7 动力护甲 (300)");
-	Reply(hPlayer, "#8 [1-3] 隐藏道具 (300):");
-	Reply(hPlayer, "　　1瞬移 2喷气背包 3诱饵");
-	Reply(hPlayer, "#9 弹药掉落 (300)");
+	Reply(hPlayer, "#9 弹药掉落 (100)");
 	Reply(hPlayer, "#points 查询积分 | 血量低于30自动开力场护盾 (全队120秒冷却)");
 }
 
@@ -2943,21 +3606,15 @@ function ShowHelp(hPlayer)
 function SpawnBuyHelpObjectives()
 {
 	local d1 = "#buy 1 全队强化+1级 (" + COST_POWER + "分) ※护送目标除外\n"
-		+ "#buy 2 战术核弹 (" + COST_NUKE + "分, 冷却" + NUKE_COOLDOWN.tointeger() + "秒)\n"
-		+ "#buy 3 1~6 叛变虫群 (" + COST_BETRAY + "分)\n"
-		+ "　1工蜂 2爆裂虫 3寄生虫\n　4蜂群 5盾甲虫 6治疗虫";
+		+ "#buy 2 战术核弹 (" + COST_NUKE + "分, 冷却" + NUKE_COOLDOWN.tointeger() + "秒)";
 	local d2 = "#buy 4 0/1 哨戒塔箱 (" + COST_SENTRY + "分): 0机枪 1炮塔\n"
-		+ "#buy 5 哨戒塔补满弹药 (" + COST_REFILL + "分)\n"
-		+ "#buy 6 1 增强电锯 (" + COST_WEAPON + "分)\n"
+		+ "#buy 6 1 增强型电锯 (" + COST_WEAPON + "分)\n"
 		+ "#buy 6 2 守望者脉冲步枪 (" + COST_WEAPON + "分)";
 	local d3 = "#buy 6 3 增强型黏弹发射器 (" + COST_WEAPON + "分)\n"
 		+ "#buy 6 4 导轨步枪 (" + COST_WEAPON + "分)\n"
 		+ "#buy 6 5 AVK-36 神射手步枪 (" + COST_WEAPON + "分)\n"
 		+ "#buy 7 动力护甲 (" + COST_ARMOR + "分)";
-	local d4 = "#buy 8 1 瞬移 (" + COST_ITEM + "分)\n"
-		+ "#buy 8 2 喷气背包 (" + COST_ITEM + "分)\n"
-		+ "#buy 8 3 诱饵 (" + COST_ITEM + "分)\n"
-		+ "#buy 9 掉落弹药 (" + COST_AMMO + "分)\n"
+	local d4 = "#buy 9 掉落弹药 (" + COST_AMMO + "分)\n"
 		+ "积分来源: 击杀虫族 (血量越多积分越多)";
 
 	local ent = Entities.CreateByClassname("asw_objective_dummy");
@@ -2973,4 +3630,5 @@ function SpawnBuyHelpObjectives()
 	ent.Spawn();
 	try { NetProps.SetPropInt(ent, "m_bOptional", 1); } catch (e) {}
 	try { NetProps.SetPropInt(ent, "m_bComplete", 1); } catch (e) {}
+	g_objHelp = ent;   // 保存句柄, 供换图前 CleanupOnMissionEnd() 清理
 }

@@ -1,8 +1,8 @@
 // ============================================================
 //  积分挑战 - 客户端 HUD (单行)
-//  每名玩家有 5 个 rd_hud_vscript 实体, 每个实体负责一行:
-//  服务端 SetInt(0) = 行号 (0 积分/1 强化/2 护甲/3 护送/4 护盾), SetString(0) = 该行文本
-//  (rd_hud_vscript 只允许字符串索引 0, 见 rd_hud_vscript_shared.cpp SetString)
+//  每名玩家有若干个 rd_hud_vscript 实体, 每个实体负责一行:
+//  服务端 SetInt(0) = 行号 (0 积分/1 强化/2 护甲/3.. 护送每 VIP 一行/末行 护盾),
+//  SetString(0) = 该行文本 (rd_hud_vscript 只允许字符串索引 0, 见 rd_hud_vscript_shared.cpp)
 // ============================================================
 
 FONT_POINTS <- self.LookupFont("DefaultMedium");
