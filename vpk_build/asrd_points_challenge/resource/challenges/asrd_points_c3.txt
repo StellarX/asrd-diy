@@ -1,7 +1,7 @@
 "CHALLENGE"
 {
 	"name"	"escort VIP C3"
-	"description"	"护送要员：随机多名要员，要员血量减半，无倒地状态，任意要员阵亡则任务失败。击杀虫族获得全队共享积分，可购买强化、核弹、武器、护甲等支援。C3 刷怪量。"
+	"description"	"护送要员：随机多名要员，要员血量减半，无倒地状态，任意要员阵亡则任务失败。击杀虫族获得全队共享积分，可购买强化、核弹、武器、护甲等支援。C3 刷怪量。 Escort VIP: random VIPs with half health and no knockdown state; if any VIP dies the mission fails. Kill aliens to earn a team-shared point pool, then spend it on upgrades, nukes, weapons and armor. C3 spawn rate."
 	"icon"	"vgui/challenges/asrd_points"
 
 	"convars"
@@ -36,8 +36,11 @@
 
 		// 强化护甲: 引擎减伤设中性 (scale=1/每层值=0), 减伤与扣层由挑战脚本接管:
 		// 有层实受 20%, 0 层实受 100%; 火焰/寄生免疫与层数无关
+		// 层数 5 (与引擎默认值相同)。该 convar 同时是引擎的回层上限
+		// (asw_weapon_normal_armor.cpp:104 / :120), 必须与脚本常量 ARMOR_LAYERS 一致,
+		// 否则会出现「引擎回满 10 层但脚本只认 5 层」的错位。
 		"asw_marine_passive_armor_scale"			"1.0"
-		"rd_marine_passive_armor_layers_amount"			"10"
+		"rd_marine_passive_armor_layers_amount"			"5"
 		"rd_marine_passive_armor_layer_protection_value"	"0.0"
 		"rd_marine_passive_armor_layer_update_interval_initial"	"8.0"
 		"rd_marine_passive_armor_layer_update_interval"		"1.0"
@@ -57,13 +60,24 @@
 		// 此处只保留能量球备弹上限 3 -> 10 (原插件 alt_ammo=10)
 		"sk_max_ar2_altfire"	"10"
 
-		// AVK-36 神射手步枪伤害 x8: 武器基础伤害 65 编译固定在装备清单 (asw_equipment_list.cpp:326),
-		// rd_sniper_dmg_base > 0 时整体覆盖基础伤害 (asw_weapon_sniper_rifle.cpp:320-328),
-		// 520 = 65 x 8
-		"rd_sniper_dmg_base"	"520"
+		// ── AVK-36 神射手步枪 (asw_weapon_sniper_rifle) 基础伤害 1800 ──
+		// 装备表基础伤害 65 编译固定在装备清单 (asw_equipment_list.cpp:326);
+		// CASW_Weapon_Sniper_Rifle::GetWeaponBaseDamageOverride() 返回 rd_sniper_dmg_base,
+		// > 0 时整体替换基础值 (asw_weapon_sniper_rifle.cpp:320-328 + asw_weapon_shared.cpp:1452-1465),
+		// 这是神射手步枪专属 convar, 不影响其它武器。
+		// 精度子技能 AMSC_ACCURACY_SNIPER_RIFLE_DMG 默认 base=0 / step=20
+		// (asw_marine_skills.cpp:249), 最多带来 +100 浮动; 写死 0/0 保证基础伤害恒定 1800。
+		// 开镜加成: rd_sniper_rifle_dmg_zoomed_bonus 原版默认 186
+		// (asw_weapon_sniper_rifle.cpp:39), GetWeaponDamage() 在 IsZoomed() 时
+		// 额外加上 GetZoomedDamageBonus() (:305-316, bonus>0 才加)。这里设为 1000,
+		// 开镜单发 = 1800 + 1000 = 2800 (不开镜仍为 1800)。
+		"rd_sniper_dmg_base"				"1800"
+		"rd_sniper_rifle_dmg_zoomed_bonus"		"1000"
+		"asw_skill_accuracy_sniper_rifle_dmg_base"	"0"
+		"asw_skill_accuracy_sniper_rifle_dmg_step"	"0"
 
-		// 哨戒塔炮塔伤害 x2: 覆盖炮塔榴弹基础伤害 60 -> 120 (asw_sentry_top_cannon.cpp:20)
-		"asw_sentry_top_cannon_dmg_override"	"120"
+		// 哨戒塔炮塔伤害保持原版 60 (asw_sentry_top_cannon.cpp:20 默认值; 显式写死防上一局残留)
+		"asw_sentry_top_cannon_dmg_override"	"60"
 
 		// 哨戒塔弹药无限: asw_sentry_infinite_ammo=1 时 OnFiredShots 不再递减 m_iAmmo
 		// (定义 asw_sentry_base.cpp:24, 判断 :422-425), 因此 HasAmmo() 恒为 true (asw_sentry_top.cpp:566-573)
@@ -95,6 +109,54 @@
 		"rd_ar2_dmg_base"	"100"
 		"sk_plr_dmg_ar2"	"100"
 
+		// ── 22A3-1 突击步枪 (asw_weapon_rifle) 伤害 ──
+		// 单发子弹 25: GetWeaponDamage() = 装备表基础伤害 + rd_rifle_dmg_base 覆盖值
+		// + 精度技能值 (asw_weapon_shared.cpp:1452-1465)。rd_rifle_dmg_base=25 直接覆盖基础值,
+		// asw_skill_accuracy_rifle_dmg_step=0 去掉技能点带来的 0~5 浮动, 保证恒定 25;
+		// 对虫族 / 门 / 虫卵都是同一个值 (FireBullets 直接把该值写进伤害)。
+		"rd_rifle_dmg_base"			"25"
+		"asw_skill_accuracy_rifle_dmg_step"	"0"
+		// 下挂榴弹 2000: asw_weapon_rifle.cpp:136 用技能值
+		// GetSkillBasedValueByMarine(GRENADES, GRENADE_DMG) 生成炮弹, 并在
+		// Rifle_Grenade_Create 里覆盖 Spawn() 写入的 sk_plr_dmg_asw_r_g(100),
+		// 所以只有改技能基础值才生效; step=0 去掉技能点浮动 (原 128 + 20 x 点数)。
+		// 源码里该子技能只有 22A3-1 下挂榴弹在用 (导轨步枪那段已注释), 不影响其它手雷。
+		// 不动 sk_plr_dmg_asw_r_g: 它是 Vindicator / 集束手雷共用的弹药表值。
+		"asw_skill_grenades_dmg_base"	"2000"
+		"asw_skill_grenades_dmg_step"	"0"
+
+		// ── PS50 斗牛犬手枪 (asw_weapon_deagle) 伤害 ──
+		// 单发 300: asw_weapon_deagle_shared.cpp:103-106 重写 GetWeaponBaseDamageOverride()
+		// 返回 rd_deagle_dmg_base, 所以它不受全局 rd_rifle_dmg_base 影响 (无连带改其它武器);
+		// GetWeaponDamage() = 装备表基础伤害 104 (asw_equipment_list.cpp:376), override > 0 时
+		// 整体替换 (asw_weapon_shared.cpp:1452-1465), 基类 PrimaryAttack 把该值直接写进每发
+		// 子弹 info.m_flDamage (:780), 门 / 虫卵等非角色目标也走同一条伤害链。
+		// 精度子技能 AMSC_ACCURACY_BULLDOG_DMG 默认 base=0 / step=0 (asw_marine_skills.cpp:254),
+		// 显式写死防上一局残留, 保证恒定 300。
+		"rd_deagle_dmg_base"			"300"
+		"asw_skill_accuracy_deagle_dmg_base"	"0"
+		"asw_skill_accuracy_deagle_dmg_step"	"0"
+		// 玩家弹药表回退值 (asw_gamerules.cpp:793 / :1503), 与 sk_plr_dmg_ar2 同样处理;
+		// 只影响 ASW_DEAGLE 弹药类型, 不动 sk_npc_dmg_asw_deagle (NPC 持枪伤害)。
+		"sk_plr_dmg_asw_deagle"		"300"
+		// 原版对大型虫 (盾虫 / 迫击虫 / 收割者 / 精英爪虫 / 女王) 有 0.5 倍减伤
+		// (rd_deagle_bigalien_dmg_scale, asw_weapon_deagle_shared.cpp:20); 设为 1.0 让
+		// "单发 300" 对所有虫族一致生效。门另有硬编码 0.4 倍 (asw_door.cpp:1249),
+		// 无法用 convar 关闭, 打门仍是 120。
+		"rd_deagle_bigalien_dmg_scale"	"1.0"
+
+		// ── M42「复仇者」霰弹枪 (asw_weapon_vindicator) 射速 x2 ──
+		// 装备表 flFireRate=0.65s (asw_equipment_list.cpp:195); 该类自己重写 GetFireRate():
+		// rd_vindicator_fire_rate > 0 时直接返回它, 否则回退 shotgun 的实现
+		// (asw_weapon_assault_shotgun_shared.cpp:30 / :206-213)。
+		// PrimaryAttack 用 m_flNextPrimaryAttack = curtime + GetFireRate()
+		// (asw_weapon_shotgun_shared.cpp:283), 所以 0.65 / 2 = 0.325 即精确 2 倍射速。
+		// 这是 vindicator 专属 convar, 不影响 35 式泵动霰弹枪 (那把走 rd_shotgun_fire_rate)。
+		"rd_vindicator_fire_rate"	"0.325"
+		// K80 单兵防御武器 (asw_weapon_pdw) 同样射速 x2, 但引擎没有 PDW 射速 convar
+		// (dll 字符串表里只有 rd_pdw_dmg_base), 0.035s 间隔硬编码在装备表, 改由脚本
+		// TickPdwFireRate() 每拍钳制 m_flNextPrimaryAttack 实现, 见 challenge_*.nut。
+
 		// 电甲爪虫自身的电晕减速由脚本在 TickZap 里清 m_fHurtSlowMoveTime 抵消,
 		// 此处保持原版 0.3, 电枪 / 电炸弹对普通虫仍有减速效果
 		"asw_alien_stunned_speed"	"0.3"
@@ -114,9 +176,14 @@
 		"rd_hackall"		"1"
 		// 取消职业限制: 改用白名单/黑名单控制武器, 任何职业都能用任意未禁用武器
 		"rd_weapon_requirement_override"	"1"
-		// 武器黑名单 (inverted=1 表示列表内禁用):
-		// 4 双持手枪 / 7 弹药背包 / 10 导轨步枪 / 16 AVK-36 神射手 / 17 燃烧哨戒 / 19 高速哨戒炮 / 20 榴弹发射器
-		"rd_weapons_regular_allowed"		"4 7 10 16 17 19 20"
+		// 武器黑名单 (inverted=1 表示列表内禁用), ID 见 asw_equipment_list.h 的
+		// ASW_Equip_Regular 枚举 (0 起算): 4 双持手枪 / 7 弹药背包 / 10 导轨步枪 /
+		// 17 燃烧哨戒 / 20 榴弹发射器。
+		// 已解禁 (从黑名单移除): 16 = ASW_EQUIP_SNIPER_RIFLE, AVK-36「神射手」步枪
+		// (itemdefid 2016); 19 = ASW_EQUIP_SENTRY_CANNON, IAF 高速型哨戒炮 (itemdefid 2019)。
+		// 两件都改为开局可常规携带; 因此积分购买列表 (#buy 6) 同步移除 AVK-36,
+		// 避免「能免费带还花 300 分买」, 见 challenge_*.nut 的 WEAPONS / ShowHelp。
+		"rd_weapons_regular_allowed"		"4 7 10 17 20"
 		"rd_weapons_regular_allowed_inverted"	"1"
 		// 额外道具黑名单: 1 焊枪 / 2 照明弹 / 4 战术重甲 / 8 肾上腺素 / 12 手电 / 13 动力拳套 / 15 夜视
 		"rd_weapons_extra_allowed"		"1 2 4 8 12 13 15"
